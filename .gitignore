@@ -15,6 +15,8 @@ __pycache__/
 # redistribuir doc de terceiro aqui não é nosso direito. Como obter em
 # docs/vendor/COMO-OBTER.md. O catálogo derivado (apps/mcp/.../catalog.json)
 # é versionado, então o MCP funciona sem esta pasta.
-docs/vendor/doc_api/
-docs/vendor/doc_api.txt
-docs/vendor/*.pdf
+#
+# Nega tudo e libera só o .md: listar extensão por extensão deixa passar o que
+# ninguém previu — e o download do portal vem como .zip, com nome que muda.
+docs/vendor/*
+!docs/vendor/*.md
