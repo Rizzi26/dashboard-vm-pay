@@ -1,0 +1,20 @@
+.env
+.env.*
+!.env.example
+*.token
+.vmpay_token
+node_modules/
+dist/
+build/
+.DS_Store
+.venv/
+__pycache__/
+
+# Documentação oficial da VMpay — material da Verti Tecnologia / Nayax.
+# Fica só na máquina de quem trabalha no repo; este repositório é público e
+# redistribuir doc de terceiro aqui não é nosso direito. Como obter em
+# docs/vendor/COMO-OBTER.md. O catálogo derivado (apps/mcp/.../catalog.json)
+# é versionado, então o MCP funciona sem esta pasta.
+docs/vendor/doc_api/
+docs/vendor/doc_api.txt
+docs/vendor/*.pdf
