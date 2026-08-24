@@ -192,16 +192,25 @@ async def _record_failure(session: AsyncSession, resource: str, message: str) ->
 
 
 async def sync_all(resources: list[str] | None = None) -> list[dict[str, Any]]:
-    """Uma rodada completa. É isto que o cron do Render chama."""
+    """Uma rodada completa: staging de vendas + snapshot de catálogo/estoque.
+
+    É isto que o cron (GitHub Actions) chama. O staging de vendas roda com o
+    token global (tenant único, registrado); o snapshot itera as integrações
+    ativas de core.integration — sem integração cadastrada, só o staging roda.
+    """
+    from .sync_core import sync_all_integrations
+
     cfg = settings()
     alvos = resources or list(RESOURCES)
-    relatorios = []
+    relatorios: list[dict[str, Any]] = []
     async with VMpayClient(cfg.vmpay_token, base_url=cfg.vmpay_base or PRODUCTION) as client:
         async with session_factory()() as session:
             for resource in alvos:
                 relatorio = await sync_resource(resource, client, session)
                 log.info("ingestão %s: %s", resource, relatorio.as_dict())
                 relatorios.append(relatorio.as_dict())
+    async with session_factory()() as session:
+        relatorios.extend(await sync_all_integrations(session))
     return relatorios
 
 
