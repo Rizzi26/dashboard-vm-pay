@@ -12,9 +12,17 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth import require_role
 from ..db import get_session
 
-router = APIRouter(prefix="/sales", tags=["vendas"])
+# Escopo por organização + papel mínimo viewer. Limitação registrada: o staging
+# de vendas (vmpay.sale) ainda é de tenant único — o guard garante QUEM lê, e a
+# canonicalização por organização fica para quando houver o segundo tenant.
+router = APIRouter(
+    prefix="/orgs/{org}/sales",
+    tags=["vendas"],
+    dependencies=[Depends(require_role("viewer"))],
+)
 
 DEFAULT_WINDOW_DAYS = 30
 

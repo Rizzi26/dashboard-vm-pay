@@ -31,6 +31,27 @@ class Settings(BaseSettings):
     #: Origens liberadas no CORS — o domínio da Vercel.
     cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
 
+    # ------------------------------------------------------------ Supabase Auth
+
+    #: URL do projeto Supabase (https://<ref>.supabase.co). Usada para montar o
+    #: JWKS e para a Admin API de convite de usuário.
+    supabase_url: str = Field(default="", alias="SUPABASE_URL")
+
+    #: Service role key — SÓ para convite/remoção de usuário via Admin API.
+    #: Nunca vai para o frontend.
+    supabase_service_role_key: str = Field(default="", alias="SUPABASE_SERVICE_ROLE_KEY")
+
+    #: Audience esperada no JWT. O Supabase emite "authenticated".
+    supabase_jwt_aud: str = Field(default="authenticated", alias="SUPABASE_JWT_AUD")
+
+    #: Segredo HS256 (projetos Supabase antigos e testes). Se vazio, a validação
+    #: usa o JWKS assimétrico do projeto — o default dos projetos novos.
+    supabase_jwt_secret: str = Field(default="", alias="SUPABASE_JWT_SECRET")
+
+    @property
+    def jwks_url(self) -> str:
+        return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+
     @property
     def allowed_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
