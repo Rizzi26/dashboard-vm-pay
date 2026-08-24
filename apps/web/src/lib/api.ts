@@ -1,12 +1,12 @@
 /**
- * Cliente do backend FastAPI.
+ * Tipos da API + cliente de browser.
  *
- * O dashboard nunca fala com a API da VMpay direto: ela não agrega nada e limita
- * 300 req/min por token. Tudo vem do nosso backend, que lê o que o worker já
- * ingeriu no Supabase.
+ * Este módulo é importado por client components, então NÃO pode depender de
+ * next/headers — o lado servidor (serverApi) vive em api.server.ts. Toda rota
+ * de dados é escopada por organização: /orgs/{slug}/...
  */
 
-const BASE = process.env.API_URL ?? "http://localhost:8000";
+const BROWSER_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type Summary = {
   periodo: { inicio: string; fim: string };
@@ -18,11 +18,7 @@ export type Summary = {
   ticket_medio: number;
 };
 
-export type DailyPoint = {
-  dia: string;
-  faturamento: number;
-  transacoes: number;
-};
+export type DailyPoint = { dia: string; faturamento: number; transacoes: number };
 
 export type MachineRow = {
   machine_id: number;
@@ -42,30 +38,55 @@ export type SyncRow = {
   atraso_segundos: number | null;
 };
 
+export type StockRow = {
+  location_id: string;
+  local: string;
+  product_id: string;
+  produto: string;
+  barcode: string | null;
+  preco: number | null;
+  quantidade: number;
+  atualizado_em: string;
+};
+
+export type Me = {
+  user_id: string;
+  email: string | null;
+  platform_admin: boolean;
+  organizations: { slug: string; name: string; role: string }[];
+};
+
+export type MemberRow = {
+  user_id: string;
+  email: string;
+  role: string;
+  member_since: string;
+};
+
+export type ActionRow = {
+  id: number;
+  acao: string;
+  status: string;
+  erro: string | null;
+  ator: string | null;
+  criada_em: string;
+  finalizada_em: string | null;
+};
+
 export type Fetched<T> = { ok: true; data: T } | { ok: false; error: string };
 
-async function get<T>(path: string): Promise<Fetched<T>> {
-  try {
-    // Dado de venda envelhece a cada rodada do worker; cache curto em vez de
-    // no-store para não bater no backend a cada navegação.
-    const res = await fetch(`${BASE}${path}`, { next: { revalidate: 60 } });
-    if (!res.ok) {
-      return { ok: false, error: `backend respondeu ${res.status}` };
-    }
-    return { ok: true, data: (await res.json()) as T };
-  } catch (err) {
-    // Backend fora do ar não pode derrubar a página inteira — cada bloco mostra
-    // seu próprio estado vazio.
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "backend inacessível",
-    };
-  }
-}
+/** Chamadas disparadas no browser (ações, export). Recebem o token da sessão. */
+export const browserApi = {
+  base: BROWSER_BASE,
 
-export const api = {
-  summary: (qs = "") => get<Summary>(`/sales/summary${qs}`),
-  daily: (qs = "") => get<DailyPoint[]>(`/sales/daily${qs}`),
-  byMachine: (qs = "") => get<MachineRow[]>(`/sales/by-machine${qs}`),
-  syncStatus: () => get<SyncRow[]>(`/sales/sync-status`),
+  async request(path: string, token: string, init?: RequestInit): Promise<Response> {
+    return fetch(`${BROWSER_BASE}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...init?.headers,
+      },
+    });
+  },
 };

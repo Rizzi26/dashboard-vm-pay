@@ -1,0 +1,289 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { StockRow } from "@/lib/api";
+import { browserApi } from "@/lib/api";
+import { formatInt, formatMoney } from "@/lib/format";
+import { supabaseBrowser } from "@/lib/supabase/browser";
+
+/** A UI esconde ações de quem não pode — e o servidor revalida de qualquer jeito. */
+const CAN_OPERATE = new Set(["admin", "master"]);
+
+type Modal =
+  | { kind: "restock"; row: StockRow }
+  | { kind: "price"; row: StockRow }
+  | null;
+
+export function StockView({
+  rows,
+  org,
+  role,
+}: {
+  rows: StockRow[];
+  org: string;
+  role: string;
+}) {
+  const router = useRouter();
+  const [filtro, setFiltro] = useState("");
+  const [modal, setModal] = useState<Modal>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const canOperate = CAN_OPERATE.has(role);
+
+  const visiveis = useMemo(() => {
+    const termo = filtro.trim().toLowerCase();
+    if (!termo) return rows;
+    return rows.filter(
+      (r) =>
+        r.produto.toLowerCase().includes(termo) ||
+        r.local.toLowerCase().includes(termo) ||
+        (r.barcode ?? "").includes(termo),
+    );
+  }, [rows, filtro]);
+
+  async function token(): Promise<string> {
+    const { data } = await supabaseBrowser().auth.getSession();
+    if (!data.session) throw new Error("sessão expirada — entre de novo");
+    return data.session.access_token;
+  }
+
+  async function exportar() {
+    try {
+      const resp = await browserApi.request(`/orgs/${org}/stock/export.csv`, await token());
+      if (!resp.ok) throw new Error(`backend respondeu ${resp.status}`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "estoque.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : "falha na exportação");
+    }
+  }
+
+  async function executar(path: string, body: unknown, sucesso: string) {
+    const resp = await browserApi.request(`/orgs/${org}${path}`, await token(), {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      throw new Error(payload.detail ?? `backend respondeu ${resp.status}`);
+    }
+    setFeedback(sucesso);
+    setModal(null);
+    router.refresh();
+  }
+
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-md border border-dashed border-[var(--grid)] p-8 text-center text-sm text-[var(--text-secondary)]">
+        Nenhum saldo sincronizado ainda. Rode a ingestão para popular o estoque.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <input
+          type="search"
+          placeholder="Filtrar por produto, local ou código…"
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          className="w-72 rounded-md border border-[var(--grid)] bg-transparent px-3 py-1.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--series-1)]"
+        />
+        <button
+          type="button"
+          onClick={exportar}
+          className="rounded-md border border-[var(--grid)] px-3 py-1.5 text-sm text-[var(--text-primary)] hover:border-[var(--series-1)]"
+        >
+          Exportar CSV
+        </button>
+      </div>
+
+      {feedback ? (
+        <p
+          role="status"
+          className="mb-4 rounded-md border border-[var(--grid)] px-3 py-2 text-sm text-[var(--text-primary)]"
+        >
+          {feedback}
+          <button
+            type="button"
+            className="ml-3 text-xs text-[var(--text-secondary)] underline"
+            onClick={() => setFeedback(null)}
+          >
+            fechar
+          </button>
+        </p>
+      ) : null}
+
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase text-[var(--text-secondary)]">
+            <th className="py-2 font-medium">Produto</th>
+            <th className="py-2 font-medium">Local</th>
+            <th className="py-2 text-right font-medium">Preço</th>
+            <th className="py-2 text-right font-medium">Qtd.</th>
+            {canOperate ? <th className="py-2 text-right font-medium">Ações</th> : null}
+          </tr>
+        </thead>
+        <tbody className="text-[var(--text-primary)]">
+          {visiveis.map((r) => (
+            <tr key={`${r.location_id}:${r.product_id}`} className="border-t border-[var(--grid)]">
+              <td className="py-2">
+                {r.produto}
+                {r.barcode ? (
+                  <span className="ml-2 text-xs text-[var(--text-secondary)]">{r.barcode}</span>
+                ) : null}
+              </td>
+              <td className="py-2 text-[var(--text-secondary)]">{r.local}</td>
+              <td className="py-2 text-right tabular-nums">
+                {r.preco !== null ? formatMoney(r.preco) : "—"}
+              </td>
+              <td className="py-2 text-right tabular-nums">{formatInt(r.quantidade)}</td>
+              {canOperate ? (
+                <td className="py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => setModal({ kind: "restock", row: r })}
+                    className="text-xs text-[var(--series-1)] underline underline-offset-2"
+                  >
+                    reabastecer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModal({ kind: "price", row: r })}
+                    className="ml-3 text-xs text-[var(--series-1)] underline underline-offset-2"
+                  >
+                    preço
+                  </button>
+                </td>
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {modal ? (
+        <ActionModal
+          modal={modal}
+          onClose={() => setModal(null)}
+          onSubmit={async (valor) => {
+            if (modal.kind === "restock") {
+              await executar(
+                "/stock/restock",
+                {
+                  location_id: modal.row.location_id,
+                  items: [{ product_id: modal.row.product_id, quantity: valor }],
+                },
+                `Reabastecimento de ${valor}× ${modal.row.produto} enviado à VMpay.`,
+              );
+            } else {
+              await executar(
+                "/stock/price",
+                {
+                  location_id: modal.row.location_id,
+                  product_id: modal.row.product_id,
+                  price: valor,
+                },
+                `Preço de ${modal.row.produto} atualizado na VMpay.`,
+              );
+            }
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ActionModal({
+  modal,
+  onClose,
+  onSubmit,
+}: {
+  modal: NonNullable<Modal>;
+  onClose: () => void;
+  onSubmit: (valor: number) => Promise<void>;
+}) {
+  const [valor, setValor] = useState("");
+  const [erro, setErro] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const restock = modal.kind === "restock";
+  const titulo = restock ? "Reabastecer" : "Alterar preço";
+  const rotulo = restock ? "Quantidade recebida" : "Novo preço (R$)";
+
+  async function confirmar(e: React.FormEvent) {
+    e.preventDefault();
+    const n = Number(valor.replace(",", "."));
+    if (!Number.isFinite(n) || n <= 0) {
+      setErro("Informe um número maior que zero.");
+      return;
+    }
+    setBusy(true);
+    setErro(null);
+    try {
+      await onSubmit(n);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "falha na ação");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={titulo}
+      className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4"
+    >
+      <form
+        onSubmit={confirmar}
+        className="w-full max-w-sm rounded-lg border border-[var(--grid)] bg-[var(--surface-1)] p-5"
+      >
+        <h2 className="text-base font-semibold text-[var(--text-primary)]">{titulo}</h2>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+          {modal.row.produto} · {modal.row.local}
+        </p>
+
+        <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+          {rotulo}
+          <input
+            autoFocus
+            inputMode="decimal"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--series-1)]"
+          />
+        </label>
+
+        {erro ? (
+          <p role="alert" className="mt-3 text-sm text-[var(--status-critical)]">
+            {erro}
+          </p>
+        ) : null}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-[var(--grid)] px-3 py-1.5 text-sm text-[var(--text-secondary)]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-md bg-[var(--series-1)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {busy ? "Enviando…" : "Confirmar"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

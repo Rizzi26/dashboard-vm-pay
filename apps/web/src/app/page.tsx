@@ -4,24 +4,29 @@ import { Offline } from "@/components/Offline";
 import { RevenueChart } from "@/components/RevenueChart";
 import { StatTile } from "@/components/StatTile";
 import { SyncStatus } from "@/components/SyncStatus";
-import { api } from "@/lib/api";
+import { Header } from "@/components/Header";
+import { serverApi } from "@/lib/api.server";
 import { formatInt, formatMoney } from "@/lib/format";
+import { orgSession } from "@/lib/org";
 
 export default async function Dashboard() {
+  const { me, org } = await orgSession();
   // Em paralelo: um bloco lento não segura os outros, e um que falha não
   // derruba a página.
   const [summary, daily, machines, sync] = await Promise.all([
-    api.summary(),
-    api.daily(),
-    api.byMachine("?limit=10"),
-    api.syncStatus(),
+    serverApi.summary(org.slug),
+    serverApi.daily(org.slug),
+    serverApi.byMachine(org.slug, "?limit=10"),
+    serverApi.syncStatus(org.slug),
   ]);
 
   return (
-    <main className="viz-root mx-auto max-w-5xl bg-[var(--surface-1)] px-6 py-10">
+    <div className="viz-root min-h-screen bg-[var(--surface-1)]">
+      <Header orgName={org.name} role={org.role} email={me.email} />
+      <main className="mx-auto max-w-5xl px-6 py-10">
       <header className="mb-8">
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">
-          VMpay · Vendas
+          Vendas
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
           {summary.ok
@@ -86,6 +91,7 @@ export default async function Dashboard() {
           </p>
         )}
       </footer>
-    </main>
+      </main>
+    </div>
   );
 }
