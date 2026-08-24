@@ -51,6 +51,18 @@ Settings → Secrets and variables → Actions:
 Uma chave por consumidor: o limite de 300 req/min é por token, então a chave da
 ingestão não pode ser a mesma do MCP nem a da API.
 
+## Primeira subida (seed da PoC)
+
+1. Aplique `supabase/migrations/0001_init.sql` e `0002_core.sql` (SQL Editor ou
+   `psql`), nesta ordem.
+2. Crie o primeiro usuário no painel: Authentication → Add user.
+3. Edite o email em `supabase/seed-poc.sql` e rode — cria a organização
+   `mercadinho`, a integração VMpay e a membership master.
+4. Confirme que os schemas `core` e `vmpay` **não** estão na lista de schemas
+   expostos da API (Settings → API → Exposed schemas).
+5. Rode a ingestão (Actions → Ingestão VMpay → Run workflow) para popular
+   catálogo e estoque.
+
 ## Backfill histórico
 
 O cron traz só o que é novo. Para carregar o histórico, dispare o workflow à mão
@@ -63,12 +75,26 @@ o que existe hoje varre do cursor para frente.
 
 ## Variáveis de ambiente dos serviços
 
-**Vercel** (`apps/web`): `API_URL` = URL pública do serviço no Render.
+**Vercel** (`apps/web`):
 
-**Render** (`apps/api`): as mesmas do `.env.example`, com uma diferença — use o
+| Env | O quê |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon/publishable key (pública por design) |
+| `API_URL` | URL do Render (fetch no servidor/SSR) |
+| `NEXT_PUBLIC_API_URL` | URL do Render (fetch no browser: ações, export) |
+
+**Render** (`apps/api`): as do `.env.example`, com uma diferença — use o
 **pooler** do Supabase (porta 6543) aqui, não a conexão direta. O engine já vai
 com `statement_cache_size=0`, necessário porque o pgbouncer em transaction mode
-não suporta prepared statements nomeados.
+não suporta prepared statements nomeados. Além delas, para o auth:
+
+| Env | O quê |
+|---|---|
+| `SUPABASE_URL` | base do JWKS para validar o JWT |
+| `SUPABASE_SERVICE_ROLE_KEY` | SÓ para convite/remoção de usuário; nunca no frontend |
+| `SUPABASE_JWT_SECRET` | opcional — só projetos antigos (HS256); projetos novos usam o JWKS |
+| `CORS_ORIGINS` | domínio da Vercel |
 
 Health check do Render: `/health`. Não use `/health/db` — ele toca no banco, e
 Supabase indisponível viraria loop de restart.

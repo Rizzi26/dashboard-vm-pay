@@ -45,19 +45,29 @@ público — `vmpay-api.readthedocs.io` é uma casca vazia de 2023.
 - Corpos de POST/PATCH vão **dentro de um envelope**: `{"product": {...}}`. O
   cliente monta isso sozinho a partir do catálogo.
 
+## O produto
+
+Plataforma **white-label** de gestão para operadores de autosserviço. A VMpay é
+o primeiro *conector*; o domínio canônico (schema `core`: organizações, papéis,
+produtos, locais, estoque, movimentos, action_log) não sabe o que é planograma.
+Papéis por organização: viewer (leitura/export), admin (+ações de operação),
+master (+usuários); superadmin de plataforma fora da hierarquia. Detalhes em
+docs/architecture.md.
+
 ## Estrutura
 
 ```
 packages/vmpay/     cliente Python compartilhado — toda quirk da API mora aqui
 apps/mcp/           servidor MCP (catálogo extraído da doc + guardrails)
-apps/api/           FastAPI no Render — ingestão + agregação
-apps/web/           Next.js na Vercel — dashboard
-supabase/           migrations (schema `vmpay`, não `public`)
+apps/api/           FastAPI no Render — auth/RBAC, ingestão, ações, agregação
+apps/web/           Next.js na Vercel — login, vendas, estoque, usuários
+supabase/           migrations (schemas `vmpay` e `core`) + seed-poc.sql
 ```
 
 O caminho do dado é sempre o mesmo: **VMpay → worker → Supabase → FastAPI →
 Next.js**. O dashboard nunca fala com a VMpay, e nada além do FastAPI fala com o
-Postgres.
+Postgres. Ações fazem o caminho inverso: FastAPI → conector → VMpay, sempre
+passando pelo action_log.
 
 Stack decidida: Next.js na Vercel, Supabase (Postgres), FastAPI no Render,
 separado do frontend.
@@ -98,6 +108,19 @@ publicar doc nova, substitua `docs/vendor/doc_api/` e rode o script.
 **Toda quirk da API vai para `packages/vmpay`,** não para o consumidor. Se você
 está prestes a tratar paginação, rate limit ou formato de data dentro do MCP, do
 worker ou da API, o lugar é o cliente.
+
+**Os schemas `core` e `vmpay` ficam FORA do PostgREST.** É o que impede a
+chave anônima do Supabase de alcançar qualquer dado. O frontend lê tudo pelo
+FastAPI, autenticado.
+
+**Papel se resolve no banco, nunca em claim do JWT.** O guard é `require_role`
+sobre `core.membership`; a UI apenas esconde botão — segurança é no servidor.
+
+**Toda ação passa pelo action_log**, com o registro pendente commitado ANTES do
+write-back. Não crie caminho de escrita que fale com a VMpay sem passar por ele.
+
+**Não edite catalog.json nem o schema na mão em produção** — migrations novas
+em `supabase/migrations/`, numeradas, validadas com pglast antes de aplicar.
 
 **Guardrails do MCP são deliberados, não excesso de zelo.** Escrita exige
 `VMPAY_ALLOW_WRITES=1` *e* `VMPAY_BASE` declarado; operação em máquina exige
