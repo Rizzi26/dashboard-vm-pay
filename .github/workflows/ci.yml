@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Um push em cima do outro cancela a execução anterior: só interessa o estado
+# mais recente do branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: testes ${{ matrix.pacote }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pacote: [packages/vmpay, apps/mcp, apps/api]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: instalar
+        working-directory: ${{ matrix.pacote }}
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
+
+      - name: pytest
+        working-directory: ${{ matrix.pacote }}
+        run: .venv/bin/pytest -q
+
+  catalogo:
+    name: catálogo do MCP confere com a doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      # docs/vendor/ não é versionada (material da Nayax), então o extrator não
+      # roda aqui. O que dá para garantir é que o catálogo commitado é JSON
+      # válido e cobre os recursos que o servidor referencia — pegar um
+      # catalog.json corrompido no merge é o objetivo.
+      - name: catálogo íntegro
+        working-directory: apps/mcp
+        run: |
+          uv venv && uv pip install -e ".[dev]"
+          .venv/bin/pytest tests/test_catalog.py -q
+
+  web:
+    name: build do dashboard
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      # O build roda o TypeScript: type error quebra aqui, não na Vercel.
+      - run: pnpm build

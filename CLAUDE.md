@@ -9,6 +9,8 @@ chama `vm-pay`).
 - [`docs/api-reference.md`](docs/api-reference.md) — a API destilada. **Consulte
   antes de escrever qualquer chamada.**
 - [`docs/architecture.md`](docs/architecture.md) — decisões tomadas e por quê.
+- [`docs/deploy.md`](docs/deploy.md) — onde cada peça roda, secrets, e as
+  armadilhas de repositório público.
 - `docs/endpoints.txt` — os 176 endpoints com o arquivo de origem de cada um.
 - `docs/vendor/doc_api.txt` — a doc oficial inteira em texto puro. Quando o
   api-reference não responder, `grep` aqui em vez de adivinhar. **Pode não
@@ -124,7 +126,8 @@ e não janela fixa, por que o cursor avança pelo maior id e não pelo último.
 - [x] `packages/vmpay` — cliente (15 testes)
 - [x] `apps/mcp` — servidor MCP (43 testes)
 - [x] `supabase/` — schema · `apps/api` — FastAPI (32 testes) · `apps/web` — dashboard
-- [ ] Conectar Vercel · Supabase · Render, e CI de deploy no merge para `main`
+- [x] CI de testes e cron de ingestão no GitHub Actions
+- [ ] Conectar Vercel · Supabase · Render (secrets em `docs/deploy.md`)
 
 **O código nunca falou com a API real** — só com mock. O primeiro contato de
 verdade depende do token de homologação, que está sendo providenciado junto ao

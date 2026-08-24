@@ -1,0 +1,87 @@
+name: Ingestão VMpay
+
+# Cron no GitHub Actions em vez do Render: o free tier do Render não tem cron
+# job, e para repositório público os minutos do Actions não são cobrados.
+#
+# O agendamento do Actions é *best-effort* — atrasos de 5 a 20 minutos são
+# comuns e uma execução pode ser pulada em horário de pico. Isso é aceitável
+# aqui só porque a ingestão é por cursor de id e idempotente: atrasar significa
+# dado menos fresco, nunca dado perdido ou duplicado. Não troque por uma
+# estratégia baseada em "a cada N minutos pegue os últimos N minutos" — essa
+# quebraria com o mesmo atraso.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      recurso:
+        description: "Qual recurso ingerir"
+        type: choice
+        options: [todos, cashless_facts, vends]
+        default: todos
+      max_rows:
+        description: "Teto de linhas (0 = sem teto, para backfill)"
+        type: string
+        default: "50000"
+
+# Sem gatilho de pull_request: num repositório público, PR de fork não pode
+# alcançar os secrets, e não há motivo para ingerir a partir de um PR.
+
+concurrency:
+  # Uma rodada por vez. Não cancela a que está correndo: durante um backfill,
+  # cancelar a cada 15 min impediria o cursor de progredir.
+  group: ingest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: conferir secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          VMPAY_INGEST_TOKEN: ${{ secrets.VMPAY_INGEST_TOKEN }}
+        run: |
+          : "${DATABASE_URL:?defina o secret DATABASE_URL}"
+          : "${VMPAY_INGEST_TOKEN:?defina o secret VMPAY_INGEST_TOKEN}"
+          echo "secrets presentes"
+
+      - name: instalar
+        working-directory: apps/api
+        run: |
+          uv venv
+          uv pip install -e .
+
+      - name: ingerir
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          VMPAY_INGEST_TOKEN: ${{ secrets.VMPAY_INGEST_TOKEN }}
+          VMPAY_BASE: ${{ secrets.VMPAY_BASE }}
+          INGEST_MAX_ROWS: ${{ inputs.max_rows || '50000' }}
+          RECURSO: ${{ inputs.recurso || 'todos' }}
+        # O log de Actions em repositório público é visível para qualquer um. O
+        # GitHub mascara o valor exato dos secrets, mas não uma versão
+        # transformada deles — por isso o cliente já faz redaction do
+        # access_token em toda URL antes de logar, e nada aqui imprime o
+        # ambiente.
+        run: |
+          if [ "$RECURSO" = "todos" ]; then
+            .venv/bin/vmpay-ingest
+          else
+            .venv/bin/python -c "
+          import asyncio, json, os
+          from vmpay_api.ingest import sync_all
+          print(json.dumps(asyncio.run(sync_all([os.environ['RECURSO']])), ensure_ascii=False, indent=2))
+          "
+          fi

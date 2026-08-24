@@ -10,8 +10,8 @@ Integração com a **API VMpay** (Nayax / Verti Tecnologia): servidor MCP + dash
 - [x] [`supabase/`](supabase) — schema da ingestão
 - [x] [`apps/api`](apps/api) — FastAPI: ingestão + agregação (32 testes)
 - [x] [`apps/web`](apps/web) — dashboard Next.js
-- [ ] Conectar Vercel · Supabase · Render
-- [ ] CI de deploy automático no merge para `main`
+- [x] CI de testes + cron de ingestão no GitHub Actions
+- [ ] Conectar Vercel · Supabase · Render — passo a passo em [docs/deploy.md](docs/deploy.md)
 
 Decisões de arquitetura em [docs/architecture.md](docs/architecture.md).
 
@@ -55,6 +55,7 @@ cd apps/mcp && uv venv && uv pip install -e ".[dev]" && .venv/bin/pytest
 | [CLAUDE.md](CLAUDE.md) | Contexto que o Claude lê a cada sessão nova. |
 | [docs/api-reference.md](docs/api-reference.md) | **Comece aqui.** Auth, paginação, rate limit, mapa dos recursos, pegadinhas. |
 | [docs/endpoints.txt](docs/endpoints.txt) | Os 176 endpoints, com o arquivo de origem de cada um. |
+| [docs/deploy.md](docs/deploy.md) | Onde cada peça roda, secrets e as armadilhas de repo público. |
 | [docs/vendor/COMO-OBTER.md](docs/vendor/COMO-OBTER.md) | Como baixar a doc oficial do portal — ela **não** é versionada. |
 
 A documentação oficial da VMpay é da Verti Tecnologia / Nayax e fica fora do git,
