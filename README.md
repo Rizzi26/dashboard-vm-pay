@@ -6,10 +6,12 @@ Integração com a **API VMpay** (Nayax / Verti Tecnologia): servidor MCP + dash
 
 - [x] Documentação consolidada
 - [x] `packages/vmpay` — cliente Python compartilhado (15 testes)
-- [x] [`apps/mcp`](apps/mcp) — servidor MCP (28 testes)
-- [ ] `apps/api` — FastAPI no Render (ingestão + agregação)
-- [ ] `apps/web` — Next.js na Vercel
-- [ ] `supabase/` — schema
+- [x] [`apps/mcp`](apps/mcp) — servidor MCP (43 testes)
+- [x] [`supabase/`](supabase) — schema da ingestão
+- [x] [`apps/api`](apps/api) — FastAPI: ingestão + agregação (32 testes)
+- [x] [`apps/web`](apps/web) — dashboard Next.js
+- [ ] Conectar Vercel · Supabase · Render
+- [ ] CI de deploy automático no merge para `main`
 
 Decisões de arquitetura em [docs/architecture.md](docs/architecture.md).
 

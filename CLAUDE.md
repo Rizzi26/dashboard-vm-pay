@@ -48,10 +48,14 @@ público — `vmpay-api.readthedocs.io` é uma casca vazia de 2023.
 ```
 packages/vmpay/     cliente Python compartilhado — toda quirk da API mora aqui
 apps/mcp/           servidor MCP (catálogo extraído da doc + guardrails)
-apps/api/           FastAPI no Render — ingestão + agregação   (não começou)
-apps/web/           Next.js na Vercel                          (não começou)
-supabase/           migrations                                 (não começou)
+apps/api/           FastAPI no Render — ingestão + agregação
+apps/web/           Next.js na Vercel — dashboard
+supabase/           migrations (schema `vmpay`, não `public`)
 ```
+
+O caminho do dado é sempre o mesmo: **VMpay → worker → Supabase → FastAPI →
+Next.js**. O dashboard nunca fala com a VMpay, e nada além do FastAPI fala com o
+Postgres.
 
 Stack decidida: Next.js na Vercel, Supabase (Postgres), FastAPI no Render,
 separado do frontend.
@@ -59,12 +63,20 @@ separado do frontend.
 ## Comandos
 
 ```bash
-# testes (58 no total)
-cd packages/vmpay && .venv/bin/pytest
-cd apps/mcp && .venv/bin/pytest
+# testes (90 no total)
+cd packages/vmpay && .venv/bin/pytest      # 15
+cd apps/mcp       && .venv/bin/pytest      # 43
+cd apps/api       && .venv/bin/pytest      # 32
 
-# ambiente, se ainda não existir
+# ambiente Python, se ainda não existir
 uv venv && uv pip install -e ".[dev]"
+
+# backend + dashboard local
+cd apps/api && .venv/bin/uvicorn vmpay_api.main:app --reload
+cd apps/web && API_URL=http://localhost:8000 pnpm dev
+
+# uma rodada de ingestão
+cd apps/api && .venv/bin/vmpay-ingest
 
 # regenerar o catálogo do MCP a partir da doc vendorizada
 python3 apps/mcp/tools/build_catalog.py
@@ -91,6 +103,13 @@ worker ou da API, o lugar é o cliente.
 alvo ecoado em `confirmar`. Comando remoto atinge equipamento físico em campo.
 Não afrouxe nada disso sem o humano pedir.
 
+**Faturamento sai de `vmpay.sale`, nunca de `vmpay.cashless_fact`.** O campo
+`status` vem `OK` ou `CANCEL`; somar sem filtrar infla o número. A view existe
+para que ninguém precise lembrar disso.
+
+**O schema `vmpay` não pode ser exposto no PostgREST.** É o que impede a chave
+anônima do Supabase de alcançar dado de venda. O dashboard lê pelo FastAPI.
+
 **Datas são UTC.** Os filtros aceitam ISO 8601 ou `dd/mm/yyyy hh:mi:ss`, e em
 ambos a API lê como UTC. Hora omitida vira 00:00 UTC e a janela muda em silêncio.
 Use `vmpay.to_vmpay_datetime()`.
@@ -104,7 +123,8 @@ e não janela fixa, por que o cursor avança pelo maior id e não pelo último.
 - [x] Documentação consolidada
 - [x] `packages/vmpay` — cliente (15 testes)
 - [x] `apps/mcp` — servidor MCP (43 testes)
-- [ ] Worker de ingestão · schema Supabase · FastAPI · dashboard
+- [x] `supabase/` — schema · `apps/api` — FastAPI (32 testes) · `apps/web` — dashboard
+- [ ] Conectar Vercel · Supabase · Render, e CI de deploy no merge para `main`
 
 **O código nunca falou com a API real** — só com mock. O primeiro contato de
 verdade depende do token de homologação, que está sendo providenciado junto ao
