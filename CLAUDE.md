@@ -9,13 +9,21 @@ chama `vm-pay`).
 - [`docs/api-reference.md`](docs/api-reference.md) — a API destilada. **Consulte
   antes de escrever qualquer chamada.**
 - [`docs/architecture.md`](docs/architecture.md) — decisões tomadas e por quê.
-- `docs/vendor/doc_api.txt` — a doc oficial inteira em texto puro. Quando o
-  api-reference não responder, `grep` aqui em vez de adivinhar.
 - `docs/endpoints.txt` — os 176 endpoints com o arquivo de origem de cada um.
+- `docs/vendor/doc_api.txt` — a doc oficial inteira em texto puro. Quando o
+  api-reference não responder, `grep` aqui em vez de adivinhar. **Pode não
+  existir** — veja abaixo.
 
-A doc oficial em HTML está em `docs/vendor/doc_api/` (abra `index.html`). Ela é
-redistribuição para consulta interna; a fonte é o portal VMpay em Configurações
-→ Chaves de Operador → Documentação API.
+## docs/vendor/ está fora do git
+
+O repositório é público e o material é da Verti Tecnologia / Nayax, então a doc
+oficial não é versionada. Um clone novo não a tem. O que é nosso — a destilação,
+a lista de endpoints, o `catalog.json` derivado — está versionado, e **o MCP
+funciona sem a pasta**.
+
+Para repopular (só é necessário para regenerar o catálogo): veja
+[`docs/vendor/COMO-OBTER.md`](docs/vendor/COMO-OBTER.md). Não existe espelho
+público — `vmpay-api.readthedocs.io` é uma casca vazia de 2023.
 
 ## A API em sete linhas
 

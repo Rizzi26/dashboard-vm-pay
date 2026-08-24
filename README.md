@@ -53,13 +53,12 @@ cd apps/mcp && uv venv && uv pip install -e ".[dev]" && .venv/bin/pytest
 | [CLAUDE.md](CLAUDE.md) | Contexto que o Claude lê a cada sessão nova. |
 | [docs/api-reference.md](docs/api-reference.md) | **Comece aqui.** Auth, paginação, rate limit, mapa dos recursos, pegadinhas. |
 | [docs/endpoints.txt](docs/endpoints.txt) | Os 176 endpoints, com o arquivo de origem de cada um. |
-| `docs/vendor/doc_api/index.html` | Doc oficial completa (Sphinx, offline). Abra no navegador. |
-| `docs/vendor/doc_api.txt` | A mesma doc em texto puro — use `grep` aqui. |
-| `docs/vendor/manual-acesso-nayax.pdf` | Como baixar a doc e gerar o token no portal. |
+| [docs/vendor/COMO-OBTER.md](docs/vendor/COMO-OBTER.md) | Como baixar a doc oficial do portal — ela **não** é versionada. |
 
-A doc oficial é redistribuída aqui só para consulta interna; a fonte é o portal
-VMpay (Configurações → Chaves de Operador → Documentação API) e o conteúdo é da
-Verti Tecnologia / Nayax.
+A documentação oficial da VMpay é da Verti Tecnologia / Nayax e fica fora do git,
+já que este repositório é público. Nada aqui depende dela: a destilação, a lista
+de endpoints e o catálogo do MCP são derivados versionados. Ela só é necessária
+para regenerar o catálogo.
 
 ## Resumo de 30 segundos
 
