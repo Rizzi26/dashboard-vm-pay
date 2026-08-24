@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import health, me, members, sales
+from .routers import health, me, members, sales, stock
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(me.router)
     app.include_router(members.router)
     app.include_router(sales.router)
+    app.include_router(stock.router)
     return app
 
 
