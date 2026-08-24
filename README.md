@@ -50,6 +50,7 @@ cd apps/mcp && uv venv && uv pip install -e ".[dev]" && .venv/bin/pytest
 
 | Arquivo | O que é |
 |---|---|
+| [CLAUDE.md](CLAUDE.md) | Contexto que o Claude lê a cada sessão nova. |
 | [docs/api-reference.md](docs/api-reference.md) | **Comece aqui.** Auth, paginação, rate limit, mapa dos recursos, pegadinhas. |
 | [docs/endpoints.txt](docs/endpoints.txt) | Os 176 endpoints, com o arquivo de origem de cada um. |
 | `docs/vendor/doc_api/index.html` | Doc oficial completa (Sphinx, offline). Abra no navegador. |
