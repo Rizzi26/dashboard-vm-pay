@@ -5,8 +5,8 @@ Integração com a **API VMpay** (Nayax / Verti Tecnologia): servidor MCP + dash
 ## Estado
 
 - [x] Documentação consolidada
-- [x] `packages/vmpay` — cliente Python compartilhado (15 testes passando)
-- [ ] `apps/mcp` — servidor MCP
+- [x] `packages/vmpay` — cliente Python compartilhado (15 testes)
+- [x] [`apps/mcp`](apps/mcp) — servidor MCP (28 testes)
 - [ ] `apps/api` — FastAPI no Render (ingestão + agregação)
 - [ ] `apps/web` — Next.js na Vercel
 - [ ] `supabase/` — schema
@@ -33,6 +33,17 @@ garante ordem crescente.
 
 ```bash
 cd packages/vmpay && uv venv && uv pip install -e ".[dev]" && .venv/bin/pytest
+```
+
+## Servidor MCP
+
+Nove tools genéricas sobre as ~160 operações da API, com o catálogo de recursos
+extraído da doc oficial e três níveis de permissão — leitura por padrão, escrita
+e operação em máquina só com interruptor explícito. Detalhes em
+[apps/mcp/README.md](apps/mcp/README.md).
+
+```bash
+cd apps/mcp && uv venv && uv pip install -e ".[dev]" && .venv/bin/pytest
 ```
 
 ## Documentação

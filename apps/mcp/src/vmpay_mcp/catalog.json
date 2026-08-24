@@ -1,0 +1,2491 @@
+{
+  "resources": {
+    "adjust": {
+      "resource": "adjust",
+      "label": "Checkpoints",
+      "group": "cadastro",
+      "doc": "registries/scheduled_visit_checkpoints.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "scheduled_visit_checkpoints/{id}/adjust",
+          "filters": [],
+          "required": [
+            "inventories",
+            "custom_values"
+          ],
+          "optional": [],
+          "envelope": "checkpoint"
+        }
+      }
+    },
+    "alerts": {
+      "resource": "alerts",
+      "label": "Alertas",
+      "group": "relatorio",
+      "doc": "reports/alert.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "alerts",
+          "filters": [
+            "start_date",
+            "end_date",
+            "client_id",
+            "location_id",
+            "machine_id",
+            "machine_manufacturer_id",
+            "installation_id",
+            "alert_id_greater_than"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "audits": {
+      "resource": "audits",
+      "label": "Auditorias",
+      "group": "cadastro",
+      "doc": "registries/installations/audit.html",
+      "path_params": [
+        "machine_id",
+        "installation_id"
+      ],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/audits",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/audits/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "available_selections": {
+      "resource": "available_selections",
+      "label": "Seleções Disponíveis",
+      "group": "relatorio",
+      "doc": "reports/available_selections.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "available_selections",
+          "filters": [
+            "client_id",
+            "location_id",
+            "machine_id",
+            "machine_model_id",
+            "machine_type_id",
+            "machine_category_id",
+            "distribution_center_id",
+            "good_id",
+            "category_id",
+            "product_type",
+            "tags",
+            "status"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "cashless_facts": {
+      "resource": "cashless_facts",
+      "label": "Transações cashless (Novo)",
+      "group": "relatorio",
+      "doc": "reports/cashless_facts.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "cashless_facts",
+          "filters": [
+            "start_date",
+            "end_date",
+            "client_id",
+            "transaction_id_greater_than",
+            "location_id",
+            "place",
+            "machine_type_id",
+            "machine_id",
+            "machine_model_id",
+            "distribution_center_id",
+            "kind",
+            "point_of_sale",
+            "request_number",
+            "uuid",
+            "route_id",
+            "eft_provider_id",
+            "eft_authorizer_id",
+            "eft_card_brand_id",
+            "eft_card_type_id",
+            "good_category_id",
+            "good_manufacturer_id",
+            "good_id",
+            "customer_id",
+            "status",
+            "equipment_id",
+            "payment_authorizer_id",
+            "masked_card_number",
+            "product_type",
+            "tags"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "cashless_sales": {
+      "resource": "cashless_sales",
+      "label": "Transações cashless por venda",
+      "group": "relatorio",
+      "doc": "reports/cashless_sales.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "cashless_sales",
+          "filters": [
+            "start_date",
+            "end_date",
+            "sale_id_greater_than",
+            "client_id",
+            "location_id",
+            "place",
+            "machine_type_id",
+            "machine_id",
+            "machine_model_id",
+            "distribution_center_id",
+            "kind",
+            "point_of_sale",
+            "request_number",
+            "uuid",
+            "route_id",
+            "eft_provider_id",
+            "eft_authorizer_id",
+            "eft_card_brand_id",
+            "eft_card_type_id",
+            "good_category_id",
+            "good_manufacturer_id",
+            "good_id",
+            "customer_id",
+            "status",
+            "equipment_id",
+            "payment_authorizer_id",
+            "masked_card_number",
+            "product_type",
+            "cpf",
+            "phone",
+            "tags"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "cashless_transactions": {
+      "resource": "cashless_transactions",
+      "label": "Transações cashless",
+      "group": "relatorio",
+      "doc": "reports/cashless_transaction.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "cashless_transactions",
+          "filters": [
+            "start_date",
+            "end_date",
+            "client_id",
+            "location_id",
+            "machine_id",
+            "installation_id",
+            "category_id",
+            "manufacturer_id",
+            "good_id",
+            "eft_provider_id",
+            "eft_authorizer_id",
+            "eft_card_brand_id",
+            "eft_card_type_id"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "categories": {
+      "resource": "categories",
+      "label": "Categorias",
+      "group": "cadastro",
+      "doc": "registries/category.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "categories",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "categories/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "categories",
+          "filters": [],
+          "required": [
+            "name",
+            "over18"
+          ],
+          "optional": [],
+          "envelope": "machine"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "categories/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "categories/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "clients": {
+      "resource": "clients",
+      "label": "Clientes",
+      "group": "cadastro",
+      "doc": "registries/client.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "clients",
+          "filters": [
+            "name",
+            "cpf",
+            "cnpj",
+            "legal_type"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "clients/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "clients",
+          "filters": [],
+          "required": [
+            "name",
+            "legal_type",
+            "cpf",
+            "cnpj"
+          ],
+          "optional": [
+            "corporate_name",
+            "contact_name",
+            "contact_phone",
+            "contact_email",
+            "notes",
+            "main_location_id",
+            "nif"
+          ],
+          "envelope": "client"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "clients/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "clients/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "complete": {
+      "resource": "complete",
+      "label": "Visitas agendadas",
+      "group": "cadastro",
+      "doc": "registries/scheduled_visits.html",
+      "path_params": [],
+      "operations": {
+        "action:complete": {
+          "method": "PATCH",
+          "path": "scheduled_visits/{id}/complete",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "compound_products": {
+      "resource": "compound_products",
+      "label": "Produtos compostos",
+      "group": "cadastro",
+      "doc": "registries/compound_product.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "compound_products",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "compound_products/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "compound_products",
+          "filters": [],
+          "required": [
+            "type",
+            "category_id",
+            "name"
+          ],
+          "optional": [
+            "cost_price",
+            "external_id",
+            "tags"
+          ],
+          "envelope": "compound_product"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "compound_products/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "compound_products/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "confirm": {
+      "resource": "confirm",
+      "label": "Checkpoints",
+      "group": "cadastro",
+      "doc": "registries/scheduled_visit_checkpoints.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "scheduled_visit_checkpoints/{id}/confirm",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "create_from_current_planogram": {
+      "resource": "create_from_current_planogram",
+      "label": "Criar e importar Planograma",
+      "group": "cadastro",
+      "doc": "registries/installations/create_from_current_planogram.html",
+      "path_params": [
+        "machine_id",
+        "installation_id"
+      ],
+      "operations": {
+        "create": {
+          "method": "POST",
+          "path": "machines/{machine_id}/installations/{installation_id}/create_from_current_planogram",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "current_planogram": {
+      "resource": "current_planogram",
+      "label": "Planograma atual",
+      "group": "cadastro",
+      "doc": "registries/installations/current_planogram.html",
+      "path_params": [
+        "machine_id",
+        "installation_id"
+      ],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/current_planogram",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "action:current_planogram": {
+          "method": "PATCH",
+          "path": "machines/{machine_id}/installations/{installation_id}/current_planogram",
+          "filters": [],
+          "required": [
+            "items_attributes"
+          ],
+          "optional": [
+            "details"
+          ],
+          "envelope": "planogram"
+        }
+      }
+    },
+    "device_configs": {
+      "resource": "device_configs",
+      "label": "Ativos",
+      "group": "relatorio",
+      "doc": "reports/device_config.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "device_configs",
+          "filters": [
+            "location_id",
+            "machine_id",
+            "equipment_id",
+            "kind",
+            "serial_number",
+            "model_number",
+            "manufacturer",
+            "active_installations_only"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "distribution_center_inventories": {
+      "resource": "distribution_center_inventories",
+      "label": "Movimentos dos Centros de Estoque",
+      "group": "relatorio",
+      "doc": "reports/distribution_center_inventories.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "distribution_center_inventories",
+          "filters": [
+            "occurred_at_start",
+            "occurred_at_end",
+            "provider_id",
+            "kind",
+            "good_id",
+            "distribution_center_id"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "distribution_centers": {
+      "resource": "distribution_centers",
+      "label": "Centros de distribuição",
+      "group": "inventario",
+      "doc": "inventory/distribution_center.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "distribution_centers",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "distribution_centers/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [
+            "name",
+            "external_id"
+          ],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "distribution_centers",
+          "filters": [],
+          "required": [
+            "name"
+          ],
+          "optional": [
+            "external_id"
+          ],
+          "envelope": "distribution_center"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "distribution_centers/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "distribution_centers/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "door_accesses": {
+      "resource": "door_accesses",
+      "label": "Abertura de Portas",
+      "group": "relatorio",
+      "doc": "reports/door_accesses.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "door_accesses",
+          "filters": [
+            "client_id",
+            "location_id",
+            "machine_id",
+            "email",
+            "name",
+            "cpf"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "eft_authorizers": {
+      "resource": "eft_authorizers",
+      "label": "Adquirentes de TEF",
+      "group": "dominio",
+      "doc": "info/eft_authorizer.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "eft_authorizers",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "eft_card_brands": {
+      "resource": "eft_card_brands",
+      "label": "Cartões",
+      "group": "dominio",
+      "doc": "info/eft_card_brand.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "eft_card_brands",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "eft_card_types": {
+      "resource": "eft_card_types",
+      "label": "Tipos de cartão",
+      "group": "dominio",
+      "doc": "info/eft_card_type.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "eft_card_types",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "eft_providers": {
+      "resource": "eft_providers",
+      "label": "Provedores de TEF",
+      "group": "dominio",
+      "doc": "info/eft_provider.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "eft_providers",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "equipments": {
+      "resource": "equipments",
+      "label": "Equipamentos",
+      "group": "dominio",
+      "doc": "info/equipment.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "equipments",
+          "filters": [
+            "assigned"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "equipments/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "export": {
+      "resource": "export",
+      "label": "Lista o link dos planogramas das instalações ativas",
+      "group": "relatorio",
+      "doc": "reports/planogram.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "planograms/{id}/export",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "export_links": {
+      "resource": "export_links",
+      "label": "Lista o link dos planogramas das instalações ativas",
+      "group": "relatorio",
+      "doc": "reports/planogram.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "planograms/export_links",
+          "filters": [
+            "virtual_equipment",
+            "client_id",
+            "location_id",
+            "machine_id",
+            "machine_type_id",
+            "equipment_id",
+            "point_of_sale",
+            "distribution_center_id",
+            "connection_status_interface_kind",
+            "filled_inventory",
+            "start_date",
+            "route_id",
+            "items_at_alert_level",
+            "empty_items",
+            "status",
+            "tags"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "external_efts": {
+      "resource": "external_efts",
+      "label": "Transações cashless externas",
+      "group": "cadastro",
+      "doc": "registries/installations/external_efts.html",
+      "path_params": [
+        "machine_id",
+        "installation_id"
+      ],
+      "operations": {
+        "create": {
+          "method": "POST",
+          "path": "machines/{machine_id}/installations/{installation_id}/external_efts",
+          "filters": [],
+          "required": [],
+          "optional": [
+            "items",
+            "payment"
+          ],
+          "envelope": null
+        }
+      }
+    },
+    "fractionable_products": {
+      "resource": "fractionable_products",
+      "label": "Produtos fracionáveis",
+      "group": "cadastro",
+      "doc": "registries/fractionable_product.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "fractionable_products",
+          "filters": [
+            "barcode",
+            "include_deleted",
+            "start_updated",
+            "end_updated"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "fractionable_products/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "fractionable_products",
+          "filters": [],
+          "required": [
+            "name",
+            "manufacturer_id",
+            "category_id",
+            "unit_id"
+          ],
+          "optional": [
+            "upc_code",
+            "barcode",
+            "external_id",
+            "weight",
+            "tags",
+            "cost_price",
+            "additional_barcodes_attributes",
+            "ncm_code",
+            "cest_code",
+            "tax_operation_id"
+          ],
+          "envelope": "product"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "fractionable_products/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "fractionable_products/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "ignored_coils": {
+      "resource": "ignored_coils",
+      "label": "Canaletas ignoradas",
+      "group": "relatorio",
+      "doc": "reports/ignored_coils.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "ignored_coils",
+          "filters": [
+            "start_date",
+            "end_date",
+            "client_id",
+            "good_id",
+            "machine_id",
+            "distribution_center_id"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "inputs": {
+      "resource": "inputs",
+      "label": "Insumos",
+      "group": "cadastro",
+      "doc": "registries/input.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "inputs",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "inputs/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "inputs",
+          "filters": [],
+          "required": [
+            "category_id",
+            "name",
+            "unit"
+          ],
+          "optional": [
+            "external_id",
+            "good_packing_attributes"
+          ],
+          "envelope": "input"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "inputs/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "inputs/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "installation_stock_balances": {
+      "resource": "installation_stock_balances",
+      "label": "Saldos das instalações",
+      "group": "relatorio",
+      "doc": "reports/installation_stock_balances.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "installation_stock_balances",
+          "filters": [
+            "client_id",
+            "location_id",
+            "machine_id",
+            "machine_type_id",
+            "machine_model_id",
+            "category_id",
+            "good_id",
+            "product_type_id",
+            "use_cost_price"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "installations": {
+      "resource": "installations",
+      "label": "Instalações",
+      "group": "cadastro",
+      "doc": "registries/installation.html",
+      "path_params": [
+        "machine_id"
+      ],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "installations",
+          "filters": [
+            "id",
+            "virtual_equipment",
+            "client_id",
+            "location_id",
+            "machine_id",
+            "machine_type_id",
+            "machine_model_id",
+            "equipment_id",
+            "point_of_sale",
+            "distribution_center_id",
+            "connection_status_interface_kind",
+            "filled_inventory",
+            "start_date",
+            "route_id",
+            "items_at_alert_level",
+            "empty_items",
+            "operation_status",
+            "tags"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "machines/{machine_id}/installations",
+          "filters": [],
+          "required": [
+            "location_id",
+            "equipment_id",
+            "cash_mode",
+            "restock_mode",
+            "restock_strategy",
+            "notifications_enabled",
+            "audit_enabled",
+            "enable_audit_schedule",
+            "visit_schedule",
+            "planograms_attributes"
+          ],
+          "optional": [
+            "place",
+            "no_vend_schedule_id",
+            "audit_schedule",
+            "enable_contactless",
+            "issues_invoice",
+            "payment_authorizer_ids"
+          ],
+          "envelope": "installation"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "machines/{machine_id}/installations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "machines/{machine_id}/installations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "inventory_adjustments": {
+      "resource": "inventory_adjustments",
+      "label": "Ajustes de inventário",
+      "group": "cadastro",
+      "doc": "registries/installations/inventory_adjustment.html",
+      "path_params": [
+        "machine_id",
+        "installation_id"
+      ],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/inventory_adjustments",
+          "filters": [
+            "start_date",
+            "end_date"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/inventory_adjustments/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [
+            "id",
+            "created_at",
+            "planogram_id",
+            "kind",
+            "event_id",
+            "user_id",
+            "occurred_at",
+            "items"
+          ],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "machines/{machine_id}/installations/{installation_id}/inventory_adjustments",
+          "filters": [],
+          "required": [
+            "planogram_id",
+            "kind",
+            "occurred_at",
+            "items_attributes"
+          ],
+          "optional": [],
+          "envelope": "inventory_adjustment"
+        }
+      }
+    },
+    "invoices": {
+      "resource": "invoices",
+      "label": "Notas Fiscais",
+      "group": "relatorio",
+      "doc": "reports/invoice.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "invoices",
+          "filters": [
+            "start_date",
+            "end_date",
+            "issued_start_date",
+            "issued_end_date",
+            "invoice_id_greater_than",
+            "client_id",
+            "location_id",
+            "machine_id",
+            "customer_id",
+            "only_customers_identified",
+            "status",
+            "number"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "last_audit": {
+      "resource": "last_audit",
+      "label": "Auditorias",
+      "group": "cadastro",
+      "doc": "registries/installations/audit.html",
+      "path_params": [
+        "machine_id",
+        "installation_id"
+      ],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/last_audit",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "locations": {
+      "resource": "locations",
+      "label": "Locais",
+      "group": "cadastro",
+      "doc": "registries/location.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "locations",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "locations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "locations",
+          "filters": [],
+          "required": [
+            "name",
+            "state"
+          ],
+          "optional": [
+            "client_id",
+            "phone",
+            "street",
+            "number",
+            "complement",
+            "neighborhood",
+            "city",
+            "country",
+            "zip_code"
+          ],
+          "envelope": "location"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "locations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "locations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "machine_manufacturers": {
+      "resource": "machine_manufacturers",
+      "label": "Fabricantes de máquina",
+      "group": "dominio",
+      "doc": "info/machine_manufacturer.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machine_manufacturers",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "machine_models": {
+      "resource": "machine_models",
+      "label": "Modelos de máquina",
+      "group": "dominio",
+      "doc": "info/machine_model.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machine_models",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "machine_types": {
+      "resource": "machine_types",
+      "label": "Tipos de máquina",
+      "group": "dominio",
+      "doc": "info/machine_type.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machine_types",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "machines": {
+      "resource": "machines",
+      "label": "Máquinas",
+      "group": "cadastro",
+      "doc": "registries/machine.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machines",
+          "filters": [
+            "asset_number",
+            "tags"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "machines/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "machines",
+          "filters": [],
+          "required": [
+            "machine_model_id"
+          ],
+          "optional": [
+            "distribution_center_id",
+            "external_id",
+            "tags"
+          ],
+          "envelope": "machine"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "machines/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "machines/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "manufacturers": {
+      "resource": "manufacturers",
+      "label": "Fabricantes",
+      "group": "cadastro",
+      "doc": "registries/manufacturer.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "manufacturers",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "manufacturers/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "manufacturers",
+          "filters": [],
+          "required": [
+            "name"
+          ],
+          "optional": [],
+          "envelope": "manufacturer"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "manufacturers/{id}",
+          "filters": [],
+          "required": [
+            "name"
+          ],
+          "optional": [],
+          "envelope": "manufacturer"
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "manufacturers/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "market_users": {
+      "resource": "market_users",
+      "label": "Usuários VMmarket",
+      "group": "relatorio",
+      "doc": "reports/market_users.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "market_users",
+          "filters": [
+            "created_at",
+            "updated_at",
+            "cpf"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "no_vend_schedules": {
+      "resource": "no_vend_schedules",
+      "label": "Agendamentos de alerta de não venda",
+      "group": "cadastro",
+      "doc": "registries/no_vend_schedule.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "no_vend_schedules",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "operator_childrens": {
+      "resource": "operator_childrens",
+      "label": "Operadores Filhos",
+      "group": "dominio",
+      "doc": "info/operator_childrens.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "operator_childrens",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "packings": {
+      "resource": "packings",
+      "label": "Packings",
+      "group": "cadastro",
+      "doc": "registries/packing.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "packings",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "packings/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "packings",
+          "filters": [],
+          "required": [
+            "name",
+            "unit",
+            "quantity"
+          ],
+          "optional": [],
+          "envelope": "packing"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "packings/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "packings/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "payment_authorizers": {
+      "resource": "payment_authorizers",
+      "label": "Autorizadores QRCode",
+      "group": "dominio",
+      "doc": "info/payment_authorizers.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "payment_authorizers",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "pick_list_items": {
+      "resource": "pick_list_items",
+      "label": "Itens de Pick List",
+      "group": "relatorio",
+      "doc": "reports/pick_list_items.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "pick_list_items",
+          "filters": [
+            "period_type",
+            "start_date",
+            "end_date",
+            "operator_id",
+            "user_id",
+            "client_id",
+            "location_id",
+            "good_id",
+            "manufacturer_id",
+            "category_id",
+            "machine_id",
+            "distribution_center_id",
+            "equipment_id",
+            "pending_only",
+            "current_installations_only",
+            "route_id",
+            "product_type",
+            "tags"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "pick_lists": {
+      "resource": "pick_lists",
+      "label": "Pick lists Padrão",
+      "group": "cadastro",
+      "doc": "registries/installations/pick_list_status_strategy_default.html",
+      "path_params": [
+        "machine_id",
+        "installation_id"
+      ],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "pick_lists",
+          "filters": [
+            "status",
+            "separate_status",
+            "pending_only",
+            "updated_since",
+            "updated_until"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/pick_lists/{id}",
+          "filters": [
+            "show_all_items"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "machines/{machine_id}/installations/{installation_id}/pick_lists",
+          "filters": [],
+          "required": [
+            "planogram_id",
+            "supply_category_id",
+            "items_attributes"
+          ],
+          "optional": [
+            "notes",
+            "skip_rules"
+          ],
+          "envelope": "pick_list"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "machines/{machine_id}/installations/{installation_id}/pick_lists/{id}",
+          "filters": [],
+          "required": [
+            "items_attributes"
+          ],
+          "optional": [
+            "notes",
+            "skip_rules"
+          ],
+          "envelope": "pick_list"
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "machines/{machine_id}/installations/{installation_id}/pick_lists/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "planograms": {
+      "resource": "planograms",
+      "label": "Planogramas",
+      "group": "cadastro",
+      "doc": "registries/installations/planogram.html",
+      "path_params": [
+        "machine_id",
+        "installation_id"
+      ],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/planograms",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/planograms/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "machines/{machine_id}/installations/{installation_id}/planograms",
+          "filters": [],
+          "required": [
+            "items_attributes"
+          ],
+          "optional": [
+            "details"
+          ],
+          "envelope": "planogram"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "machines/{machine_id}/installations/{installation_id}/planograms/{id}",
+          "filters": [],
+          "required": [
+            "items_attributes"
+          ],
+          "optional": [
+            "details"
+          ],
+          "envelope": "planogram"
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "machines/{machine_id}/installations/{installation_id}/planograms/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "products": {
+      "resource": "products",
+      "label": "Produtos",
+      "group": "cadastro",
+      "doc": "registries/product.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "products",
+          "filters": [
+            "include_deleted",
+            "barcode",
+            "start_updated",
+            "end_updated"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "products/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "products",
+          "filters": [],
+          "required": [
+            "name",
+            "manufacturer_id",
+            "category_id",
+            "supply_category_id"
+          ],
+          "optional": [
+            "upc_code",
+            "barcode",
+            "external_id",
+            "weight",
+            "cost_price",
+            "default_price",
+            "ignore_distribution_center",
+            "ignore_automatic_picklist",
+            "tags",
+            "additional_barcodes_attributes",
+            "alternatives",
+            "good_packing_attributes",
+            "ncm_code",
+            "cest_code",
+            "tax_operation_id"
+          ],
+          "envelope": "product"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "products/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [
+            "packing",
+            "alternatives"
+          ],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "products/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "reactivate": {
+      "resource": "reactivate",
+      "label": "Produtos fracionáveis",
+      "group": "cadastro",
+      "doc": "registries/fractionable_product.html",
+      "path_params": [],
+      "operations": {
+        "action:reactivate": {
+          "method": "PATCH",
+          "path": "products/{id}/reactivate",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "remote_commands": {
+      "resource": "remote_commands",
+      "label": "Comandos remotos",
+      "group": "cadastro",
+      "doc": "registries/installations/remote_command.html",
+      "path_params": [
+        "machine_id",
+        "installation_id"
+      ],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/remote_commands",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "machines/{machine_id}/installations/{installation_id}/remote_commands/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [
+            "id",
+            "created_at",
+            "kind",
+            "user_input",
+            "status"
+          ],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "machines/{machine_id}/installations/{installation_id}/remote_commands",
+          "filters": [],
+          "required": [
+            "kind",
+            "user_input"
+          ],
+          "optional": [],
+          "envelope": "remote_command"
+        }
+      }
+    },
+    "restock": {
+      "resource": "restock",
+      "label": "Instalações",
+      "group": "cadastro",
+      "doc": "registries/installation.html",
+      "path_params": [
+        "machine_id"
+      ],
+      "operations": {
+        "create": {
+          "method": "POST",
+          "path": "machines/{machine_id}/installations/{id}/restock",
+          "filters": [],
+          "required": [],
+          "optional": [
+            "restock_mode"
+          ],
+          "envelope": null
+        }
+      }
+    },
+    "returned_amount_types": {
+      "resource": "returned_amount_types",
+      "label": "Tipos de retorno",
+      "group": "dominio",
+      "doc": "info/returned_amount_types.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "returned_amount_types",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "routes": {
+      "resource": "routes",
+      "label": "Rotas",
+      "group": "cadastro",
+      "doc": "registries/route.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "routes",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "routes/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "routes",
+          "filters": [],
+          "required": [
+            "name",
+            "installation_ids"
+          ],
+          "optional": [],
+          "envelope": "route"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "routes/{id}",
+          "filters": [],
+          "required": [
+            "name",
+            "installation_ids"
+          ],
+          "optional": [],
+          "envelope": "route"
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "routes/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "ruptures": {
+      "resource": "ruptures",
+      "label": "Rupturas",
+      "group": "relatorio",
+      "doc": "reports/rupture.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "ruptures",
+          "filters": [
+            "period_type",
+            "date",
+            "start_date",
+            "end_date",
+            "client_id",
+            "location_id",
+            "machine_id",
+            "machine_type_id",
+            "distribution_center_id",
+            "route_id",
+            "category_id",
+            "good_id",
+            "trigger",
+            "tags",
+            "ignore_products"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "scheduled_visit_checkpoints": {
+      "resource": "scheduled_visit_checkpoints",
+      "label": "Checkpoints",
+      "group": "cadastro",
+      "doc": "registries/scheduled_visit_checkpoints.html",
+      "path_params": [],
+      "operations": {
+        "get": {
+          "method": "GET",
+          "path": "scheduled_visit_checkpoints/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "scheduled_visits": {
+      "resource": "scheduled_visits",
+      "label": "Visitas agendadas",
+      "group": "cadastro",
+      "doc": "registries/scheduled_visits.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "scheduled_visits",
+          "filters": [
+            "start_date",
+            "end_date"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "scheduled_visits/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "scheduled_visits",
+          "filters": [],
+          "required": [
+            "date",
+            "supply_category_id"
+          ],
+          "optional": [
+            "scheduled_visit_routes_attributes",
+            "scheduled_visit_checkpoints"
+          ],
+          "envelope": "scheduled_visit"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "scheduled_visits/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "scheduled_visits/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "sessions": {
+      "resource": "sessions",
+      "label": "Caixas",
+      "group": "relatorio",
+      "doc": "reports/session.html",
+      "path_params": [
+        "session_id"
+      ],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "sessions",
+          "filters": [
+            "started_at_from",
+            "started_at_to",
+            "ended_at_from",
+            "ended_at_to",
+            "client_id",
+            "location_id",
+            "machine_id",
+            "installation_id",
+            "route_id",
+            "active_installations_only",
+            "status"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "sessions/{session_id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "storables": {
+      "resource": "storables",
+      "label": "Estoques",
+      "group": "inventario",
+      "doc": "inventory/storable.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "storables",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "storables/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [
+            "type",
+            "manufacturer_id",
+            "category_id",
+            "name",
+            "upc_code",
+            "barcode",
+            "external_id",
+            "inventories"
+          ],
+          "envelope": null
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "storables/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [
+            "inventories"
+          ],
+          "envelope": "storable"
+        }
+      }
+    },
+    "store_models": {
+      "resource": "store_models",
+      "label": "Modelos de Loja",
+      "group": "dominio",
+      "doc": "info/store_models.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "store_models",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "supply_categories": {
+      "resource": "supply_categories",
+      "label": "Categorias de abastecimento",
+      "group": "cadastro",
+      "doc": "registries/supply_category.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "supply_categories",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "supply_categories/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "supply_categories",
+          "filters": [],
+          "required": [
+            "name"
+          ],
+          "optional": [],
+          "envelope": "supply_category"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "supply_categories/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "supply_categories/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "tax_operations": {
+      "resource": "tax_operations",
+      "label": "Operações Fiscais",
+      "group": "cadastro",
+      "doc": "registries/tax_operation.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "tax_operations",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "tax_operations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "tax_operations",
+          "filters": [],
+          "required": [
+            "name",
+            "cfop",
+            "pis_cst",
+            "pis_aliquot",
+            "cofins_cst",
+            "cofins_aliquot",
+            "icms_cst",
+            "icms_aliquot",
+            "icms_reduction",
+            "benefit",
+            "ibs_cbs_tax_situation",
+            "ibs_cbs_tax_classification",
+            "ibs_state_aliquot",
+            "cbs_aliquot"
+          ],
+          "optional": [
+            "icms_exemption_reason",
+            "icms_exemption_aliquot",
+            "ibs_municipal_aliquot",
+            "ibs_state_reduction_aliquot",
+            "ibs_mun_reduction_aliquot",
+            "cbs_reduction_aliquot"
+          ],
+          "envelope": "tax_operation"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "tax_operations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "tax_operations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "undo_complete": {
+      "resource": "undo_complete",
+      "label": "Visitas agendadas",
+      "group": "cadastro",
+      "doc": "registries/scheduled_visits.html",
+      "path_params": [],
+      "operations": {
+        "action:undo_complete": {
+          "method": "PATCH",
+          "path": "scheduled_visits/{id}/undo_complete",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "units": {
+      "resource": "units",
+      "label": "Unidades de medida",
+      "group": "cadastro",
+      "doc": "registries/unit.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "units",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "units/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "vendibles": {
+      "resource": "vendibles",
+      "label": "Produtos",
+      "group": "cadastro",
+      "doc": "registries/product.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "vendibles",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "vendibles/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "vendibles",
+          "filters": [],
+          "required": [
+            "name",
+            "type",
+            "manufacturer_id",
+            "category_id"
+          ],
+          "optional": [
+            "upc_code",
+            "good_packing_attributes"
+          ],
+          "envelope": "vendible"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "vendibles/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "vendibles/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      },
+      "deprecated": true
+    },
+    "vends": {
+      "resource": "vends",
+      "label": "Vendas",
+      "group": "relatorio",
+      "doc": "reports/vend.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "vends",
+          "filters": [
+            "start_date",
+            "end_date",
+            "client_id",
+            "location_id",
+            "machine_id",
+            "installation_id",
+            "category_id",
+            "manufacturer_id",
+            "good_id",
+            "vend_id_greater_than",
+            "audit_id"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "virtual_installations": {
+      "resource": "virtual_installations",
+      "label": "Instalações Virtuais",
+      "group": "cadastro",
+      "doc": "registries/virtual_installation.html",
+      "path_params": [
+        "machine_id"
+      ],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "machines/{machine_id}/virtual_installations",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "get": {
+          "method": "GET",
+          "path": "machines/{machine_id}/virtual_installations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "create": {
+          "method": "POST",
+          "path": "machines/{machine_id}/virtual_installations",
+          "filters": [],
+          "required": [
+            "location_id",
+            "equipment_id",
+            "notifications_enabled",
+            "planograms_attributes"
+          ],
+          "optional": [
+            "place",
+            "issues_invoice",
+            "enable_market_app",
+            "enable_restricted_door_control",
+            "enable_external_eft"
+          ],
+          "envelope": "installation"
+        },
+        "update": {
+          "method": "PATCH",
+          "path": "machines/{machine_id}/virtual_installations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "machines/{machine_id}/virtual_installations/{id}",
+          "filters": [],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "visits": {
+      "resource": "visits",
+      "label": "Visitas",
+      "group": "relatorio",
+      "doc": "reports/visit.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "visits",
+          "filters": [
+            "start_date",
+            "end_date",
+            "restock",
+            "cash_collect",
+            "location_id",
+            "event_id",
+            "machine_id",
+            "machine_type_id",
+            "route_id"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    },
+    "working_sessions": {
+      "resource": "working_sessions",
+      "label": "Giro de caixa",
+      "group": "relatorio",
+      "doc": "reports/working_session.html",
+      "path_params": [],
+      "operations": {
+        "list": {
+          "method": "GET",
+          "path": "working_sessions",
+          "filters": [
+            "start_date",
+            "end_date",
+            "client_id",
+            "distribution_center_id",
+            "location_id",
+            "machine_id",
+            "machine_type_id",
+            "machine_model_id",
+            "place",
+            "route_id",
+            "kind"
+          ],
+          "required": [],
+          "optional": [],
+          "envelope": null
+        }
+      }
+    }
+  }
+}

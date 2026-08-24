@@ -1,0 +1,25 @@
+[project]
+name = "vmpay-mcp"
+version = "0.1.0"
+description = "Servidor MCP para a API VMpay"
+requires-python = ">=3.11"
+dependencies = ["mcp>=1.2", "vmpay"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "respx>=0.21"]
+
+[project.scripts]
+vmpay-mcp = "vmpay_mcp.server:main"
+
+[tool.uv.sources]
+vmpay = { path = "../../packages/vmpay", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vmpay_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
