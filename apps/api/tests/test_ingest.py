@@ -184,3 +184,42 @@ async def test_retoma_do_cursor_salvo(cliente):
     sessao = FakeSession(cursor_inicial=5000)
     await ingest.sync_resource("cashless_facts", cliente, sessao)
     assert rota.calls.last.request.url.params["transaction_id_greater_than"] == "5000"
+
+
+@respx.mock
+async def test_vends_tambem_extrai_dimensoes(cliente):
+    """Venda de produto que nunca apareceu no cashless não pode quebrar a FK.
+
+    A primeira ingestão real quebrou aqui: vmpay.vend tem FK para vmpay.good e
+    só o cashless extraía dimensões. O payload de /vends traz os aninhados —
+    têm que virar dimensão antes do fato, no mesmo lote.
+    """
+    respx.get(f"{BASE}/vends").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": 50,
+                        "occurred_at": "2024-01-01T10:00:00Z",
+                        "good_id": 999,
+                        "machine_id": 10,
+                        "value": 2.5,
+                        "good": {"id": 999, "name": "Produto só de dinheiro"},
+                        "machine": {"id": 10, "asset_number": "A10"},
+                        "client": {"id": 20, "name": "Cliente"},
+                        "location": {"id": 30, "name": "Local"},
+                    }
+                ],
+            ),
+            httpx.Response(200, json=[]),
+        ]
+    )
+    sessao = FakeSession()
+    rel = await ingest.sync_resource("vends", cliente, sessao, batch_size=10)
+    assert rel.error is None
+
+    sqls = sessao.sql()
+    pos_good = next(i for i, s in enumerate(sqls) if "vmpay.good" in s)
+    pos_vend = next(i for i, s in enumerate(sqls) if "vmpay.vend" in s)
+    assert pos_good < pos_vend  # dimensão antes do fato, senão a FK quebra

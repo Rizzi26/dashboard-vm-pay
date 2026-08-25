@@ -134,6 +134,6 @@ RESOURCES = {
     "vends": {
         "mapper": map_vend,
         "cursor_param": "vend_id_greater_than",
-        "extract_dimensions": False,
+        "extract_dimensions": True,
     },
 }
