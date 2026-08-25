@@ -9,3 +9,5 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+// deploy: força build da Vercel (skip-deployments ignora commits fora de apps/web)
