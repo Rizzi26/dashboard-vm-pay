@@ -4,19 +4,45 @@ import { Offline } from "@/components/Offline";
 import { RevenueChart } from "@/components/RevenueChart";
 import { StatTile } from "@/components/StatTile";
 import { SyncStatus } from "@/components/SyncStatus";
+import Link from "next/link";
+
 import { Header } from "@/components/Header";
 import { serverApi } from "@/lib/api.server";
 import { formatInt, formatMoney } from "@/lib/format";
 import { orgSession } from "@/lib/org";
 
-export default async function Dashboard() {
+// Períodos oferecidos. O backend aceita start/end; "tudo" usa uma data anterior
+// ao go-live de qualquer operador plausível.
+const PERIODOS = [
+  { key: "30", label: "30 dias", dias: 30 },
+  { key: "90", label: "90 dias", dias: 90 },
+  { key: "365", label: "12 meses", dias: 365 },
+  { key: "tudo", label: "Tudo", dias: null },
+] as const;
+
+function startFor(key: string): string | null {
+  const periodo = PERIODOS.find((p) => p.key === key) ?? PERIODOS[0];
+  if (periodo.dias === null) return "2000-01-01";
+  const d = new Date();
+  d.setDate(d.getDate() - periodo.dias);
+  return d.toISOString().slice(0, 10);
+}
+
+export default async function Dashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string }>;
+}) {
   const { me, org } = await orgSession();
+  const { periodo = "30" } = await searchParams;
+  const qs = `?start=${startFor(periodo)}`;
+
   // Em paralelo: um bloco lento não segura os outros, e um que falha não
   // derruba a página.
   const [summary, daily, machines, sync] = await Promise.all([
-    serverApi.summary(org.slug),
-    serverApi.daily(org.slug),
-    serverApi.byMachine(org.slug, "?limit=10"),
+    serverApi.summary(org.slug, qs),
+    serverApi.daily(org.slug, qs),
+    serverApi.byMachine(org.slug, `${qs}&limit=10`),
     serverApi.syncStatus(org.slug),
   ]);
 
@@ -33,6 +59,21 @@ export default async function Dashboard() {
             ? `${summary.data.periodo.inicio} a ${summary.data.periodo.fim}`
             : "Últimos 30 dias"}
         </p>
+        <nav className="mt-3 flex gap-2">
+          {PERIODOS.map((p) => (
+            <Link
+              key={p.key}
+              href={p.key === "30" ? "/" : `/?periodo=${p.key}`}
+              className={
+                p.key === periodo
+                  ? "rounded-md bg-[var(--series-1)] px-3 py-1 text-sm font-medium text-white"
+                  : "rounded-md border border-[var(--grid)] px-3 py-1 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              }
+            >
+              {p.label}
+            </Link>
+          ))}
+        </nav>
       </header>
 
       {summary.ok ? (
