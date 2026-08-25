@@ -189,10 +189,26 @@ async def sync_resource(
     dims: dict[str, dict[int, dict]] = {name: {} for name in DIMENSION_TABLES}
     highest = cursor
 
+    # Cursor 0 = primeira carga = BACKFILL por paginação comum, não por cursor.
+    # A API devolve do mais recente para o mais antigo: com cursor, a primeira
+    # página seria só o topo e o cursor saltaria para o id máximo — o histórico
+    # ficaria para trás para sempre (aconteceu na primeira carga real: cashless
+    # parou nas 1000 mais novas). No backfill o cursor só é gravado no FIM da
+    # varredura completa; queda no meio recomeça do zero, e o upsert absorve.
+    backfill = cursor == 0
+
+    async def _source():
+        if backfill:
+            async for payload in client.paginate(resource):
+                yield payload
+        else:
+            async for payload in client.iter_since(
+                resource, cursor_param=spec["cursor_param"], since_id=cursor
+            ):
+                yield payload
+
     try:
-        async for payload in client.iter_since(
-            resource, cursor_param=spec["cursor_param"], since_id=cursor
-        ):
+        async for payload in _source():
             buffer.append(spec["mapper"](payload))
             highest = max(highest, int(payload["id"]))
             if spec["extract_dimensions"]:
@@ -201,14 +217,18 @@ async def sync_resource(
                         dims[name][dim["id"]] = dim
 
             if len(buffer) >= batch_size:
-                await _flush(session, resource, table, buffer, dims, highest, report)
+                # No backfill o cursor fica onde está (0) até a varredura fechar.
+                await _flush(
+                    session, resource, table, buffer, dims,
+                    cursor if backfill else highest, report,
+                )
                 buffer, dims = [], {name: {} for name in DIMENSION_TABLES}
 
             if max_rows and report.rows + len(buffer) >= max_rows:
                 report.truncated = True
                 break
 
-        if buffer:
+        if buffer or (backfill and highest > cursor):
             await _flush(session, resource, table, buffer, dims, highest, report)
     except VMpayError as exc:
         # O que já foi confirmado fica; o cursor aponta para o último lote bom.

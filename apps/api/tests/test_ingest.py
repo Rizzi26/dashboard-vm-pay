@@ -251,3 +251,59 @@ async def test_fato_com_dimensao_ausente_ganha_stub(cliente):
     assert stub is not None, "faltou o stub da dimensão referenciada"
     assert "ON CONFLICT" in stub.upper() and "DO NOTHING" in stub.upper()
     assert sqls.index(stub) < next(i for i, s in enumerate(sqls) if "vmpay.vend" in s)
+
+
+@respx.mock
+async def test_cursor_zero_faz_backfill_por_paginacao(cliente):
+    """Primeira carga varre por página, não por cursor.
+
+    A API devolve do mais recente ao mais antigo: cursor no backfill pegaria só
+    o topo e abandonaria o histórico — o bug da primeira carga real.
+    """
+    # páginas cheias têm 1000 itens — a de menos que isso encerra a varredura
+    pagina_nova = fatos(range(2000, 1000, -1))   # as mais recentes primeiro
+    pagina_velha = fatos([2, 1])                 # o histórico, por último
+    respx.get(f"{BASE}/cashless_facts").mock(
+        side_effect=[
+            httpx.Response(200, json=pagina_nova),
+            httpx.Response(200, json=pagina_velha),
+        ]
+    )
+    sessao = FakeSession(cursor_inicial=0)
+    rel = await ingest.sync_resource("cashless_facts", cliente, sessao, batch_size=600)
+
+    assert rel.rows == 1002  # o histórico inteiro, não só o topo
+    assert rel.cursor_after == 2000
+    chamadas = [str(c.request.url) for c in respx.calls]
+    assert all("transaction_id_greater_than" not in u for u in chamadas)
+    assert "page=2" in chamadas[1]
+
+
+@respx.mock
+async def test_backfill_nao_grava_cursor_antes_do_fim(cliente):
+    """Queda no meio do backfill recomeça do zero — nunca meio-histórico."""
+    respx.get(f"{BASE}/cashless_facts").mock(
+        side_effect=[
+            httpx.Response(200, json=fatos(range(2000, 1000, -1))),
+            httpx.Response(500, text="boom"),
+        ]
+    )
+    sessao = FakeSession(cursor_inicial=0)
+    cliente_sem_retry = VMpayClient("segredo", base_url=BASE, max_retries=0)
+    rel = await ingest.sync_resource(
+        "cashless_facts", cliente_sem_retry, sessao, batch_size=600
+    )
+    assert rel.error is not None
+    # os lotes intermediários gravaram cursor 0: a próxima rodada revarre tudo
+    assert rel.cursor_after == 0
+
+
+@respx.mock
+async def test_cursor_existente_segue_incremental(cliente):
+    rota = respx.get(f"{BASE}/cashless_facts").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    sessao = FakeSession(cursor_inicial=5000)
+    await ingest.sync_resource("cashless_facts", cliente, sessao)
+    url = str(rota.calls.last.request.url)
+    assert "transaction_id_greater_than=5000" in url

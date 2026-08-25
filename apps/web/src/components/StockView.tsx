@@ -26,12 +26,13 @@ export function StockView({
 }) {
   const router = useRouter();
   const [filtro, setFiltro] = useState("");
+  const [pagina, setPagina] = useState(0);
   const [modal, setModal] = useState<Modal>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const canOperate = CAN_OPERATE.has(role);
 
-  const visiveis = useMemo(() => {
+  const filtrados = useMemo(() => {
     const termo = filtro.trim().toLowerCase();
     if (!termo) return rows;
     return rows.filter(
@@ -41,6 +42,16 @@ export function StockView({
         (r.barcode ?? "").includes(termo),
     );
   }, [rows, filtro]);
+
+  // 1.170 itens numa tabela só é rolagem infinita; 50 por página mantém o
+  // filtro global (busca em tudo) e a página curta.
+  const POR_PAGINA = 50;
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas - 1);
+  const visiveis = filtrados.slice(
+    paginaAtual * POR_PAGINA,
+    (paginaAtual + 1) * POR_PAGINA,
+  );
 
   async function token(): Promise<string> {
     const { data } = await supabaseBrowser().auth.getSession();
@@ -93,7 +104,10 @@ export function StockView({
           type="search"
           placeholder="Filtrar por produto, local ou código…"
           value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
+          onChange={(e) => {
+            setFiltro(e.target.value);
+            setPagina(0);
+          }}
           className="w-72 rounded-md border border-[var(--grid)] bg-transparent px-3 py-1.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--series-1)]"
         />
         <button
@@ -167,6 +181,40 @@ export function StockView({
           ))}
         </tbody>
       </table>
+
+      <div className="mt-4 flex items-center justify-between text-sm text-[var(--text-secondary)]">
+        <span>
+          {filtrados.length === 0
+            ? "Nenhum item encontrado"
+            : `${paginaAtual * POR_PAGINA + 1}–${Math.min(
+                (paginaAtual + 1) * POR_PAGINA,
+                filtrados.length,
+              )} de ${filtrados.length} itens`}
+        </span>
+        {totalPaginas > 1 ? (
+          <span className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={paginaAtual === 0}
+              onClick={() => setPagina(paginaAtual - 1)}
+              className="rounded-md border border-[var(--grid)] px-3 py-1 disabled:opacity-40"
+            >
+              ← Anterior
+            </button>
+            <span className="tabular-nums">
+              {paginaAtual + 1}/{totalPaginas}
+            </span>
+            <button
+              type="button"
+              disabled={paginaAtual >= totalPaginas - 1}
+              onClick={() => setPagina(paginaAtual + 1)}
+              className="rounded-md border border-[var(--grid)] px-3 py-1 disabled:opacity-40"
+            >
+              Próxima →
+            </button>
+          </span>
+        ) : null}
+      </div>
 
       {modal ? (
         <ActionModal
