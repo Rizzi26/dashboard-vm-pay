@@ -74,6 +74,15 @@ para regenerar o catálogo.
 - Ingestão de vendas: cursor por id (`transaction_id_greater_than` em
   `/cashless_facts`), **não** janela de data.
 
+## Ver rodando sem credencial nenhuma
+
+```bash
+./scripts/demo/run.sh
+```
+
+Sobe o painel completo em http://localhost:3210 com stubs de Supabase Auth e do
+backend — logins e detalhes em [scripts/demo/README.md](scripts/demo/README.md).
+
 ## Testar um token
 
 O token nunca deve ir para o histórico de shell nem para um arquivo versionado.
