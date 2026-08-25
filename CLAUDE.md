@@ -163,11 +163,14 @@ O kiosk é 100% cashless, um item por transação.
 
 ## Roadmap V1.1 (dados já no banco; nada toca a ingestão)
 
-1. **Painel de vendas perdidas** — 1.626 tentativas não aprovadas (10,4% das
-   interações do totem). `cashless_fact.status <> 'OK'` +
-   `cashless_error_friendly` já gravados; é agregação + uma tela.
-2. **Visão por produto no painel** — Vendas hoje soma só cashless; os vends
-   dão top vendidos, giro e curva ABC via `good_id`.
+1. ~~**Painel de vendas perdidas**~~ — FEITO (rota `/sales/lost` + página /perdidas).
+2. ~~**Visão por produto no painel**~~ — FEITO (ficha /produto/{id} via vends).
+2b. ~~**Cadastro de produto**~~ — FEITO: `POST /orgs/{org}/products` cria na
+   VMpay (envelope `product`; exige manufacturer/category/supply_category, as
+   opções vêm ao vivo de `GET /orgs/{org}/products/refs`) e espelha em
+   core.product + product_link. Mesmo action_log e mesma trava
+   VMPAY_ALLOW_WRITES das outras ações. Cadastro ≠ prateleira: entrar no
+   planograma continua manual na VMpay — a UI avisa.
 3. Preço unitário de item com saldo zero — a fonte exata é o
    `current_planogram` da instalação (uma chamada por instalação no snapshot);
    hoje deriva do valor total do relatório de saldos e fica nulo com saldo 0.

@@ -53,7 +53,13 @@ export type Me = {
   user_id: string;
   email: string | null;
   platform_admin: boolean;
-  organizations: { slug: string; name: string; role: string }[];
+  organizations: { slug: string; name: string; role: string; locais?: string[] }[];
+};
+
+export type ProductRefs = {
+  fabricantes: { id: number; nome: string }[];
+  categorias: { id: number; nome: string }[];
+  categorias_abastecimento: { id: number; nome: string }[];
 };
 
 export type MemberRow = {

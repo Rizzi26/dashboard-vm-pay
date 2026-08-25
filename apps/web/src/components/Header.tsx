@@ -22,11 +22,13 @@ export function Header({
   role,
   email,
   periodo,
+  local,
 }: {
   orgName: string;
   role: string;
   email: string | null;
   periodo?: string;
+  local?: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -50,9 +52,16 @@ export function Header({
     <header className="sticky top-0 z-20 border-b border-[var(--grid)] bg-[var(--surface-0)]">
       <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-3">
         <div className="flex min-w-0 items-center justify-between gap-3">
-          <span className="truncate text-sm font-semibold text-[var(--text-primary)]">
-            {orgName}
-          </span>
+          <div className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-[var(--text-primary)]">
+              {orgName}
+            </span>
+            {local ? (
+              <span className="block truncate text-[11px] leading-tight text-[var(--text-secondary)]">
+                {local}
+              </span>
+            ) : null}
+          </div>
           <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
             <span>
               <span className="hidden md:inline">{email} · </span>

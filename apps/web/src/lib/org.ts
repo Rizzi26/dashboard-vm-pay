@@ -4,7 +4,7 @@ import type { Me } from "@/lib/api";
 
 export type OrgSession = {
   me: Me;
-  org: { slug: string; name: string; role: string };
+  org: { slug: string; name: string; role: string; local: string | null };
 };
 
 /**
@@ -22,5 +22,10 @@ export async function orgSession(): Promise<OrgSession> {
     // Autenticado mas sem organização: convite incompleto ou seed pendente.
     redirect("/login?erro=sem-organizacao");
   }
-  return { me: me.data, org: first };
+  // O ponto físico da operação no header: um local mostra o nome; vários, a
+  // contagem — o dado vem do /me para não custar uma chamada extra por página.
+  const locais = first.locais ?? [];
+  const local =
+    locais.length === 1 ? locais[0] : locais.length > 1 ? `${locais.length} locais` : null;
+  return { me: me.data, org: { ...first, local } };
 }

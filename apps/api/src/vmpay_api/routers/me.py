@@ -23,10 +23,17 @@ async def me(
         await session.execute(
             text(
                 """
-                select o.slug, o.name, m.role
+                select o.slug, o.name, m.role,
+                       coalesce(
+                           array_agg(l.name order by l.name)
+                               filter (where l.name is not null),
+                           '{}'
+                       ) as locations
                   from core.membership m
                   join core.organization o on o.id = m.org_id
+                  left join core.location l on l.org_id = o.id
                  where m.user_id = :user_id
+                 group by o.slug, o.name, m.role
                  order by o.name
                 """
             ),
@@ -44,6 +51,12 @@ async def me(
         "email": principal.email,
         "platform_admin": is_platform,
         "organizations": [
-            {"slug": r["slug"], "name": r["name"], "role": r["role"]} for r in rows
+            {
+                "slug": r["slug"],
+                "name": r["name"],
+                "role": r["role"],
+                "locais": list(r.get("locations") or []),
+            }
+            for r in rows
         ],
     }

@@ -19,7 +19,7 @@ export default async function PerdidasPage({
 
   return (
     <div className="viz-root min-h-screen bg-[var(--surface-0)]">
-      <Header orgName={org.name} role={org.role} email={me.email} periodo={periodo} />
+      <Header orgName={org.name} role={org.role} email={me.email} local={org.local} periodo={periodo} />
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">

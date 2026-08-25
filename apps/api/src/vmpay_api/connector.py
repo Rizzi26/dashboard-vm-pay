@@ -91,6 +91,32 @@ class VMpayConnector:
             json=body,
         )
 
+    async def product_refs(self) -> dict[str, list[dict[str, Any]]]:
+        """Registries que o cadastro de produto exige: id + nome de cada um.
+
+        A VMpay não cria produto sem fabricante, categoria e categoria de
+        abastecimento — o formulário precisa oferecer os existentes da conta.
+        """
+        out: dict[str, list[dict[str, Any]]] = {}
+        for key, path in (
+            ("fabricantes", "manufacturers"),
+            ("categorias", "categories"),
+            ("categorias_abastecimento", "supply_categories"),
+        ):
+            out[key] = [
+                {"id": item["id"], "nome": item.get("name") or ""}
+                async for item in self.client.paginate(path)
+            ]
+        return out
+
+    async def create_product(self, fields: dict[str, Any]) -> Any:
+        """Cria o produto no cadastro da VMpay (envelope `product`).
+
+        Cadastro ≠ prateleira: para vender, o produto ainda precisa entrar no
+        planograma da instalação — isso continua sendo feito na VMpay.
+        """
+        return await self.client.post("products", json={"product": fields})
+
     async def set_price(
         self, machine_id: int, installation_id: int, changes: list[tuple[int, float]]
     ) -> Any:
