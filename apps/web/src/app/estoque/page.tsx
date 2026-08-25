@@ -1,58 +1,70 @@
 import { Header } from "@/components/Header";
-import { StatTile } from "@/components/StatTile";
 import { Offline } from "@/components/Offline";
 import { StockView } from "@/components/StockView";
 import { serverApi } from "@/lib/api.server";
-import { formatInt, formatMoney } from "@/lib/format";
+import { formatAtraso } from "@/lib/format";
 import { orgSession } from "@/lib/org";
 
-export default async function EstoquePage() {
+/**
+ * Frescor do dado: o operador decide reposição sobre este saldo — se ele
+ * está velho, precisa saber antes de sair carregando caixa. Fora do corpo do
+ * componente porque numa página dinâmica de servidor cada request é um render
+ * novo — o "agora" é estável dentro do request.
+ */
+function atrasoDoEstoque(rows: { atualizado_em: string }[]): number | null {
+  if (rows.length === 0) return null;
+  const maisRecente = Math.max(...rows.map((r) => Date.parse(r.atualizado_em)));
+  if (Number.isNaN(maisRecente)) return null;
+  return Math.max(0, Math.floor((Date.now() - maisRecente) / 1000));
+}
+
+export default async function EstoquePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ disp?: string; q?: string }>;
+}) {
   const { me, org } = await orgSession();
+  const { disp, q } = await searchParams;
+  const initialDisp = disp === "com" || disp === "sem" ? disp : undefined;
   const stock = await serverApi.stock(org.slug);
 
+  const atrasoSeg = stock.ok ? atrasoDoEstoque(stock.data) : null;
+
   return (
-    <div className="viz-root min-h-screen bg-[var(--surface-1)]">
+    <div className="viz-root min-h-screen bg-[var(--surface-0)]">
       <Header orgName={org.name} role={org.role} email={me.email} />
-      <main className="mx-auto max-w-5xl px-6 py-10">
+      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6">
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Estoque</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Estoque</h1>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Saldo atual por local e produto, sincronizado da VMpay.
+            Saldo atual por local e produto
+            {atrasoSeg !== null ? (
+              atrasoSeg > 9 * 3600 ? (
+                <>
+                  {" — "}
+                  <span className="text-[var(--status-warning)]">
+                    ▲ sincronizado {formatAtraso(atrasoSeg)}
+                  </span>
+                </>
+              ) : (
+                <> — sincronizado {formatAtraso(atrasoSeg)}</>
+              )
+            ) : null}
+            .
           </p>
         </header>
         {stock.ok ? (
-          <>
-            <ShelfTiles rows={stock.data} />
-            <StockView rows={stock.data} org={org.slug} role={org.role} />
-          </>
+          <StockView
+            rows={stock.data}
+            org={org.slug}
+            role={org.role}
+            initialDisp={initialDisp}
+            initialBusca={q}
+          />
         ) : (
           <Offline error={stock.error} />
         )}
       </main>
-    </div>
-  );
-}
-
-function ShelfTiles({ rows }: { rows: { quantidade: number; preco: number | null }[] }) {
-  // Calculado dos dados que a página já carrega — sem endpoint novo.
-  const unidades = rows.reduce((s, r) => s + r.quantidade, 0);
-  const valor = rows.reduce((s, r) => s + r.quantidade * (r.preco ?? 0), 0);
-  const disponiveis = rows.filter((r) => r.quantidade > 0).length;
-  const ruptura = rows.filter((r) => r.quantidade === 0).length;
-  return (
-    <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-      <StatTile label="Unidades em prateleira" value={formatInt(unidades)} />
-      <StatTile
-        label="Valor de prateleira"
-        value={formatMoney(valor)}
-        hint="a preço de venda; itens sem preço conhecido ficam de fora"
-      />
-      <StatTile label="Produtos disponíveis" value={formatInt(disponiveis)} />
-      <StatTile
-        label="Em ruptura"
-        value={formatInt(ruptura)}
-        hint="itens do planograma com saldo zero"
-      />
     </div>
   );
 }

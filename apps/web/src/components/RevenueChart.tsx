@@ -1,14 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { DailyPoint } from "@/lib/api";
 import { formatDay, formatInt, formatMoney, formatMoneyCompact } from "@/lib/format";
-
-const W = 800;
-const H = 260;
-// right acomoda o rótulo do eixo: em BRL "R$ 1,2 mil" é mais largo do que
-// parece, e cortar número num painel de faturamento é pior que apertar o plot.
-const PAD = { top: 16, right: 78, bottom: 28, left: 16 };
 
 /**
  * Faturamento diário — uma série só, então sem legenda: o título nomeia a série.
@@ -16,6 +10,9 @@ const PAD = { top: 16, right: 78, bottom: 28, left: 16 };
  * Faturamento e transações não dividem o mesmo gráfico. São escalas diferentes,
  * e dois eixos y no mesmo plot fazem o leitor comparar formas que não são
  * comparáveis; transações ficam no tooltip e nos tiles.
+ *
+ * O viewBox usa a largura MEDIDA do contêiner: com viewBox fixo de 800, o
+ * fontSize 11 dos rótulos virava ~5px num celular de 375px.
  */
 export function RevenueChart({
   points,
@@ -25,8 +22,31 @@ export function RevenueChart({
   countLabel?: string;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const gradId = useId();
+  const [width, setWidth] = useState(800);
   const [hover, setHover] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setWidth(Math.round(w));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const W = width;
+  const H = width < 480 ? 200 : 260;
+  // right acomoda o rótulo do eixo: em BRL "R$ 1,2 mil" é mais largo do que
+  // parece, e cortar número num painel de faturamento é pior que apertar o plot.
+  const PAD = useMemo(
+    () => ({ top: 16, right: width < 480 ? 54 : 78, bottom: 28, left: 16 }),
+    [width],
+  );
 
   const geo = useMemo(() => {
     if (points.length === 0) return null;
@@ -41,9 +61,9 @@ export function RevenueChart({
       x,
       y,
       path: points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(p.faturamento)}`).join(" "),
-      ticks: [0, 0.5, 1].map((f) => ({ v: max * f, y: y(max * f) })),
+      ticks: [0, 0.5, 1].map((f) => ({ f, v: max * f, y: y(max * f) })),
     };
-  }, [points]);
+  }, [points, W, H, PAD]);
 
   if (!geo) {
     return (
@@ -53,7 +73,7 @@ export function RevenueChart({
     );
   }
 
-  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+  const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
     const rel = ((e.clientX - rect.left) / rect.width) * W;
@@ -67,19 +87,24 @@ export function RevenueChart({
   const ultimo = points[points.length - 1];
 
   return (
-    <div>
+    <div ref={wrapRef}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         className="w-full"
         role="img"
         aria-label={`Faturamento diário, ${points.length} dias, máximo ${formatMoney(geo.max)}`}
-        onMouseMove={onMove}
-        onMouseLeave={() => setHover(null)}
+        style={{ touchAction: "pan-y" }}
+        onPointerMove={onMove}
+        onPointerDown={onMove}
+        onPointerLeave={(e) => {
+          // No touch, o dia tocado persiste selecionado.
+          if (e.pointerType === "mouse") setHover(null);
+        }}
       >
         {/* Grade recessiva: orienta a leitura sem competir com a linha. */}
         {geo.ticks.map((t) => (
-          <g key={t.v}>
+          <g key={t.f}>
             <line
               x1={PAD.left}
               x2={W - PAD.right}
@@ -87,6 +112,7 @@ export function RevenueChart({
               y2={t.y}
               stroke="var(--grid)"
               strokeWidth="1"
+              strokeDasharray={t.f === 0 ? undefined : "2 4"}
               vectorEffect="non-scaling-stroke"
             />
             <text
@@ -100,6 +126,21 @@ export function RevenueChart({
             </text>
           </g>
         ))}
+
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="var(--series-1)" stopOpacity="0.14" />
+            <stop offset="1" stopColor="var(--series-1)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Área sob a linha: dá peso visual sem esconder a grade. */}
+        <path
+          d={`${geo.path} L${geo.x(points.length - 1)},${H - PAD.bottom} L${geo.x(0)},${
+            H - PAD.bottom
+          } Z`}
+          fill={`url(#${gradId})`}
+        />
 
         <path
           d={geo.path}
@@ -130,6 +171,7 @@ export function RevenueChart({
               y2={H - PAD.bottom}
               stroke="var(--grid)"
               strokeWidth="1"
+              strokeDasharray="3 3"
               vectorEffect="non-scaling-stroke"
             />
             {/* Anel na cor da superfície separa a marca da linha por baixo. */}
@@ -144,7 +186,13 @@ export function RevenueChart({
           </g>
         ) : null}
 
-        <text x={PAD.left} y={H - 8} fill="var(--text-secondary)" fontSize="11">
+        <text
+          x={PAD.left}
+          y={H - 8}
+          fill="var(--text-secondary)"
+          fontSize="11"
+          className="tabular-nums"
+        >
           {formatDay(points[0].dia)}
         </text>
         <text
@@ -153,6 +201,7 @@ export function RevenueChart({
           fill="var(--text-secondary)"
           fontSize="11"
           textAnchor="end"
+          className="tabular-nums"
         >
           {formatDay(ultimo.dia)}
         </text>
@@ -172,7 +221,7 @@ export function RevenueChart({
             </span>
           ) : (
             <span className="text-[var(--text-secondary)]">
-              Passe o cursor sobre o gráfico para ver o dia.
+              Toque ou passe o cursor sobre o gráfico para ver o dia.
             </span>
           )}
         </div>
@@ -186,24 +235,29 @@ export function RevenueChart({
       </div>
 
       {showTable ? (
-        <table className="mt-3 w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase text-[var(--text-secondary)]">
-              <th className="py-1 font-medium">Dia</th>
-              <th className="py-1 text-right font-medium">Faturamento</th>
-              <th className="py-1 text-right font-medium">{countLabel}</th>
-            </tr>
-          </thead>
-          <tbody className="text-[var(--text-primary)]">
-            {points.map((p) => (
-              <tr key={p.dia} className="border-t border-[var(--grid)]">
-                <td className="py-1">{formatDay(p.dia)}</td>
-                <td className="py-1 text-right tabular-nums">{formatMoney(p.faturamento)}</td>
-                <td className="py-1 text-right tabular-nums">{formatInt(p.transacoes)}</td>
+        <div className="overflow-x-auto">
+          <table className="mt-3 w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--grid)] text-left text-[11px] uppercase tracking-[0.08em] text-[var(--text-secondary)]">
+                <th className="py-2 font-medium">Dia</th>
+                <th className="py-2 text-right font-medium">Faturamento</th>
+                <th className="py-2 text-right font-medium">{countLabel}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="text-[var(--text-primary)]">
+              {points.map((p) => (
+                <tr
+                  key={p.dia}
+                  className="border-t border-[var(--grid)] hover:bg-[var(--row-hover)]"
+                >
+                  <td className="py-2">{formatDay(p.dia)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatMoney(p.faturamento)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatInt(p.transacoes)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
     </div>
   );

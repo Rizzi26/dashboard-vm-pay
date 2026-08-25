@@ -13,11 +13,11 @@ export default async function UsuariosPage() {
   const members = await serverApi.members(org.slug);
 
   return (
-    <div className="viz-root min-h-screen bg-[var(--surface-1)]">
+    <div className="viz-root min-h-screen bg-[var(--surface-0)]">
       <Header orgName={org.name} role={org.role} email={me.email} />
-      <main className="mx-auto max-w-3xl px-6 py-10">
+      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6">
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Usuários</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Usuários</h1>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Quem acessa o painel de {org.name} e com qual papel.
           </p>

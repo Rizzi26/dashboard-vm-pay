@@ -1,16 +1,16 @@
 import { Card } from "@/components/Card";
 import { MachineTable } from "@/components/MachineTable";
 import { Offline } from "@/components/Offline";
+import { PeriodoNav } from "@/components/PeriodoNav";
 import { RevenueChart } from "@/components/RevenueChart";
 import { StatTile } from "@/components/StatTile";
 import { SyncStatus } from "@/components/SyncStatus";
-import Link from "next/link";
 
 import { Header } from "@/components/Header";
 import { serverApi } from "@/lib/api.server";
-import { formatInt, formatMoney } from "@/lib/format";
+import { formatDay, formatInt, formatMoney } from "@/lib/format";
 import { orgSession } from "@/lib/org";
-import { PERIODOS, startFor } from "@/lib/periodos";
+import { startFor } from "@/lib/periodos";
 
 export default async function Dashboard({
   searchParams,
@@ -31,33 +31,19 @@ export default async function Dashboard({
   ]);
 
   return (
-    <div className="viz-root min-h-screen bg-[var(--surface-1)]">
-      <Header orgName={org.name} role={org.role} email={me.email} />
-      <main className="mx-auto max-w-5xl px-6 py-10">
+    <div className="viz-root min-h-screen bg-[var(--surface-0)]">
+      <Header orgName={org.name} role={org.role} email={me.email} periodo={periodo} />
+      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
       <header className="mb-8">
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
           Vendas
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
           {summary.ok
-            ? `${summary.data.periodo.inicio} a ${summary.data.periodo.fim}`
+            ? `${formatDay(summary.data.periodo.inicio)} a ${formatDay(summary.data.periodo.fim)}`
             : "Últimos 30 dias"}
         </p>
-        <nav className="mt-3 flex gap-2">
-          {PERIODOS.map((p) => (
-            <Link
-              key={p.key}
-              href={p.key === "30" ? "/" : `/?periodo=${p.key}`}
-              className={
-                p.key === periodo
-                  ? "rounded-md bg-[var(--series-1)] px-3 py-1 text-sm font-medium text-white"
-                  : "rounded-md border border-[var(--grid)] px-3 py-1 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              }
-            >
-              {p.label}
-            </Link>
-          ))}
-        </nav>
+        <PeriodoNav basePath="/" periodo={periodo} />
       </header>
 
       {summary.ok ? (
@@ -65,11 +51,16 @@ export default async function Dashboard({
           <StatTile
             label="Faturamento"
             value={formatMoney(summary.data.faturamento)}
-            hint="transações confirmadas"
+            hint={
+              summary.data.descontos > 0
+                ? `descontos de ${formatMoney(summary.data.descontos)}`
+                : "transações confirmadas"
+            }
           />
           <StatTile
             label="Transações"
             value={formatInt(summary.data.transacoes)}
+            hint={`${formatInt(summary.data.itens)} itens vendidos`}
           />
           <StatTile
             label="Ticket médio"

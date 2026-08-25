@@ -28,10 +28,10 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="viz-root flex min-h-screen items-center justify-center bg-[var(--surface-1)] px-6">
+    <main className="viz-root flex min-h-screen items-center justify-center bg-[var(--surface-0)] px-6">
       <form
         onSubmit={submit}
-        className="w-full max-w-sm rounded-lg border border-[var(--grid)] p-6"
+        className="w-full max-w-sm rounded-xl border border-[var(--grid)] bg-[var(--surface-1)] p-6 shadow-[var(--shadow-card)]"
       >
         <h1 className="text-lg font-semibold text-[var(--text-primary)]">Entrar</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
@@ -46,7 +46,7 @@ export default function LoginPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--series-1)]"
+            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
           />
         </label>
 
@@ -58,7 +58,7 @@ export default function LoginPage() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--series-1)]"
+            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
           />
         </label>
 
@@ -71,7 +71,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={busy}
-          className="mt-5 w-full rounded-md bg-[var(--series-1)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="mt-5 w-full rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
         >
           {busy ? "Entrando…" : "Entrar"}
         </button>

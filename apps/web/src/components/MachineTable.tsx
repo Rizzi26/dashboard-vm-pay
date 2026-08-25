@@ -10,28 +10,38 @@ export function MachineTable({ rows }: { rows: MachineRow[] }) {
     );
   }
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-xs uppercase text-[var(--text-secondary)]">
-          <th className="py-2 font-medium">Máquina</th>
-          <th className="py-2 font-medium">Modelo</th>
-          <th className="py-2 text-right font-medium">Faturamento</th>
-          <th className="py-2 text-right font-medium">Transações</th>
-        </tr>
-      </thead>
-      <tbody className="text-[var(--text-primary)]">
-        {rows.map((row) => (
-          <tr key={row.machine_id} className="border-t border-[var(--grid)]">
-            <td className="py-2">
-              {/* A dimensão pode não ter sido ingerida ainda; o id sempre existe. */}
-              {row.patrimonio ?? `#${row.machine_id}`}
-            </td>
-            <td className="py-2 text-[var(--text-secondary)]">{row.modelo ?? "—"}</td>
-            <td className="py-2 text-right tabular-nums">{formatMoney(row.faturamento)}</td>
-            <td className="py-2 text-right tabular-nums">{formatInt(row.transacoes)}</td>
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-[var(--grid)] text-left text-[11px] uppercase tracking-[0.08em] text-[var(--text-secondary)]">
+            <th className="py-2.5 font-medium">Máquina</th>
+            <th className="hidden py-2.5 font-medium sm:table-cell">Modelo</th>
+            <th className="py-2.5 text-right font-medium">Faturamento</th>
+            <th className="py-2.5 text-right font-medium">Transações</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="text-[var(--text-primary)]">
+          {rows.map((row) => (
+            <tr
+              key={row.machine_id}
+              className="border-t border-[var(--grid)] hover:bg-[var(--row-hover)]"
+            >
+              <td className="py-2.5">
+                {/* A dimensão pode não ter sido ingerida ainda; o id sempre existe. */}
+                {row.patrimonio ?? `#${row.machine_id}`}
+                <span className="block text-xs text-[var(--text-secondary)] sm:hidden">
+                  {row.modelo ?? "—"}
+                </span>
+              </td>
+              <td className="hidden py-2.5 text-[var(--text-secondary)] sm:table-cell">
+                {row.modelo ?? "—"}
+              </td>
+              <td className="py-2.5 text-right tabular-nums">{formatMoney(row.faturamento)}</td>
+              <td className="py-2.5 text-right tabular-nums">{formatInt(row.transacoes)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

@@ -92,7 +92,7 @@ export function MembersView({
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--series-1)]"
+            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
           />
         </label>
         <label className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
@@ -100,7 +100,7 @@ export function MembersView({
           <select
             value={papel}
             onChange={(e) => setPapel(e.target.value)}
-            className="mt-1 block rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)]"
+            className="mt-1 block rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] sm:text-sm"
           >
             {PAPEIS.map((p) => (
               <option key={p.value} value={p.value}>
@@ -112,7 +112,7 @@ export function MembersView({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-[var(--series-1)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
         >
           {busy ? "Convidando…" : "Convidar"}
         </button>
@@ -124,27 +124,31 @@ export function MembersView({
         </p>
       ) : null}
 
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-xs uppercase text-[var(--text-secondary)]">
-            <th className="py-2 font-medium">Email</th>
-            <th className="py-2 font-medium">Papel</th>
-            <th className="py-2 font-medium">Desde</th>
-            <th className="py-2 text-right font-medium">Ações</th>
+          <tr className="border-b border-[var(--grid)] text-left text-[11px] uppercase tracking-[0.08em] text-[var(--text-secondary)]">
+            <th className="py-2.5 font-medium">Email</th>
+            <th className="py-2.5 font-medium">Papel</th>
+            <th className="hidden py-2.5 font-medium sm:table-cell">Desde</th>
+            <th className="py-2.5 text-right font-medium">Ações</th>
           </tr>
         </thead>
         <tbody className="text-[var(--text-primary)]">
           {rows.map((m) => {
             const self = m.user_id === selfId;
             return (
-              <tr key={m.user_id} className="border-t border-[var(--grid)]">
-                <td className="py-2">
+              <tr
+                key={m.user_id}
+                className="border-t border-[var(--grid)] hover:bg-[var(--row-hover)]"
+              >
+                <td className="py-2.5">
                   {m.email}
                   {self ? (
                     <span className="ml-2 text-xs text-[var(--text-secondary)]">(você)</span>
                   ) : null}
                 </td>
-                <td className="py-2">
+                <td className="py-2.5">
                   {self ? (
                     <span className="text-[var(--text-secondary)]">
                       {PAPEIS.find((p) => p.value === m.role)?.label ?? m.role}
@@ -153,7 +157,7 @@ export function MembersView({
                     <select
                       value={m.role}
                       onChange={(e) => mudarPapel(m.user_id, e.target.value)}
-                      className="rounded-md border border-[var(--grid)] bg-transparent px-2 py-1 text-sm"
+                      className="rounded-md border border-[var(--grid)] bg-transparent px-2 py-1 text-base sm:text-sm"
                     >
                       {PAPEIS.map((p) => (
                         <option key={p.value} value={p.value}>
@@ -163,10 +167,10 @@ export function MembersView({
                     </select>
                   )}
                 </td>
-                <td className="py-2 text-[var(--text-secondary)]">
+                <td className="hidden py-2.5 text-[var(--text-secondary)] sm:table-cell">
                   {new Date(m.member_since).toLocaleDateString("pt-BR")}
                 </td>
-                <td className="py-2 text-right">
+                <td className="py-2.5 text-right">
                   {self ? null : (
                     <button
                       type="button"
@@ -182,6 +186,7 @@ export function MembersView({
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

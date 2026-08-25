@@ -21,10 +21,12 @@ export function Header({
   orgName,
   role,
   email,
+  periodo,
 }: {
   orgName: string;
   role: string;
   email: string | null;
+  periodo?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -35,39 +37,56 @@ export function Header({
     router.refresh();
   }
 
+  // O período selecionado sobrevive à troca de aba — sem useSearchParams,
+  // que exigiria boundary de Suspense: as páginas que o conhecem passam a prop.
+  function hrefFor(href: string): string {
+    if (periodo && periodo !== "30" && (href === "/" || href === "/perdidas")) {
+      return href === "/" ? `/?periodo=${periodo}` : `${href}?periodo=${periodo}`;
+    }
+    return href;
+  }
+
   return (
-    <header className="border-b border-[var(--grid)]">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
-        <div className="flex items-center gap-6">
-          <span className="text-sm font-semibold text-[var(--text-primary)]">{orgName}</span>
-          <nav className="flex gap-4">
-            {LINKS.filter((l) => l.roles.includes(role)).map((l) => (
+    <header className="sticky top-0 z-20 border-b border-[var(--grid)] bg-[var(--surface-0)]">
+      <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-3">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <span className="truncate text-sm font-semibold text-[var(--text-primary)]">
+            {orgName}
+          </span>
+          <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
+            <span>
+              <span className="hidden md:inline">{email} · </span>
+              {ROLE_LABEL[role] ?? role}
+            </span>
+            <button
+              type="button"
+              onClick={sair}
+              className="rounded-lg border border-[var(--grid)] px-3 py-2 hover:bg-[var(--row-hover)] hover:text-[var(--text-primary)]"
+            >
+              Sair
+            </button>
+          </div>
+        </div>
+        <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:gap-2 sm:overflow-visible sm:px-0">
+          {LINKS.filter((l) => l.roles.includes(role)).map((l) => {
+            const ativo =
+              pathname === l.href ||
+              (l.href === "/estoque" && pathname.startsWith("/produto"));
+            return (
               <Link
                 key={l.href}
-                href={l.href}
+                href={hrefFor(l.href)}
                 className={
-                  pathname === l.href
-                    ? "text-sm font-medium text-[var(--text-primary)] underline underline-offset-4"
-                    : "text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  ativo
+                    ? "whitespace-nowrap rounded-md px-3 py-2.5 text-sm font-medium text-[var(--text-primary)] underline decoration-2 decoration-[var(--accent)] underline-offset-4"
+                    : "whitespace-nowrap rounded-md px-3 py-2.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 }
               >
                 {l.label}
               </Link>
-            ))}
-          </nav>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
-          <span>
-            {email} · {ROLE_LABEL[role] ?? role}
-          </span>
-          <button
-            type="button"
-            onClick={sair}
-            className="rounded-md border border-[var(--grid)] px-2 py-1 hover:text-[var(--text-primary)]"
-          >
-            Sair
-          </button>
-        </div>
+            );
+          })}
+        </nav>
       </div>
     </header>
   );

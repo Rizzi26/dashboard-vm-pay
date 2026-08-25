@@ -1,13 +1,12 @@
-import Link from "next/link";
-
 import { Card } from "@/components/Card";
 import { Header } from "@/components/Header";
 import { Offline } from "@/components/Offline";
+import { PeriodoNav } from "@/components/PeriodoNav";
 import { StatTile } from "@/components/StatTile";
 import { serverApi } from "@/lib/api.server";
 import { formatInt, formatMoney } from "@/lib/format";
 import { orgSession } from "@/lib/org";
-import { PERIODOS, startFor } from "@/lib/periodos";
+import { startFor } from "@/lib/periodos";
 
 export default async function PerdidasPage({
   searchParams,
@@ -19,32 +18,18 @@ export default async function PerdidasPage({
   const lost = await serverApi.lost(org.slug, `?start=${startFor(periodo)}`);
 
   return (
-    <div className="viz-root min-h-screen bg-[var(--surface-1)]">
-      <Header orgName={org.name} role={org.role} email={me.email} />
-      <main className="mx-auto max-w-5xl px-6 py-10">
+    <div className="viz-root min-h-screen bg-[var(--surface-0)]">
+      <Header orgName={org.name} role={org.role} email={me.email} periodo={periodo} />
+      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6">
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
             Vendas perdidas
           </h1>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Interações do totem que não viraram dinheiro — cartão recusado,
             operação cancelada, erro de leitura.
           </p>
-          <nav className="mt-3 flex gap-2">
-            {PERIODOS.map((p) => (
-              <Link
-                key={p.key}
-                href={p.key === "30" ? "/perdidas" : `/perdidas?periodo=${p.key}`}
-                className={
-                  p.key === periodo
-                    ? "rounded-md bg-[var(--series-1)] px-3 py-1 text-sm font-medium text-white"
-                    : "rounded-md border border-[var(--grid)] px-3 py-1 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }
-              >
-                {p.label}
-              </Link>
-            ))}
-          </nav>
+          <PeriodoNav basePath="/perdidas" periodo={periodo} />
         </header>
 
         {lost.ok ? (
@@ -75,28 +60,33 @@ export default async function PerdidasPage({
                   Nenhuma tentativa não aprovada no período. 🎉
                 </p>
               ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs uppercase text-[var(--text-secondary)]">
-                      <th className="py-2 font-medium">Motivo</th>
-                      <th className="py-2 text-right font-medium">Tentativas</th>
-                      <th className="py-2 text-right font-medium">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-[var(--text-primary)]">
-                    {lost.data.motivos.map((m) => (
-                      <tr key={m.motivo} className="border-t border-[var(--grid)]">
-                        <td className="py-2">{m.motivo}</td>
-                        <td className="py-2 text-right tabular-nums">
-                          {formatInt(m.tentativas)}
-                        </td>
-                        <td className="py-2 text-right tabular-nums">
-                          {formatMoney(m.valor)}
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--grid)] text-left text-[11px] uppercase tracking-[0.08em] text-[var(--text-secondary)]">
+                        <th className="py-2.5 font-medium">Motivo</th>
+                        <th className="py-2.5 text-right font-medium">Tentativas</th>
+                        <th className="py-2.5 text-right font-medium">Valor</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="text-[var(--text-primary)]">
+                      {lost.data.motivos.map((m) => (
+                        <tr
+                          key={m.motivo}
+                          className="border-t border-[var(--grid)] hover:bg-[var(--row-hover)]"
+                        >
+                          <td className="py-2.5">{m.motivo}</td>
+                          <td className="py-2.5 text-right tabular-nums">
+                            {formatInt(m.tentativas)}
+                          </td>
+                          <td className="py-2.5 text-right tabular-nums">
+                            {formatMoney(m.valor)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </Card>
           </>

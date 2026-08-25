@@ -8,7 +8,7 @@ export function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-[var(--grid)] bg-[var(--surface-1)] p-4">
+    <section className="rounded-xl border border-[var(--grid)] bg-[var(--surface-1)] p-5 shadow-[var(--shadow-card)]">
       <header className="mb-3">
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h2>
         {subtitle ? (
