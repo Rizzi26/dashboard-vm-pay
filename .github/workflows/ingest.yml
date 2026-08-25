@@ -11,7 +11,10 @@ name: Ingestão VMpay
 # quebraria com o mesmo atraso.
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # 23h, 7h e 15h de Brasília (BRT = UTC-3, sem horário de verão desde 2019).
+    # O agendamento do Actions é best-effort: atrasos de 5–20 min são normais e
+    # inofensivos aqui — a ingestão é por cursor e idempotente.
+    - cron: "0 2,10,18 * * *"
   workflow_dispatch:
     inputs:
       recurso:

@@ -151,7 +151,7 @@ no centavo:
 - Frontend: https://dashboard-vm-pay.vercel.app (Vercel, root `apps/web`)
 - API: https://vmpay-api.onrender.com (Render, Docker via `render.yaml`, Ohio)
 - Banco: Supabase `bjmcakvubmggwqkigfle` (schemas `core`+`vmpay`, Data API OFF)
-- Ingestão: GitHub Actions a cada 15 min; histórico completo desde o go-live
+- Ingestão: GitHub Actions 3× ao dia (23h/7h/15h BRT); histórico completo desde o go-live
   do mercadinho (06/11/2025): 15.612 cashless + 13.986 vends + 5.674 produtos
   + 1.170 saldos com preço
 - **Escrita na VMpay TRAVADA** (`VMPAY_ALLOW_WRITES=0` no Render) até a

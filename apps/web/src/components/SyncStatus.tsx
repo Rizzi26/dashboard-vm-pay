@@ -16,8 +16,9 @@ const ESTADOS = {
 
 function estado(row: SyncRow): keyof typeof ESTADOS {
   if (row.ultimo_erro) return "falha";
-  // O worker roda de 10 em 10 minutos; meia hora sem sucesso é sinal de parada.
-  if (row.atraso_segundos === null || row.atraso_segundos > 1800) return "atrasado";
+  // A ingestão roda 3× ao dia (23h/7h/15h BRT); 9h sem sucesso — uma rodada
+  // inteira perdida, com folga para o atraso do Actions — é sinal de parada.
+  if (row.atraso_segundos === null || row.atraso_segundos > 9 * 3600) return "atrasado";
   return "ok";
 }
 

@@ -4,7 +4,7 @@
 |---|---|---|
 | `apps/web` | Vercel | push na `main` (integração da Vercel) |
 | `apps/api` | Render, web service **Docker** (`render.yaml`) | push na `main` |
-| Ingestão | **GitHub Actions**, não Render | cron a cada 15 min |
+| Ingestão | **GitHub Actions**, não Render | cron 3× ao dia (23h/7h/15h BRT = 2,10,18 UTC) |
 | Testes | GitHub Actions | push e pull request |
 
 ## Por que a ingestão não roda no Render
