@@ -61,11 +61,24 @@ def map_balance(payload: dict[str, Any]) -> dict[str, Any] | None:
         return None
     location = payload.get("location") or {}
     name_parts = [location.get("name"), machine.get("asset_number")]
+    quantity = payload.get("inventory_balance") or 0
+
+    # O "desired_price" DESTE relatório é o VALOR TOTAL do saldo (qtd ×
+    # unitário), não o preço unitário — a descrição na doc é texto copiado de
+    # outro relatório, mas o exemplo oficial entrega (saldo 18, valor 36.00) e
+    # os dados reais confirmam (qtd 0 vem sempre 0.00). O unitário sai da
+    # divisão; com saldo zero não há como derivar e fica nulo (o planograma da
+    # instalação seria a fonte exata — fica para quando houver necessidade).
+    total_value = payload.get("desired_price")
+    unit_price = None
+    if total_value is not None and quantity:
+        unit_price = round(float(total_value) / float(quantity), 2)
+
     return {
         "machine_id": machine["id"],
         "good_id": good["id"],
-        "quantity": payload.get("inventory_balance") or 0,
-        "desired_price": payload.get("desired_price"),
+        "quantity": quantity,
+        "unit_price": unit_price,
         "location_name": " — ".join(str(p) for p in name_parts if p)
         or f"Máquina {machine['id']}",
     }

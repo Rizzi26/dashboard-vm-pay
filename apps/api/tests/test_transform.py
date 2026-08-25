@@ -102,6 +102,18 @@ def test_saldo_junta_nome_do_local_e_patrimonio():
     assert row["good_id"] == 163
 
 
+def test_preco_unitario_e_o_total_dividido_pelo_saldo():
+    """O desired_price do relatório é o VALOR do estoque: 36.00 para saldo 18 =
+    2.00 a unidade — o exemplo da própria doc. Dados reais confirmam (qtd 0
+    sempre vem 0.00, o que seria absurdo como preço unitário)."""
+    assert map_balance(SALDO)["unit_price"] == 2.0
+
+
+def test_saldo_zero_nao_inventa_preco():
+    row = map_balance({**SALDO, "inventory_balance": 0, "desired_price": 0.0})
+    assert row["unit_price"] is None
+
+
 def test_saldo_sem_maquina_ou_produto_e_descartado():
     assert map_balance({**SALDO, "machine": None}) is None
     assert map_balance({**SALDO, "good": {}}) is None
