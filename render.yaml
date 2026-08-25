@@ -13,6 +13,9 @@ services:
     dockerfilePath: apps/api/Dockerfile
     dockerContext: .
     plan: free
+    # Mesma região do Supabase (East US / Ohio): API e banco lado a lado em vez
+    # de cada query atravessar o país.
+    region: ohio
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL          # pooler do Supabase (porta 6543)
