@@ -145,18 +145,35 @@ e não janela fixa, por que o cursor avança pelo maior id e não pelo último.
 
 ## Estado e pendências
 
-- [x] Documentação consolidada
-- [x] `packages/vmpay` — cliente (15 testes)
-- [x] `apps/mcp` — servidor MCP (43 testes)
-- [x] `supabase/` — schema · `apps/api` — FastAPI (32 testes) · `apps/web` — dashboard
-- [x] CI de testes e cron de ingestão no GitHub Actions
-- [ ] Conectar Vercel · Supabase · Render (secrets em `docs/deploy.md`)
+**V1 EM PRODUÇÃO desde 2026-08-25**, com dados reais e reconciliação fechando
+no centavo:
 
-**O código nunca falou com a API real** — só com mock. O primeiro contato de
-verdade depende do token de homologação, que está sendo providenciado junto ao
-suporte da Nayax (integracoes@nayax.com). Até lá, trate qualquer afirmação sobre
-comportamento em runtime como não verificada.
+- Frontend: https://dashboard-vm-pay.vercel.app (Vercel, root `apps/web`)
+- API: https://vmpay-api.onrender.com (Render, Docker via `render.yaml`, Ohio)
+- Banco: Supabase `bjmcakvubmggwqkigfle` (schemas `core`+`vmpay`, Data API OFF)
+- Ingestão: GitHub Actions a cada 15 min; histórico completo desde o go-live
+  do mercadinho (06/11/2025): 15.612 cashless + 13.986 vends + 5.674 produtos
+  + 1.170 saldos com preço
+- **Escrita na VMpay TRAVADA** (`VMPAY_ALLOW_WRITES=0` no Render) até a
+  homologação da Nayax — pendente do token de homolog (integracoes@nayax.com)
 
-O catálogo cobre bem os recursos que a doc documenta bem. `audits`, `storables` e
-as tabelas de domínio têm pouca ou nenhuma descrição de parâmetro na origem — o
-extrator não inventa o que a doc não diz.
+Validação de integridade (2026-08-25): soma dos vends = faturamento cashless
+OK = R$ 116.320,15; 15.612 transações − 1.626 não-OK = 13.986 vends exatos.
+O kiosk é 100% cashless, um item por transação.
+
+## Roadmap V1.1 (dados já no banco; nada toca a ingestão)
+
+1. **Painel de vendas perdidas** — 1.626 tentativas não aprovadas (10,4% das
+   interações do totem). `cashless_fact.status <> 'OK'` +
+   `cashless_error_friendly` já gravados; é agregação + uma tela.
+2. **Visão por produto no painel** — Vendas hoje soma só cashless; os vends
+   dão top vendidos, giro e curva ABC via `good_id`.
+3. Preço unitário de item com saldo zero — a fonte exata é o
+   `current_planogram` da instalação (uma chamada por instalação no snapshot);
+   hoje deriva do valor total do relatório de saldos e fica nulo com saldo 0.
+4. Rotação da `sb_secret` vazada no primeiro deploy da Vercel — CONFERIR se o
+   Revoke + chave nova no Render foi concluído.
+
+O catálogo do MCP cobre bem os recursos que a doc documenta bem. `audits`,
+`storables` e as tabelas de domínio têm pouca descrição na origem — o extrator
+não inventa o que a doc não diz.
