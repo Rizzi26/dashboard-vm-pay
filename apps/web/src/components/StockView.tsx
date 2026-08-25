@@ -26,13 +26,15 @@ export function StockView({
 }) {
   const router = useRouter();
   const [filtro, setFiltro] = useState("");
+  const [disponibilidade, setDisponibilidade] = useState<"todos" | "com" | "sem">("todos");
+  const [ordem, setOrdem] = useState<"nome" | "qtd-desc" | "qtd-asc">("nome");
   const [pagina, setPagina] = useState(0);
   const [modal, setModal] = useState<Modal>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const canOperate = CAN_OPERATE.has(role);
 
-  const filtrados = useMemo(() => {
+  const porTexto = useMemo(() => {
     const termo = filtro.trim().toLowerCase();
     if (!termo) return rows;
     return rows.filter(
@@ -42,6 +44,27 @@ export function StockView({
         (r.barcode ?? "").includes(termo),
     );
   }, [rows, filtro]);
+
+  const contagens = useMemo(
+    () => ({
+      todos: porTexto.length,
+      com: porTexto.filter((r) => r.quantidade > 0).length,
+      sem: porTexto.filter((r) => r.quantidade === 0).length,
+    }),
+    [porTexto],
+  );
+
+  const filtrados = useMemo(() => {
+    let out = porTexto;
+    if (disponibilidade === "com") out = out.filter((r) => r.quantidade > 0);
+    if (disponibilidade === "sem") out = out.filter((r) => r.quantidade === 0);
+    if (ordem !== "nome") {
+      out = [...out].sort((a, b) =>
+        ordem === "qtd-desc" ? b.quantidade - a.quantidade : a.quantidade - b.quantidade,
+      );
+    }
+    return out;
+  }, [porTexto, disponibilidade, ordem]);
 
   // 1.170 itens numa tabela só é rolagem infinita; 50 por página mantém o
   // filtro global (busca em tudo) e a página curta.
@@ -117,6 +140,49 @@ export function StockView({
         >
           Exportar CSV
         </button>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-2" role="group" aria-label="Filtrar por disponibilidade">
+          {(
+            [
+              ["todos", "Todos"],
+              ["com", "Com estoque"],
+              ["sem", "Em ruptura"],
+            ] as const
+          ).map(([valor, rotulo]) => (
+            <button
+              key={valor}
+              type="button"
+              onClick={() => {
+                setDisponibilidade(valor);
+                setPagina(0);
+              }}
+              className={
+                disponibilidade === valor
+                  ? "rounded-md bg-[var(--series-1)] px-3 py-1 text-sm font-medium text-white"
+                  : "rounded-md border border-[var(--grid)] px-3 py-1 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              }
+            >
+              {rotulo} ({contagens[valor]})
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+          Ordenar
+          <select
+            value={ordem}
+            onChange={(e) => {
+              setOrdem(e.target.value as typeof ordem);
+              setPagina(0);
+            }}
+            className="rounded-md border border-[var(--grid)] bg-transparent px-2 py-1 text-sm text-[var(--text-primary)]"
+          >
+            <option value="nome">Nome (A–Z)</option>
+            <option value="qtd-desc">Quantidade: maior → menor</option>
+            <option value="qtd-asc">Quantidade: menor → maior</option>
+          </select>
+        </label>
       </div>
 
       {feedback ? (
