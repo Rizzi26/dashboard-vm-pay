@@ -17,7 +17,13 @@ const PAD = { top: 16, right: 78, bottom: 28, left: 16 };
  * e dois eixos y no mesmo plot fazem o leitor comparar formas que não são
  * comparáveis; transações ficam no tooltip e nos tiles.
  */
-export function RevenueChart({ points }: { points: DailyPoint[] }) {
+export function RevenueChart({
+  points,
+  countLabel = "transações",
+}: {
+  points: DailyPoint[];
+  countLabel?: string;
+}) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
@@ -161,7 +167,7 @@ export function RevenueChart({ points }: { points: DailyPoint[] }) {
               <span className="tabular-nums">{formatMoney(ativo.faturamento)}</span>
               {" · "}
               <span className="tabular-nums text-[var(--text-secondary)]">
-                {formatInt(ativo.transacoes)} transações
+                {formatInt(ativo.transacoes)} {countLabel}
               </span>
             </span>
           ) : (
@@ -185,7 +191,7 @@ export function RevenueChart({ points }: { points: DailyPoint[] }) {
             <tr className="text-left text-xs uppercase text-[var(--text-secondary)]">
               <th className="py-1 font-medium">Dia</th>
               <th className="py-1 text-right font-medium">Faturamento</th>
-              <th className="py-1 text-right font-medium">Transações</th>
+              <th className="py-1 text-right font-medium">{countLabel}</th>
             </tr>
           </thead>
           <tbody className="text-[var(--text-primary)]">

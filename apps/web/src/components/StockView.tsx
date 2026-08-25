@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { StockRow } from "@/lib/api";
 import { browserApi } from "@/lib/api";
@@ -215,7 +216,12 @@ export function StockView({
           {visiveis.map((r) => (
             <tr key={`${r.location_id}:${r.product_id}`} className="border-t border-[var(--grid)]">
               <td className="py-2">
-                {r.produto}
+                <Link
+                  href={`/produto/${r.product_id}`}
+                  className="text-[var(--text-primary)] underline decoration-[var(--grid)] underline-offset-4 hover:decoration-[var(--series-1)]"
+                >
+                  {r.produto}
+                </Link>
                 {r.barcode ? (
                   <span className="ml-2 text-xs text-[var(--text-secondary)]">{r.barcode}</span>
                 ) : null}

@@ -34,6 +34,9 @@ class FakeResult:
     def all(self):
         return self._rows
 
+    def first(self):
+        return self._rows[0] if self._rows else None
+
 
 class FakeSession:
     """Devolve linhas pré-cozidas e guarda os parâmetros recebidos."""
@@ -183,3 +186,39 @@ async def test_vendas_perdidas_calcula_a_taxa():
 async def test_vendas_perdidas_sem_interacao_nao_divide_por_zero():
     com_sessao_sequencial([[{"tentativas": 0, "valor": 0, "interacoes": 0}], []])
     assert (await get("/orgs/mercadinho/sales/lost")).json()["taxa"] == 0.0
+
+
+PROD_ID = "00000000-0000-0000-0000-00000000ffff"
+
+
+async def test_ficha_de_produto_junta_estoque_e_vendas():
+    from datetime import datetime, timezone as tz
+
+    com_sessao_sequencial([
+        [{"name": "Água Mineral", "barcode": "789", "preco": 3.5, "estoque": 18}],
+        [("163",)],
+        [{"unidades": 40, "faturamento": 140.0,
+          "ultima_venda": datetime(2026, 8, 24, 12, 0, tzinfo=tz.utc)}],
+        [{"dia": date(2026, 8, 24), "faturamento": 140.0, "unidades": 40}],
+    ])
+    body = (await get(f"/orgs/mercadinho/products/{PROD_ID}")).json()
+    assert body["produto"]["nome"] == "Água Mineral"
+    assert body["resumo"]["preco_medio"] == 3.5  # 140 / 40
+    assert body["diario"][0]["unidades"] == 40
+
+
+async def test_produto_sem_vinculo_devolve_zeros_e_nao_explode():
+    com_sessao_sequencial([
+        [{"name": "Órfão", "barcode": None, "preco": None, "estoque": 0}],
+        [],  # sem product_link
+        [{"unidades": 0, "faturamento": 0, "ultima_venda": None}],
+        [],
+    ])
+    body = (await get(f"/orgs/mercadinho/products/{PROD_ID}")).json()
+    assert body["resumo"]["unidades"] == 0
+    assert body["resumo"]["preco_medio"] is None
+
+
+async def test_produto_de_outra_org_da_404():
+    com_sessao_sequencial([[]])
+    assert (await get(f"/orgs/mercadinho/products/{PROD_ID}")).status_code == 404

@@ -82,6 +82,24 @@ export type LostSales = {
   motivos: { motivo: string; tentativas: number; valor: number }[];
 };
 
+export type ProductDetail = {
+  produto: {
+    id: string;
+    nome: string;
+    barcode: string | null;
+    preco: number | null;
+    estoque: number;
+  };
+  periodo: { inicio: string; fim: string };
+  resumo: {
+    unidades: number;
+    faturamento: number;
+    preco_medio: number | null;
+    ultima_venda: string | null;
+  };
+  diario: { dia: string; faturamento: number; unidades: number }[];
+};
+
 export type Fetched<T> = { ok: true; data: T } | { ok: false; error: string };
 
 /** Chamadas disparadas no browser (ações, export). Recebem o token da sessão. */

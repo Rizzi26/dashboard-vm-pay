@@ -11,6 +11,7 @@ import type {
   MachineRow,
   Me,
   MemberRow,
+  ProductDetail,
   StockRow,
   Summary,
   SyncRow,
@@ -43,6 +44,8 @@ export const serverApi = {
     serverGet<MachineRow[]>(`/orgs/${org}/sales/by-machine${qs}`),
   syncStatus: (org: string) => serverGet<SyncRow[]>(`/orgs/${org}/sales/sync-status`),
   lost: (org: string, qs = "") => serverGet<LostSales>(`/orgs/${org}/sales/lost${qs}`),
+  product: (org: string, id: string, qs = "") =>
+    serverGet<ProductDetail>(`/orgs/${org}/products/${id}${qs}`),
   stock: (org: string) => serverGet<StockRow[]>(`/orgs/${org}/stock`),
   members: (org: string) => serverGet<MemberRow[]>(`/orgs/${org}/members`),
   actions: (org: string) => serverGet<ActionRow[]>(`/orgs/${org}/stock/actions`),
