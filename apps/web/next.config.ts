@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // standalone: o build vira um server.js autocontido, que é o que a imagem
-  // Docker roda. A Vercel ignora isto e faz o build dela normalmente.
-  output: "standalone",
+  // standalone é para a imagem Docker (compose/self-host): o build vira um
+  // server.js autocontido. Na Vercel ele NÃO pode ficar ligado — o empacotador
+  // dela (onBuildComplete) espera o layout padrão de traces e quebra com
+  // "ENOENT: .next/next-server.js.nft.json". A env VERCEL=1 existe só lá.
+  output: process.env.VERCEL ? undefined : "standalone",
 };
 
 export default nextConfig;
