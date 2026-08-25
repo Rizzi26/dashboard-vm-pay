@@ -199,7 +199,11 @@ async def sync_resource(
 
     async def _source():
         if backfill:
-            async for payload in client.paginate(resource):
+            # O filtro de cursor vai FIXO em 0: /cashless_facts devolve 400 sem
+            # nenhum filtro, e com ele a paginação varre tudo (page 1..N).
+            async for payload in client.paginate(
+                resource, **{spec["cursor_param"]: 0}
+            ):
                 yield payload
         else:
             async for payload in client.iter_since(

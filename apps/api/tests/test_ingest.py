@@ -275,7 +275,9 @@ async def test_cursor_zero_faz_backfill_por_paginacao(cliente):
     assert rel.rows == 1002  # o histórico inteiro, não só o topo
     assert rel.cursor_after == 2000
     chamadas = [str(c.request.url) for c in respx.calls]
-    assert all("transaction_id_greater_than" not in u for u in chamadas)
+    # o cursor vai fixo em 0 como FILTRO (sem ele o endpoint devolve 400);
+    # quem varre é o page
+    assert all("transaction_id_greater_than=0" in u for u in chamadas)
     assert "page=2" in chamadas[1]
 
 
