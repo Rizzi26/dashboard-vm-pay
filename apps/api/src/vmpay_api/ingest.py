@@ -75,20 +75,29 @@ async def read_cursor(session: AsyncSession, resource: str) -> int:
     return value or 0
 
 
+#: Linhas por statement — o asyncpg limita 32.767 parâmetros por query, e o
+#: cashless_fact tem ~30 colunas (500 linhas ~ 15k: perto demais do teto).
+UPSERT_CHUNK = 200
+
+
 async def _upsert(session: AsyncSession, table, rows: list[dict], key: str = "id") -> None:
     """Upsert em bloco, atualizando todas as colunas exceto a chave.
 
     Reingestão sobrescreve: se a VMpay corrigir uma transação, a correção chega.
     """
-    if not rows:
-        return
-    stmt = insert(table).values(rows)
-    updatable = {
-        c.name: stmt.excluded[c.name]
-        for c in table.__table__.columns
-        if c.name not in (key, "ingested_at", "synced_at")
-    }
-    await session.execute(stmt.on_conflict_do_update(index_elements=[key], set_=updatable))
+    for start in range(0, len(rows), UPSERT_CHUNK):
+        chunk = rows[start : start + UPSERT_CHUNK]
+        if not chunk:
+            return
+        stmt = insert(table).values(chunk)
+        updatable = {
+            c.name: stmt.excluded[c.name]
+            for c in table.__table__.columns
+            if c.name not in (key, "ingested_at", "synced_at")
+        }
+        await session.execute(
+            stmt.on_conflict_do_update(index_elements=[key], set_=updatable)
+        )
 
 
 #: Campo do fato -> dimensão que ele referencia por FK.

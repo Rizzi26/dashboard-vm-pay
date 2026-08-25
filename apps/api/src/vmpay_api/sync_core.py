@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, select, tuple_
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from vmpay import VMpayClient, VMpayError
@@ -67,18 +67,27 @@ def resolve_token(config: dict[str, Any]) -> str:
     return token
 
 
+#: Linhas por statement. O asyncpg limita a 32.767 parâmetros por query; com
+#: ~10 colunas, 200 linhas usam ~2.000 — folga de uma ordem de grandeza. A
+#: primeira ingestão real estourou o limite com um catálogo de 6.000+ produtos
+#: num upsert só.
+UPSERT_CHUNK = 200
+
+
 async def _upsert(session: AsyncSession, table, rows: list[dict], keys: list[str]) -> None:
     if not rows:
         return
-    stmt = insert(table).values(rows)
-    updatable = {
-        c.name: stmt.excluded[c.name]
-        for c in table.__table__.columns
-        if c.name not in keys and c.name not in ("created_at",)
-    }
-    await session.execute(
-        stmt.on_conflict_do_update(index_elements=keys, set_=updatable)
-    )
+    for start in range(0, len(rows), UPSERT_CHUNK):
+        chunk = rows[start : start + UPSERT_CHUNK]
+        stmt = insert(table).values(chunk)
+        updatable = {
+            c.name: stmt.excluded[c.name]
+            for c in table.__table__.columns
+            if c.name not in keys and c.name not in ("created_at",)
+        }
+        await session.execute(
+            stmt.on_conflict_do_update(index_elements=keys, set_=updatable)
+        )
 
 
 async def sync_products(
@@ -204,17 +213,17 @@ async def sync_stock(
     )
 
     # O snapshot é a verdade: saldo que sumiu do relatório sai da tabela — senão
-    # produto removido da máquina continuaria "em estoque" para sempre.
+    # produto removido da máquina continuaria "em estoque" para sempre. A
+    # identificação é por timestamp (linhas destes locais não tocadas nesta
+    # rodada), não por lista de pares — que estourava o limite de parâmetros do
+    # asyncpg em catálogos grandes.
     removed = 0
     location_ids = list({loc["id"] for loc in locations.values()})
     if location_ids:
-        seen_pairs = list(balances)
         result = await session.execute(
             delete(core.StockBalance).where(
                 core.StockBalance.location_id.in_(location_ids),
-                ~tuple_(
-                    core.StockBalance.location_id, core.StockBalance.product_id
-                ).in_(seen_pairs),
+                core.StockBalance.updated_at < now,
             )
         )
         removed = result.rowcount or 0
