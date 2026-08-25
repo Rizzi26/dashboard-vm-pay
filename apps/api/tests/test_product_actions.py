@@ -166,6 +166,22 @@ async def test_refs_vem_ao_vivo_da_vmpay(monkeypatch):
     assert resp.json()["fabricantes"] == [{"id": 1, "nome": "Ambev"}]
 
 
+async def test_refs_sem_token_no_ambiente_e_502_legivel(monkeypatch):
+    """Env do token ausente vira 502 com mensagem — nunca 500 cru.
+
+    Regressão real: o 500 sai por fora do CORSMiddleware, o browser reporta
+    como erro de CORS e a causa (env faltando no Render) fica invisível.
+    """
+    monkeypatch.delenv("ENV_QUE_NAO_EXISTE", raising=False)
+    use_role("admin")
+    use_session(
+        [("from core.integration", [{"id": INTEG_ID, "config": {"token_env": "ENV_QUE_NAO_EXISTE"}}])]
+    )
+    resp = await call("GET", "/orgs/mercadinho/products/refs")
+    assert resp.status_code == 502
+    assert "ENV_QUE_NAO_EXISTE" in resp.json()["detail"]
+
+
 # --------------------------------------------------------------------- criação
 
 

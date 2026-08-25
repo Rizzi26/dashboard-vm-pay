@@ -73,8 +73,10 @@ async def product_refs(ctx: AdminCtx, session: Session) -> dict:
     formulário precisa do estado atual, não do último snapshot.
     """
     integration = await _load_integration(session, ctx.org_id)
-    connector = get_connector(integration["config"])
+    # get_connector DENTRO do try: resolve_token levanta VMpayError se a env do
+    # token não existe no ambiente — fora daqui viraria 500 sem headers de CORS.
     try:
+        connector = get_connector(integration["config"])
         async with connector.client:
             return await connector.product_refs()
     except VMpayError as exc:
