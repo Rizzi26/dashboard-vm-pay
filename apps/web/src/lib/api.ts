@@ -73,6 +73,15 @@ export type ActionRow = {
   finalizada_em: string | null;
 };
 
+export type LostSales = {
+  periodo: { inicio: string; fim: string };
+  tentativas: number;
+  valor_nao_capturado: number;
+  interacoes: number;
+  taxa: number;
+  motivos: { motivo: string; tentativas: number; valor: number }[];
+};
+
 export type Fetched<T> = { ok: true; data: T } | { ok: false; error: string };
 
 /** Chamadas disparadas no browser (ações, export). Recebem o token da sessão. */

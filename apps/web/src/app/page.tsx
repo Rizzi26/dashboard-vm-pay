@@ -10,23 +10,7 @@ import { Header } from "@/components/Header";
 import { serverApi } from "@/lib/api.server";
 import { formatInt, formatMoney } from "@/lib/format";
 import { orgSession } from "@/lib/org";
-
-// Períodos oferecidos. O backend aceita start/end; "tudo" usa uma data anterior
-// ao go-live de qualquer operador plausível.
-const PERIODOS = [
-  { key: "30", label: "30 dias", dias: 30 },
-  { key: "90", label: "90 dias", dias: 90 },
-  { key: "365", label: "12 meses", dias: 365 },
-  { key: "tudo", label: "Tudo", dias: null },
-] as const;
-
-function startFor(key: string): string | null {
-  const periodo = PERIODOS.find((p) => p.key === key) ?? PERIODOS[0];
-  if (periodo.dias === null) return "2000-01-01";
-  const d = new Date();
-  d.setDate(d.getDate() - periodo.dias);
-  return d.toISOString().slice(0, 10);
-}
+import { PERIODOS, startFor } from "@/lib/periodos";
 
 export default async function Dashboard({
   searchParams,

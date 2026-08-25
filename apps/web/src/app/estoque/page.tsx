@@ -1,7 +1,9 @@
 import { Header } from "@/components/Header";
+import { StatTile } from "@/components/StatTile";
 import { Offline } from "@/components/Offline";
 import { StockView } from "@/components/StockView";
 import { serverApi } from "@/lib/api.server";
+import { formatInt, formatMoney } from "@/lib/format";
 import { orgSession } from "@/lib/org";
 
 export default async function EstoquePage() {
@@ -19,11 +21,38 @@ export default async function EstoquePage() {
           </p>
         </header>
         {stock.ok ? (
-          <StockView rows={stock.data} org={org.slug} role={org.role} />
+          <>
+            <ShelfTiles rows={stock.data} />
+            <StockView rows={stock.data} org={org.slug} role={org.role} />
+          </>
         ) : (
           <Offline error={stock.error} />
         )}
       </main>
+    </div>
+  );
+}
+
+function ShelfTiles({ rows }: { rows: { quantidade: number; preco: number | null }[] }) {
+  // Calculado dos dados que a página já carrega — sem endpoint novo.
+  const unidades = rows.reduce((s, r) => s + r.quantidade, 0);
+  const valor = rows.reduce((s, r) => s + r.quantidade * (r.preco ?? 0), 0);
+  const disponiveis = rows.filter((r) => r.quantidade > 0).length;
+  const ruptura = rows.filter((r) => r.quantidade === 0).length;
+  return (
+    <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <StatTile label="Unidades em prateleira" value={formatInt(unidades)} />
+      <StatTile
+        label="Valor de prateleira"
+        value={formatMoney(valor)}
+        hint="a preço de venda; itens sem preço conhecido ficam de fora"
+      />
+      <StatTile label="Produtos disponíveis" value={formatInt(disponiveis)} />
+      <StatTile
+        label="Em ruptura"
+        value={formatInt(ruptura)}
+        hint="itens do planograma com saldo zero"
+      />
     </div>
   );
 }

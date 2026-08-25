@@ -145,6 +145,66 @@ async def by_machine(
     ]
 
 
+@router.get("/lost")
+async def lost_sales(
+    start: date | None = None,
+    end: date | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Vendas perdidas: interações do totem que não viraram dinheiro.
+
+    Base: cashless_fact com status <> OK. O "valor não capturado" é teto, não
+    piso — cliente com cartão recusado pode ter tentado de novo e comprado; a
+    UI diz isso em vez de fingir precisão.
+    """
+    start, end = _window(start, end)
+    params = {"start": start, "end": end + timedelta(days=1)}
+    resumo = (
+        await session.execute(
+            text(
+                """
+                select count(*) filter (where status is distinct from 'OK') as tentativas,
+                       coalesce(sum(value) filter (where status is distinct from 'OK'), 0) as valor,
+                       count(*) as interacoes
+                  from vmpay.cashless_fact
+                 where occurred_at >= :start and occurred_at < :end
+                """
+            ),
+            params,
+        )
+    ).mappings().one()
+    motivos = (
+        await session.execute(
+            text(
+                """
+                select coalesce(nullif(cashless_error_friendly, ''), status) as motivo,
+                       count(*)                as tentativas,
+                       coalesce(sum(value), 0) as valor
+                  from vmpay.cashless_fact
+                 where status is distinct from 'OK'
+                   and occurred_at >= :start and occurred_at < :end
+                 group by 1
+                 order by 2 desc
+                 limit 12
+                """
+            ),
+            params,
+        )
+    ).mappings().all()
+    tentativas, interacoes = resumo["tentativas"], resumo["interacoes"]
+    return {
+        "periodo": {"inicio": start.isoformat(), "fim": end.isoformat()},
+        "tentativas": tentativas,
+        "valor_nao_capturado": float(resumo["valor"]),
+        "interacoes": interacoes,
+        "taxa": tentativas / interacoes if interacoes else 0.0,
+        "motivos": [
+            {"motivo": m["motivo"], "tentativas": m["tentativas"], "valor": float(m["valor"])}
+            for m in motivos
+        ],
+    }
+
+
 @router.get("/sync-status")
 async def sync_status(session: AsyncSession = Depends(get_session)) -> list[dict]:
     """Quão fresco está o dado — o dashboard mostra isto no rodapé.

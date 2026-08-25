@@ -7,6 +7,7 @@ import type {
   ActionRow,
   DailyPoint,
   Fetched,
+  LostSales,
   MachineRow,
   Me,
   MemberRow,
@@ -41,6 +42,7 @@ export const serverApi = {
   byMachine: (org: string, qs = "") =>
     serverGet<MachineRow[]>(`/orgs/${org}/sales/by-machine${qs}`),
   syncStatus: (org: string) => serverGet<SyncRow[]>(`/orgs/${org}/sales/sync-status`),
+  lost: (org: string, qs = "") => serverGet<LostSales>(`/orgs/${org}/sales/lost${qs}`),
   stock: (org: string) => serverGet<StockRow[]>(`/orgs/${org}/stock`),
   members: (org: string) => serverGet<MemberRow[]>(`/orgs/${org}/members`),
   actions: (org: string) => serverGet<ActionRow[]>(`/orgs/${org}/stock/actions`),

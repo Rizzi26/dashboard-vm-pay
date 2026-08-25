@@ -145,3 +145,41 @@ async def test_sync_status_expoe_o_atraso():
     body = (await get("/orgs/mercadinho/sales/sync-status")).json()
     assert body[0]["atraso_segundos"] == 300.0
     assert body[0]["cursor"] == 900
+
+
+def com_sessao_sequencial(lotes):
+    """Cada execute() consome o próximo lote de linhas — para rotas com mais de
+    uma query, onde a sessão de lote único devolveria o lote errado."""
+
+    class Sequencial:
+        def __init__(self):
+            self._lotes = list(lotes)
+
+        async def execute(self, _stmt, params=None):
+            return FakeResult(self._lotes.pop(0) if self._lotes else [])
+
+    sessao = Sequencial()
+
+    async def _override():
+        yield sessao
+
+    app.dependency_overrides[get_session] = _override
+    viewer_ctx()
+    return sessao
+
+
+async def test_vendas_perdidas_calcula_a_taxa():
+    com_sessao_sequencial([
+        [{"tentativas": 100, "valor": 550.0, "interacoes": 1000}],
+        [{"motivo": "Operação cancelada pelo operador.", "tentativas": 60, "valor": 300.0}],
+    ])
+    body = (await get("/orgs/mercadinho/sales/lost")).json()
+    assert body["tentativas"] == 100
+    assert body["taxa"] == 0.1
+    assert body["valor_nao_capturado"] == 550.0
+    assert body["motivos"][0]["motivo"] == "Operação cancelada pelo operador."
+
+
+async def test_vendas_perdidas_sem_interacao_nao_divide_por_zero():
+    com_sessao_sequencial([[{"tentativas": 0, "valor": 0, "interacoes": 0}], []])
+    assert (await get("/orgs/mercadinho/sales/lost")).json()["taxa"] == 0.0
