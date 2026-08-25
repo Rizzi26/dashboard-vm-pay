@@ -279,10 +279,14 @@ export function StockView({
         </p>
       ) : null}
 
-      {/* Lista mobile: mesmos dados da tabela, um card por linha. */}
-      <ul className="divide-y divide-[var(--grid)] md:hidden">
+      {/* Lista mobile: mesmos dados da tabela, um card por produto — a
+          superfície mais clara separa cada item do fundo da página. */}
+      <ul className="space-y-3 md:hidden">
         {visiveis.map((r) => (
-          <li key={`${r.location_id}:${r.product_id}`} className="py-3">
+          <li
+            key={`${r.location_id}:${r.product_id}`}
+            className="rounded-xl border border-[var(--grid)] bg-[var(--surface-1)] p-4 shadow-[var(--shadow-card)]"
+          >
             <div className="flex items-start justify-between gap-3">
               <Link
                 href={`/produto/${r.product_id}`}

@@ -1,0 +1,22 @@
+# Mantém a API acordada: o free tier do Render hiberna após ~15 min sem
+# tráfego e o primeiro acesso seguinte paga ~30-60s de cold start — é a maior
+# parte da lentidão percebida no dashboard. Com ping a cada 10 min o serviço
+# fica quente 24/7, o que cabe nas 750 instance-hours/mês do plano free
+# (24h × 31d = 744h). Cron do GitHub é best-effort: um ping perdido só
+# significa um eventual cold start, nunca dado errado.
+name: keepalive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping da API no Render
+        run: |
+          curl -sf --max-time 60 https://vmpay-api.onrender.com/health \
+            || echo "ping falhou — provável cold start em andamento; o próximo acerta"

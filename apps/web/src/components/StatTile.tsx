@@ -26,15 +26,17 @@ export function StatTile({
 
   const boxClasses = `rounded-xl border ${
     active ? "border-[var(--accent)]" : "border-[var(--grid)]"
-  } bg-[var(--surface-1)] p-5 shadow-[var(--shadow-card)]`;
+  } bg-[var(--surface-1)] p-4 shadow-[var(--shadow-card)] sm:p-5`;
 
   const inner = (
     <>
       <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--text-secondary)]">
         {label}
       </div>
+      {/* Menor no mobile: o tile de grid-cols-2 tem ~160px e "R$ 12.280,84"
+          estoura em 1.75rem; break-words segura o pior caso em vez de vazar. */}
       <div
-        className={`mt-2 text-[1.75rem] leading-tight tracking-tight font-semibold tabular-nums ${valueColor}`}
+        className={`mt-2 break-words text-xl leading-tight tracking-tight font-semibold tabular-nums sm:text-[1.75rem] ${valueColor}`}
       >
         {value}
       </div>
