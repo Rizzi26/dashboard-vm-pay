@@ -67,7 +67,7 @@ select l.id   as location_id,
        p.id   as product_id,
        p.name as product_name,
        p.barcode,
-       p.unit_price,
+       coalesce(b.price, p.unit_price) as unit_price,
        b.quantity,
        b.updated_at
   from core.stock_balance b
@@ -348,6 +348,15 @@ async def set_price(body: PriceBody, ctx: AdminCtx, session: Session) -> dict:
             """
         ),
         {"price": body.price, "product_id": str(body.product_id), "org_id": str(ctx.org_id)},
+    )
+    await session.execute(
+        text(
+            """
+            update core.stock_balance set price = :price, updated_at = now()
+             where location_id = :location_id and product_id = :product_id
+            """
+        ),
+        {"price": body.price, "location_id": str(body.location_id), "product_id": str(body.product_id)},
     )
     await _close_action(session, action_id)
     return {"action_id": action_id, "status": "success", "vmpay": result}

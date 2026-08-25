@@ -135,6 +135,7 @@ class StockBalance(Base):
     location_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     quantity: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    price: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

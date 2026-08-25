@@ -201,6 +201,9 @@ async def sync_stock(
             "location_id": location_id,
             "product_id": product_id,
             "quantity": row["quantity"],
+            # O preço vigente vem do planograma da instalação — produto pode
+            # nem ter preço padrão no catálogo (o da PoC não tem).
+            "price": row["desired_price"],
             "updated_at": now,
         }
 
