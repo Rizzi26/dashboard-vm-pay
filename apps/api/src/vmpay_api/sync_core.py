@@ -61,7 +61,9 @@ class SnapshotReport:
 def resolve_token(config: dict[str, Any]) -> str:
     """O config aponta o NOME da env var; o valor nunca sai do ambiente."""
     env_name = config.get("token_env", DEFAULT_TOKEN_ENV)
-    token = os.environ.get(env_name, "")
+    # strip: valor colado em dashboard costuma vir com quebra de linha, espaço
+    # ou aspas junto — e a VMpay responde 401 sem dizer por quê.
+    token = os.environ.get(env_name, "").strip().strip('"').strip("'")
     if not token:
         raise VMpayError(f"env var {env_name} (token da integração) não está definida")
     return token

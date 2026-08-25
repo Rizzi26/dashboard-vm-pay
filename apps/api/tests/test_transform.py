@@ -140,6 +140,20 @@ def test_env_ausente_e_erro_claro(monkeypatch):
         sync_core.resolve_token({"token_env": "TOKEN_SUMIDO"})
 
 
+def test_token_colado_com_sujeira_e_saneado(monkeypatch):
+    """Quebra de linha, espaço e aspas de colagem em dashboard não vão à VMpay."""
+    monkeypatch.setenv("TOKEN_SUJO", '  "abc123"\n')
+    assert sync_core.resolve_token({"token_env": "TOKEN_SUJO"}) == "abc123"
+
+
+def test_env_so_com_espacos_conta_como_ausente(monkeypatch):
+    from vmpay import VMpayError
+
+    monkeypatch.setenv("TOKEN_VAZIO", "   \n")
+    with pytest.raises(VMpayError, match="TOKEN_VAZIO"):
+        sync_core.resolve_token({"token_env": "TOKEN_VAZIO"})
+
+
 # ------------------------------------------------- orquestração (sessão falsa)
 
 
