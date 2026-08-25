@@ -17,6 +17,9 @@ def _clean_settings(monkeypatch):
     """Cada teste parte de settings recém-lidos, com HS256 de teste ligado."""
     monkeypatch.setenv("SUPABASE_JWT_SECRET", SECRET)
     monkeypatch.setenv("SUPABASE_URL", "https://teste.supabase.co")
+    # Os testes de ação assumem write-back ligado; os que provam a trava
+    # desligam explicitamente.
+    monkeypatch.setenv("VMPAY_ALLOW_WRITES", "1")
     settings.cache_clear()
     yield
     settings.cache_clear()

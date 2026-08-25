@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     #: Origens liberadas no CORS — o domínio da Vercel.
     cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
 
+    #: Trava de escrita na VMpay. DESLIGADA por padrão: com o banco populado de
+    #: dados de produção, nenhuma ação (restock, preço) alcança a VMpay até
+    #: alguém ligar isto de propósito no ambiente. Mesmo nome e semântica do
+    #: interruptor do MCP.
+    vmpay_allow_writes: bool = Field(default=False, alias="VMPAY_ALLOW_WRITES")
+
     # ------------------------------------------------------------ Supabase Auth
 
     #: URL do projeto Supabase (https://<ref>.supabase.co). Usada para montar o

@@ -87,7 +87,10 @@ async def daily(
                        count(*)                             as transactions
                   from vmpay.sale
                  where occurred_at >= :start and occurred_at < :end
-                   and (:machine_id::bigint is null or machine_id = :machine_id)
+                   -- cast() em vez de ::: o parser de parâmetros do SQLAlchemy
+                   -- lê ":machine_id::bigint" errado e deixa o primeiro
+                   -- placeholder sem substituir (500 em runtime).
+                   and (cast(:machine_id as bigint) is null or machine_id = :machine_id)
                  group by 1
                  order by 1
                 """

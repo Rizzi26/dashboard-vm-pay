@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { AUTH_COOKIE } from "@/lib/supabase/browser";
+
 /**
  * Guarda de sessão. Sem usuário -> /login; com usuário em /login -> /.
  *
@@ -12,9 +14,11 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    // No servidor a URL interna (SUPABASE_URL) vence — ver lib/supabase/server.ts.
+    process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: { name: AUTH_COOKIE },
       cookies: {
         getAll: () => request.cookies.getAll(),
         setAll: (cookiesToSet) => {

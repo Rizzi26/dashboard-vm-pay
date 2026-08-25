@@ -1,0 +1,75 @@
+# V1 local: banco real (Postgres com as migrations reais), backend real,
+# frontend real — só o Supabase Auth é stub (scripts/demo/stub_supabase.py).
+#
+#   docker compose up --build
+#   http://localhost:3210  (master@mercadinho.dev / senha-master)
+#
+# A escrita na VMpay nasce BLOQUEADA (VMPAY_ALLOW_WRITES ausente = 0): as ações
+# devolvem 503 com a mensagem da trava. É o mesmo comportamento planejado para
+# a produção nesta fase.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: local-dev-password
+    ports:
+      - "54329:5432"   # exposto para inspeção via psql; interno é db:5432
+    volumes:
+      # O shim de auth.users entra antes; as migrations REAIS entram como estão
+      # no repo — sem cópia, sem drift; o seed local por último.
+      - ./docker/postgres/00-auth-shim.sql:/docker-entrypoint-initdb.d/00-auth-shim.sql:ro
+      - ./supabase/migrations/0001_init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - ./supabase/migrations/0002_core.sql:/docker-entrypoint-initdb.d/20-core.sql:ro
+      - ./docker/postgres/90-seed-local.sql:/docker-entrypoint-initdb.d/90-seed-local.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  auth:
+    image: python:3.12-slim
+    command: python /demo/stub_supabase.py
+    environment:
+      HOST: 0.0.0.0
+      PORT: "9999"
+    volumes:
+      - ./scripts/demo:/demo:ro
+    ports:
+      - "9999:9999"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:local-dev-password@db:5432/postgres
+      SUPABASE_URL: http://auth:9999
+      SUPABASE_JWT_SECRET: "segredo-de-teste-com-32-bytes-ok!!"
+      CORS_ORIGINS: http://localhost:3210
+      # VMPAY_ALLOW_WRITES ausente de propósito: trava fechada.
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: apps/web
+      args:
+        # Inlined no build — endereços que o BROWSER alcança.
+        NEXT_PUBLIC_SUPABASE_URL: http://localhost:9999
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: local-dev-anon-key
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    environment:
+      # Endereços internos, que o SERVIDOR Next alcança dentro da rede do compose.
+      SUPABASE_URL: http://auth:9999
+      API_URL: http://api:8000
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: local-dev-anon-key
+    ports:
+      - "3210:3000"
+    depends_on:
+      - api
+      - auth

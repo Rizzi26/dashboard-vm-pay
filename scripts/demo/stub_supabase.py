@@ -3,7 +3,7 @@
 Suficiente para @supabase/ssr acreditar que está falando com o Supabase. O JWT
 é HS256 com segredo compartilhado com o stub do backend.
 """
-import json, time
+import json, os, time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import base64, hmac, hashlib
@@ -85,4 +85,4 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
 print("stub supabase na 9999")
-HTTPServer(("127.0.0.1", 9999), H).serve_forever()
+HTTPServer((os.environ.get("HOST", "127.0.0.1"), int(os.environ.get("PORT", "9999"))), H).serve_forever()

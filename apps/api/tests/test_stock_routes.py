@@ -283,3 +283,49 @@ async def test_preco_atualiza_o_produto_canonico_apos_aceite(monkeypatch):
     assert fake.calls == [("price", 49, 857, [(163, 4.25)])]
     sqls = " ".join(sql for sql, _ in sessao.executed)
     assert "update core.product" in sqls
+
+
+# ------------------------------------------------------------ trava de escrita
+
+
+async def test_escrita_desligada_bloqueia_restock_mesmo_para_master(monkeypatch):
+    monkeypatch.setenv("VMPAY_ALLOW_WRITES", "0")
+    from vmpay_api.config import settings
+
+    settings.cache_clear()
+    use_role("master")
+    sessao = use_session(rotas_de_sucesso())
+    fake = use_connector(monkeypatch)
+
+    resp = await call("POST", "/orgs/mercadinho/stock/restock", json=RESTOCK_BODY)
+    assert resp.status_code == 503
+    assert "VMPAY_ALLOW_WRITES" in resp.json()["detail"]
+    assert fake.calls == []  # nada alcançou a VMpay
+    assert sessao.executed == []  # nem o banco foi tocado
+
+
+async def test_escrita_desligada_e_o_default(monkeypatch):
+    """Sem a env, a trava está fechada — seguro por omissão."""
+    monkeypatch.delenv("VMPAY_ALLOW_WRITES", raising=False)
+    from vmpay_api.config import settings
+
+    settings.cache_clear()
+    use_role("admin")
+    use_session(rotas_de_sucesso())
+    resp = await call(
+        "POST",
+        "/orgs/mercadinho/stock/price",
+        json={"location_id": str(LOC_ID), "product_id": str(PROD_ID), "price": 4.0},
+    )
+    assert resp.status_code == 503
+
+
+async def test_leitura_continua_com_escrita_desligada(monkeypatch):
+    monkeypatch.setenv("VMPAY_ALLOW_WRITES", "0")
+    from vmpay_api.config import settings
+
+    settings.cache_clear()
+    use_role("viewer")
+    use_session([("from core.stock_balance", [STOCK_ROW])])
+    resp = await call("GET", "/orgs/mercadinho/stock")
+    assert resp.status_code == 200

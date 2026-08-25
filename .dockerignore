@@ -1,0 +1,10 @@
+**/.venv
+**/node_modules
+**/__pycache__
+**/.next
+**/dist
+.git
+docs/vendor
+*.pdf
+.env
+**/.env

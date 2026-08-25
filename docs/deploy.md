@@ -3,7 +3,7 @@
 | Peça | Onde roda | Gatilho |
 |---|---|---|
 | `apps/web` | Vercel | push na `main` (integração da Vercel) |
-| `apps/api` | Render, web service | push na `main` (auto-deploy do Render) |
+| `apps/api` | Render, web service **Docker** (`render.yaml`) | push na `main` |
 | Ingestão | **GitHub Actions**, não Render | cron a cada 15 min |
 | Testes | GitHub Actions | push e pull request |
 
@@ -50,6 +50,28 @@ Settings → Secrets and variables → Actions:
 
 Uma chave por consumidor: o limite de 300 req/min é por token, então a chave da
 ingestão não pode ser a mesma do MCP nem a da API.
+
+## V1 local completa (Docker)
+
+```bash
+docker compose up --build
+```
+
+Sobe Postgres com as migrations REAIS + seed local, backend real, frontend
+real; só o Supabase Auth é stub. http://localhost:3210, logins em
+`scripts/demo/README.md`. A escrita na VMpay nasce bloqueada — as ações
+devolvem o 503 da trava, o mesmo comportamento da produção nesta fase.
+
+É também o jeito de testar migration nova antes de aplicar no Supabase:
+`docker compose down -v && docker compose up --build` recria o banco do zero.
+
+## Trava de escrita (fase atual)
+
+`VMPAY_ALLOW_WRITES` — default **0**. Com o banco populado de dados de
+produção, nenhuma ação (reabastecer, preço) alcança a VMpay: o backend devolve
+503 com mensagem clara e a UI a exibe. Leitura, ingestão e exportação seguem
+normais. Ligar a escrita = subir `VMPAY_ALLOW_WRITES=1` no Render, de
+preferência primeiro com `VMPAY_BASE` apontando para homologação.
 
 ## Primeira subida (seed da PoC)
 

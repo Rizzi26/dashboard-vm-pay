@@ -1,0 +1,27 @@
+# Blueprint do Render: o backend como serviço Docker.
+#
+# No painel: New → Blueprint → apontar para este repo. Os secrets marcados
+# sync: false são preenchidos à mão no painel — nunca aqui.
+#
+# A ingestão NÃO roda aqui (free tier não tem cron); ela vive no GitHub
+# Actions — ver .github/workflows/ingest.yml e docs/deploy.md.
+
+services:
+  - type: web
+    name: vmpay-api
+    runtime: docker
+    dockerfilePath: apps/api/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL          # pooler do Supabase (porta 6543)
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CORS_ORIGINS          # domínio do dashboard na Vercel
+        sync: false
+      - key: VMPAY_ALLOW_WRITES    # fase atual: dados de PRD, escrita bloqueada
+        value: "0"

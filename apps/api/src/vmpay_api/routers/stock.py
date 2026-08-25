@@ -25,6 +25,7 @@ from vmpay.client import PRODUCTION
 from vmpay.redact import redact
 
 from ..auth import OrgContext, require_role
+from ..config import settings
 from ..connector import VMpayConnector
 from ..db import get_session
 from ..sync_core import resolve_token
@@ -34,6 +35,21 @@ router = APIRouter(prefix="/orgs/{org}/stock", tags=["estoque"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 ViewerCtx = Annotated[OrgContext, Depends(require_role("viewer"))]
 AdminCtx = Annotated[OrgContext, Depends(require_role("admin"))]
+
+
+def require_writes_enabled() -> None:
+    """Fase atual: banco com dados de produção, escrita na VMpay bloqueada.
+
+    O 503 é deliberado (e não 403): não é falta de permissão do usuário, é o
+    write-back da plataforma que está desligado. A UI mostra a mensagem como
+    veio.
+    """
+    if not settings().vmpay_allow_writes:
+        raise HTTPException(
+            503,
+            "escrita na VMpay está desligada nesta fase (VMPAY_ALLOW_WRITES=0); "
+            "as ações voltam quando o write-back for liberado",
+        )
 
 
 def get_connector(config: dict[str, Any]) -> VMpayConnector:
@@ -230,6 +246,7 @@ async def _close_action(
 @router.post("/restock", status_code=201)
 async def restock(body: RestockBody, ctx: AdminCtx, session: Session) -> dict:
     """Entrada de estoque: empurra o ajuste para a VMpay e registra localmente."""
+    require_writes_enabled()
     target = await _load_target(session, ctx.org_id, body.location_id)
     externals = await _external_ids(
         session, target["integration_id"], [i.product_id for i in body.items]
@@ -297,6 +314,7 @@ async def restock(body: RestockBody, ctx: AdminCtx, session: Session) -> dict:
 @router.post("/price")
 async def set_price(body: PriceBody, ctx: AdminCtx, session: Session) -> dict:
     """Alteração de preço no planograma da instalação, via VMpay."""
+    require_writes_enabled()
     target = await _load_target(session, ctx.org_id, body.location_id)
     externals = await _external_ids(session, target["integration_id"], [body.product_id])
     if body.product_id not in externals:

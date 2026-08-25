@@ -1,5 +1,5 @@
 """Stub do FastAPI com as rotas novas, papel por token e dados plausíveis."""
-import base64, json, math, random
+import base64, json, math, os, random
 from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -51,7 +51,7 @@ class H(BaseHTTPRequestHandler):
     def _send(self, code, body=None, ct="application/json", headers=None):
         self.send_response(code)
         self.send_header("Content-Type", ct)
-        self.send_header("Access-Control-Allow-Origin", "http://localhost:3210")
+        self.send_header("Access-Control-Allow-Origin", os.environ.get("CORS_ORIGIN", "http://localhost:3210"))
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
         for k, v in (headers or {}).items():
@@ -144,4 +144,4 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
 print("stub backend na 8123")
-HTTPServer(("127.0.0.1", 8123), H).serve_forever()
+HTTPServer((os.environ.get("HOST", "127.0.0.1"), int(os.environ.get("PORT", "8123"))), H).serve_forever()
