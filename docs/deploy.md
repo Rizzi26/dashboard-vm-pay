@@ -44,9 +44,14 @@ Settings → Secrets and variables → Actions:
 
 | Secret | O quê |
 |---|---|
-| `DATABASE_URL` | Postgres do Supabase, **conexão direta** (porta 5432) — o worker é sessão longa |
+| `DATABASE_URL` | Postgres do Supabase, **Session pooler** (porta 5432, host `pooler.supabase.com`) |
 | `VMPAY_INGEST_TOKEN` | Chave de operador dedicada à ingestão |
 | `VMPAY_BASE` | URL do ambiente VMpay; vazio = produção |
+
+**Nunca a "Direct connection"** (`db.<ref>.supabase.co`): ela é IPv6-only, e nem
+os runners do GitHub Actions nem o Render falam IPv6 — o sintoma é `gaierror`
+na primeira conexão. Session pooler dá a sessão longa que o worker quer por um
+host IPv4. A API web no Render usa a variante Transaction (porta 6543).
 
 Uma chave por consumidor: o limite de 300 req/min é por token, então a chave da
 ingestão não pode ser a mesma do MCP nem a da API.
@@ -72,6 +77,18 @@ produção, nenhuma ação (reabastecer, preço) alcança a VMpay: o backend dev
 503 com mensagem clara e a UI a exibe. Leitura, ingestão e exportação seguem
 normais. Ligar a escrita = subir `VMPAY_ALLOW_WRITES=1` no Render, de
 preferência primeiro com `VMPAY_BASE` apontando para homologação.
+
+## Chaves do Supabase (nomenclatura nova)
+
+| Chave | Onde vive |
+|---|---|
+| `sb_publishable_...` | Vercel (`NEXT_PUBLIC_SUPABASE_ANON_KEY`), tipo Config |
+| `sb_secret_...` | Render (`SUPABASE_SERVICE_ROLE_KEY`), Secret |
+| senha do banco | dentro das `DATABASE_URL` — só letras e números (símbolos como `@` quebram a URI) |
+
+Com a Data API do Supabase **desligada** (nosso caso — só o Auth é usado), a
+publishable vira ainda mais inofensiva: não existe REST de dados para ela
+alcançar.
 
 ## Primeira subida (seed da PoC)
 
@@ -102,19 +119,20 @@ o que existe hoje varre do cursor para frente.
 | Env | O quê |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon/publishable key (pública por design) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | a **publishable** (`sb_publishable_...`, pública por design). JAMAIS a `sb_secret` — `NEXT_PUBLIC_*` vai embutida no JavaScript público, e uma secret ali é vazamento (aconteceu na primeira subida; a chave foi rotacionada) |
 | `API_URL` | URL do Render (fetch no servidor/SSR) |
 | `NEXT_PUBLIC_API_URL` | URL do Render (fetch no browser: ações, export) |
 
 **Render** (`apps/api`): as do `.env.example`, com uma diferença — use o
-**pooler** do Supabase (porta 6543) aqui, não a conexão direta. O engine já vai
+**Transaction pooler** do Supabase (porta 6543; a Direct connection é IPv6-only
+e falha com `gaierror`). O engine já vai
 com `statement_cache_size=0`, necessário porque o pgbouncer em transaction mode
 não suporta prepared statements nomeados. Além delas, para o auth:
 
 | Env | O quê |
 |---|---|
 | `SUPABASE_URL` | base do JWKS para validar o JWT |
-| `SUPABASE_SERVICE_ROLE_KEY` | SÓ para convite/remoção de usuário; nunca no frontend |
+| `SUPABASE_SERVICE_ROLE_KEY` | a **secret** (`sb_secret_...`); SÓ servidor, nunca no frontend |
 | `SUPABASE_JWT_SECRET` | opcional — só projetos antigos (HS256); projetos novos usam o JWKS |
 | `CORS_ORIGINS` | domínio da Vercel |
 
