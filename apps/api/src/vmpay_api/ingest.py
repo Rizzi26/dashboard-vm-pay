@@ -91,6 +91,28 @@ async def _upsert(session: AsyncSession, table, rows: list[dict], key: str = "id
     await session.execute(stmt.on_conflict_do_update(index_elements=[key], set_=updatable))
 
 
+#: Campo do fato -> dimensão que ele referencia por FK.
+FACT_DIM_FIELDS = {
+    "client_id": "client",
+    "location_id": "location",
+    "machine_id": "machine",
+    "good_id": "good",
+}
+
+
+async def _insert_stubs(session: AsyncSession, table, ids: set[int]) -> None:
+    """Dimensões-esqueleto (só o id) com DO NOTHING.
+
+    DO NOTHING, não DO UPDATE: um stub jamais pode apagar o nome de uma
+    dimensão que já existe — ele só garante que a FK do fato tenha onde apoiar.
+    Se um payload futuro trouxer os detalhes, o upsert normal enriquece.
+    """
+    if not ids:
+        return
+    stmt = insert(table).values([{"id": i} for i in sorted(ids)])
+    await session.execute(stmt.on_conflict_do_nothing(index_elements=["id"]))
+
+
 async def _flush(
     session: AsyncSession,
     resource: str,
@@ -102,12 +124,19 @@ async def _flush(
 ) -> None:
     """Grava um lote e avança o cursor — tudo numa transação só.
 
-    As dimensões vão primeiro: os fatos têm FK para elas.
+    As dimensões vão primeiro: os fatos têm FK para elas. E toda dimensão
+    REFERENCIADA por um fato que não veio no payload (produto deletado do
+    catálogo, por exemplo — a primeira ingestão real tropeçou num good assim)
+    vira stub antes, senão a FK estoura.
     """
     for name, bucket in dims.items():
         if bucket:
             await _upsert(session, DIMENSION_TABLES[name], list(bucket.values()))
             report.dimensions[name] = report.dimensions.get(name, 0) + len(bucket)
+    for field, dim_name in FACT_DIM_FIELDS.items():
+        referenced = {r[field] for r in rows if r.get(field) is not None}
+        missing = referenced - set(dims.get(dim_name, {}).keys())
+        await _insert_stubs(session, DIMENSION_TABLES[dim_name], missing)
     await _upsert(session, table, rows)
     await session.execute(
         update(models.SyncCursor)

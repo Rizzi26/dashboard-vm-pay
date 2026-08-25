@@ -223,3 +223,31 @@ async def test_vends_tambem_extrai_dimensoes(cliente):
     pos_good = next(i for i, s in enumerate(sqls) if "vmpay.good" in s)
     pos_vend = next(i for i, s in enumerate(sqls) if "vmpay.vend" in s)
     assert pos_good < pos_vend  # dimensão antes do fato, senão a FK quebra
+
+
+@respx.mock
+async def test_fato_com_dimensao_ausente_ganha_stub(cliente):
+    """good_id sem objeto aninhado (produto deletado do catálogo) não quebra FK.
+
+    O stub é DO NOTHING: garante a FK sem jamais sobrescrever uma dimensão que
+    já tem nome.
+    """
+    respx.get(f"{BASE}/vends").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json=[{"id": 60, "occurred_at": "2024-01-01T10:00:00Z",
+                       "good_id": 28496003, "value": 2.5}],  # sem aninhados
+            ),
+            httpx.Response(200, json=[]),
+        ]
+    )
+    sessao = FakeSession()
+    rel = await ingest.sync_resource("vends", cliente, sessao, batch_size=10)
+    assert rel.error is None
+
+    sqls = sessao.sql()
+    stub = next((s for s in sqls if "vmpay.good" in s), None)
+    assert stub is not None, "faltou o stub da dimensão referenciada"
+    assert "ON CONFLICT" in stub.upper() and "DO NOTHING" in stub.upper()
+    assert sqls.index(stub) < next(i for i, s in enumerate(sqls) if "vmpay.vend" in s)
