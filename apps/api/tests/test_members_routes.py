@@ -133,7 +133,7 @@ async def test_viewer_nao_le_vendas_de_org_que_nao_e_membro():
 
 @respx.mock
 async def test_master_convida_e_grava_membership():
-    respx.post("https://teste.supabase.co/auth/v1/invite").mock(
+    invite = respx.post("https://teste.supabase.co/auth/v1/invite").mock(
         return_value=httpx.Response(201, json={"id": str(OUTRO), "email": "novo@teste.dev"})
     )
     use_role("master")
@@ -149,6 +149,12 @@ async def test_master_convida_e_grava_membership():
         "POST", "/orgs/mercadinho/members", json={"email": "novo@teste.dev", "role": "admin"}
     )
     assert resp.status_code == 201
+    # O convite tem que cair na página de definir senha do dashboard, não na
+    # Site URL default do Supabase (localhost).
+    import json
+
+    sent = json.loads(invite.calls.last.request.content)
+    assert sent["redirect_to"].endswith("/definir-senha")
     assert sessao.committed
     sql, params = sessao.executed[-1]
     assert "on conflict" in sql.lower()

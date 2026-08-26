@@ -9,7 +9,24 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  async function forgot() {
+    setError(null);
+    setNotice(null);
+    if (!email) {
+      setError("Preencha o email para receber o link de redefinição.");
+      return;
+    }
+    setBusy(true);
+    await supabaseBrowser().auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/definir-senha`,
+    });
+    // Mesma mensagem com email existente ou não: não confirmar cadastro.
+    setNotice("Se este email tiver acesso, o link de redefinição foi enviado.");
+    setBusy(false);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,6 +84,11 @@ export default function LoginPage() {
             {error}
           </p>
         ) : null}
+        {notice ? (
+          <p role="status" className="mt-3 text-sm text-[var(--text-secondary)]">
+            {notice}
+          </p>
+        ) : null}
 
         <button
           type="submit"
@@ -74,6 +96,15 @@ export default function LoginPage() {
           className="mt-5 w-full rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
         >
           {busy ? "Entrando…" : "Entrar"}
+        </button>
+
+        <button
+          type="button"
+          onClick={forgot}
+          disabled={busy}
+          className="mt-3 w-full text-xs text-[var(--text-secondary)] underline disabled:opacity-60"
+        >
+          Esqueci a senha
         </button>
 
         <p className="mt-4 text-xs text-[var(--text-secondary)]">

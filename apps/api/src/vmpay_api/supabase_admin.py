@@ -32,9 +32,15 @@ async def invite_or_find(email: str) -> uuid.UUID:
     O convite dispara o email do Supabase com o link de definir senha. Usuário
     repetido não é erro do nosso lado — vira busca.
     """
+    # Sem redirect_to o Supabase usa a Site URL do painel — que por default é
+    # localhost e ninguém lembra de trocar. A página de destino ainda precisa
+    # estar na lista "Redirect URLs" do painel, senão o Supabase ignora.
+    redirect_to = f"{settings().dashboard_url.rstrip('/')}/definir-senha"
     async with httpx.AsyncClient(timeout=15) as http:
         resp = await http.post(
-            f"{_base()}/auth/v1/invite", headers=_headers(), json={"email": email}
+            f"{_base()}/auth/v1/invite",
+            headers=_headers(),
+            json={"email": email, "redirect_to": redirect_to},
         )
         if resp.status_code in (200, 201):
             return uuid.UUID(resp.json()["id"])

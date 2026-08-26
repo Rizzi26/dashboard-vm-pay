@@ -36,7 +36,14 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isLogin = request.nextUrl.pathname.startsWith("/login");
+  const path = request.nextUrl.pathname;
+  const isLogin = path.startsWith("/login");
+  // /definir-senha recebe o token do convite/recuperação no fragment (#...),
+  // que nunca chega ao servidor: aqui não há como saber se o usuário está
+  // "logado", então a página decide sozinha no browser.
+  if (path.startsWith("/definir-senha")) {
+    return response;
+  }
   if (!user && !isLogin) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

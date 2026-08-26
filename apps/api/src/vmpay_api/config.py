@@ -63,6 +63,17 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
+    def dashboard_url(self) -> str:
+        """Para onde os emails de auth (convite, recuperação) mandam o usuário.
+
+        A primeira origem do CORS é o dashboard por construção — reaproveitar
+        evita uma variável a mais que alguém esquece de trocar e deixa o
+        convite apontando para localhost.
+        """
+        origins = self.allowed_origins
+        return origins[0] if origins else "http://localhost:3000"
+
+    @property
     def asyncpg_url(self) -> str:
         """SQLAlchemy async quer o driver no esquema; o Supabase entrega postgresql://."""
         url = self.database_url
