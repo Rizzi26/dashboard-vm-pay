@@ -57,6 +57,7 @@ cd apps/mcp && uv venv && uv pip install -e ".[dev]" && .venv/bin/pytest
 | [docs/endpoints.txt](docs/endpoints.txt) | Os 176 endpoints, com o arquivo de origem de cada um. |
 | [docs/deploy.md](docs/deploy.md) | Onde cada peça roda, secrets e as armadilhas de repo público. |
 | [docs/vendor/COMO-OBTER.md](docs/vendor/COMO-OBTER.md) | Como baixar a doc oficial do portal — ela **não** é versionada. |
+| [docs/roadmap-seguranca.md](docs/roadmap-seguranca.md) | **Plano futuro** (não iniciado): perímetro de segurança por câmera + IA, integrado ao dashboard. |
 
 A documentação oficial da VMpay é da Verti Tecnologia / Nayax e fica fora do git,
 já que este repositório é público. Nada aqui depende dela: a destilação, a lista
