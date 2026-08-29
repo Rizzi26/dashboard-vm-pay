@@ -13,6 +13,7 @@ import type {
   MemberRow,
   ProductDetail,
   Quebras,
+  Reposicao,
   StockHistoryPoint,
   StockRow,
   Summary,
@@ -51,6 +52,8 @@ export const serverApi = {
   stock: (org: string) => serverGet<StockRow[]>(`/orgs/${org}/stock`),
   quebras: (org: string, dias = 30) =>
     serverGet<Quebras>(`/orgs/${org}/stock/quebras?days=${dias}`),
+  reposicao: (org: string, dias = 30) =>
+    serverGet<Reposicao>(`/orgs/${org}/stock/reposicao?days=${dias}`),
   stockHistory: (org: string, productId: string, dias = 30) =>
     serverGet<StockHistoryPoint[]>(`/orgs/${org}/stock/history/${productId}?days=${dias}`),
   members: (org: string) => serverGet<MemberRow[]>(`/orgs/${org}/members`),

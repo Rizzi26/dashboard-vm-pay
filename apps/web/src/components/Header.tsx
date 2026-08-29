@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/perdidas", label: "Perdas", roles: ["viewer", "admin", "master"] },
   { href: "/quebras", label: "Quebras", roles: ["viewer", "admin", "master"] },
   { href: "/estoque", label: "Estoque", roles: ["viewer", "admin", "master"] },
+  { href: "/reposicao", label: "Reposição", roles: ["viewer", "admin", "master"] },
   { href: "/usuarios", label: "Usuários", roles: ["master"] },
 ];
 

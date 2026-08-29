@@ -176,6 +176,53 @@ async def test_csv_vem_como_anexo_com_separador_pt_br():
     assert "3,50" in linhas[1]  # preço com vírgula
 
 
+# --------------------------------------------------------------- reposição
+
+
+def reposicao_row(**extra):
+    base = {
+        "location_id": LOC_ID,
+        "location_name": "Condomínio — 0010",
+        "product_id": PROD_ID,
+        "product_name": "Água Mineral",
+        "barcode": "789",
+        "quantity": 0,
+        "preco": 3.5,
+        "vendidas": 30,
+        "ultima_venda": AGORA,
+        "por_dia": 1.0,
+    }
+    return {**base, **extra}
+
+
+async def test_reposicao_classifica_ruptura_e_acabando():
+    use_role("viewer")
+    use_session(
+        [("with vendas", [reposicao_row(), reposicao_row(quantity=3)])]
+    )
+    body = (await call("GET", "/orgs/mercadinho/stock/reposicao")).json()
+
+    zerado, acabando = body["itens"]
+    assert zerado["status"] == "ruptura"
+    assert zerado["dias_restantes"] == 0.0
+    assert zerado["sugestao"] == 7  # 1/dia × 7 dias de alvo
+    assert zerado["risco_dia"] == 3.5
+
+    assert acabando["status"] == "acabando"
+    assert acabando["dias_restantes"] == 3.0
+    assert acabando["sugestao"] == 4  # alvo 7 − 3 em prateleira
+
+    assert body["resumo"] == {"ruptura": 1, "acabando": 1, "risco_dia": 7.0}
+
+
+async def test_reposicao_sem_preco_nao_inventa_risco():
+    use_role("viewer")
+    use_session([("with vendas", [reposicao_row(preco=None)])])
+    body = (await call("GET", "/orgs/mercadinho/stock/reposicao")).json()
+    assert body["itens"][0]["risco_dia"] is None
+    assert body["resumo"]["risco_dia"] == 0
+
+
 # ------------------------------------------------------------- sincronização
 
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import os
 import uuid
 from datetime import datetime, timezone
@@ -125,6 +126,108 @@ async def export_csv(ctx: ViewerCtx, session: Session) -> Response:
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="estoque.csv"'},
     )
+
+
+# ----------------------------------------------------------------- reposição
+
+#: Item entra na lista se está zerado OU se o saldo cobre menos que este
+#: horizonte de dias no ritmo de venda do período.
+REPOSICAO_HORIZONTE_DIAS = 5
+
+#: A sugestão de compra mira uma semana de venda — o ciclo típico de visita.
+REPOSICAO_ALVO_DIAS = 7
+
+REPOSICAO_SQL = """
+with vendas as (
+    select ll.location_id, pl.product_id,
+           sum(coalesce(v.quantity, 1)) as unidades,
+           max(v.occurred_at)           as ultima_venda
+      from vmpay.vend v
+      join core.location_link ll on ll.machine_id = v.machine_id
+      join core.product_link  pl on pl.integration_id = ll.integration_id
+                                and cast(pl.external_id as bigint) = v.good_id
+      join core.location l on l.id = ll.location_id
+     where l.org_id = :org_id
+       and v.occurred_at >= now() - make_interval(days => :days)
+     group by ll.location_id, pl.product_id
+)
+select b.location_id, l.name as location_name,
+       b.product_id, p.name as product_name, p.barcode,
+       b.quantity,
+       coalesce(b.price, p.unit_price) as preco,
+       va.unidades as vendidas,
+       va.ultima_venda,
+       va.unidades / cast(:days as numeric) as por_dia
+  from core.stock_balance b
+  join core.location l on l.id = b.location_id
+  join core.product  p on p.id = b.product_id
+  join vendas va on va.location_id = b.location_id and va.product_id = b.product_id
+ where l.org_id = :org_id
+   and (
+        b.quantity = 0
+        or b.quantity / (va.unidades / cast(:days as numeric)) <= :horizonte
+   )
+ order by (va.unidades / cast(:days as numeric)) * coalesce(b.price, p.unit_price, 0) desc
+"""
+
+
+@router.get("/reposicao")
+async def restock_list(ctx: ViewerCtx, session: Session, days: int = 30) -> dict:
+    """O que levar na próxima visita: produto que VENDE e está zerado/acabando.
+
+    Ruptura sem venda no período não entra — produto morto é decisão de
+    sortimento, não de reposição. A ordem é por faturamento diário em risco.
+    """
+    days = max(7, min(days, 365))
+    rows = (
+        await session.execute(
+            text(REPOSICAO_SQL),
+            {
+                "org_id": str(ctx.org_id),
+                "days": days,
+                "horizonte": REPOSICAO_HORIZONTE_DIAS,
+            },
+        )
+    ).mappings().all()
+
+    itens = []
+    for r in rows:
+        quantidade = float(r["quantity"])
+        por_dia = float(r["por_dia"])
+        preco = float(r["preco"]) if r["preco"] is not None else None
+        alvo = por_dia * REPOSICAO_ALVO_DIAS
+        sugestao = max(1, math.ceil(alvo - quantidade))
+        itens.append(
+            {
+                "location_id": str(r["location_id"]),
+                "local": r["location_name"],
+                "product_id": str(r["product_id"]),
+                "produto": r["product_name"],
+                "barcode": r["barcode"],
+                "quantidade": quantidade,
+                "status": "ruptura" if quantidade == 0 else "acabando",
+                "dias_restantes": (
+                    round(quantidade / por_dia, 1) if quantidade > 0 else 0.0
+                ),
+                "vendidas_periodo": float(r["vendidas"]),
+                "por_dia": round(por_dia, 2),
+                "ultima_venda": (
+                    r["ultima_venda"].isoformat() if r["ultima_venda"] else None
+                ),
+                "preco": preco,
+                "risco_dia": round(por_dia * preco, 2) if preco is not None else None,
+                "sugestao": sugestao,
+            }
+        )
+    return {
+        "dias": days,
+        "resumo": {
+            "ruptura": sum(1 for i in itens if i["status"] == "ruptura"),
+            "acabando": sum(1 for i in itens if i["status"] == "acabando"),
+            "risco_dia": round(sum(i["risco_dia"] or 0 for i in itens), 2),
+        },
+        "itens": itens,
+    }
 
 
 # ---------------------------------------------------------------- atualização

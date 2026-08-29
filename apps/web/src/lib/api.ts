@@ -76,6 +76,29 @@ export type StockHistoryPoint = {
   quantidade: number;
 };
 
+export type ReposicaoItem = {
+  location_id: string;
+  local: string;
+  product_id: string;
+  produto: string;
+  barcode: string | null;
+  quantidade: number;
+  status: "ruptura" | "acabando";
+  dias_restantes: number;
+  vendidas_periodo: number;
+  por_dia: number;
+  ultima_venda: string | null;
+  preco: number | null;
+  risco_dia: number | null;
+  sugestao: number;
+};
+
+export type Reposicao = {
+  dias: number;
+  resumo: { ruptura: number; acabando: number; risco_dia: number };
+  itens: ReposicaoItem[];
+};
+
 export type Me = {
   user_id: string;
   email: string | null;
