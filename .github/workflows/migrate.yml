@@ -1,0 +1,51 @@
+name: Migração de banco
+
+# Aplicação manual de migration no Supabase, usando o mesmo secret
+# DATABASE_URL da ingestão. Existe porque nenhuma máquina de desenvolvimento
+# guarda credencial do banco (repositório público, política da casa) — o
+# caminho para DDL em produção é este workflow ou o SQL Editor do painel.
+on:
+  workflow_dispatch:
+    inputs:
+      arquivo:
+        description: "Nome do arquivo em supabase/migrations (ex.: 0004_stock_history.sql)"
+        type: string
+        required: true
+
+concurrency:
+  # Mesmo grupo da ingestão: DDL não roda por cima de uma rodada de ingest —
+  # espera a vez em vez de disputar lock com upsert no meio.
+  group: ingest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: validar caminho e sintaxe
+        env:
+          ARQUIVO: ${{ inputs.arquivo }}
+        run: |
+          # basename barra path traversal: o input vira só um nome de arquivo.
+          nome="$(basename "$ARQUIVO")"
+          caminho="supabase/migrations/$nome"
+          [ -f "$caminho" ] || { echo "não existe: $caminho"; exit 1; }
+          echo "caminho=$caminho" >> "$GITHUB_ENV"
+          pip install --quiet pglast
+          python -c "import pglast, sys; pglast.parse_sql(open(sys.argv[1]).read()); print('sintaxe OK')" "$caminho"
+
+      - name: aplicar
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        # -1 = transação única: ou a migration inteira entra, ou nada entra.
+        # O log é público (repo público); psql só imprime os comandos do
+        # arquivo, nunca a URL de conexão.
+        run: |
+          : "${DATABASE_URL:?defina o secret DATABASE_URL}"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f "$caminho"
