@@ -285,32 +285,30 @@ QUEBRA_ROW = {
     "product_id": PROD_ID,
     "product_name": "Água Mineral",
     "barcode": "789",
-    "foto_anterior": AGORA,
-    "snapshot_at": AGORA,
-    "saida": 3,
-    "vendidas": 1,
     "quebra": 2,
-    "preco": 6.99,
+    "valor": 13.98,
+    "ultima": AGORA,
 }
 
 
-async def test_viewer_ve_quebras_com_valor_calculado():
+async def test_viewer_ve_quebras_agregadas_por_produto():
     use_role("viewer")
     use_session([("core.stock_snapshot", [QUEBRA_ROW])])
     body = (await call("GET", "/orgs/mercadinho/stock/quebras")).json()
 
-    evento = body["eventos"][0]
-    assert evento["quebra"] == 2.0
-    assert evento["vendidas"] == 1.0
-    assert evento["valor"] == 13.98  # 2 × 6,99
-    assert body["resumo"] == {"eventos": 1, "unidades": 2.0, "valor": 13.98}
+    item = body["itens"][0]
+    assert item["produto"] == "Água Mineral"
+    assert item["quebra"] == 2.0
+    assert item["valor"] == 13.98
+    assert item["ultima"] == AGORA.isoformat()
+    assert body["resumo"] == {"unidades": 2.0, "valor": 13.98}
 
 
 async def test_quebra_sem_preco_nao_inventa_valor():
     use_role("viewer")
-    use_session([("core.stock_snapshot", [{**QUEBRA_ROW, "preco": None}])])
+    use_session([("core.stock_snapshot", [{**QUEBRA_ROW, "valor": None}])])
     body = (await call("GET", "/orgs/mercadinho/stock/quebras")).json()
-    assert body["eventos"][0]["valor"] is None
+    assert body["itens"][0]["valor"] is None
     assert body["resumo"]["valor"] == 0  # só soma o que tem preço conhecido
 
 

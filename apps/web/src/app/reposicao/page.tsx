@@ -5,13 +5,15 @@ import { Header } from "@/components/Header";
 import { Offline } from "@/components/Offline";
 import { StatTile } from "@/components/StatTile";
 import { serverApi } from "@/lib/api.server";
-import { formatDay, formatInt, formatMoney } from "@/lib/format";
+import { formatInt } from "@/lib/format";
 import { orgSession } from "@/lib/org";
 
 /**
  * Lista de compra do repositor: produto que VENDE e está zerado ou acabando.
- * Ruptura de produto morto fica de fora — isso é decisão de sortimento, e o
- * lugar dela é o /estoque com o filtro de ruptura.
+ * Três colunas de propósito — a decisão aqui é "o que levar e quanto"; o
+ * ritmo de venda vira subtexto e o resto (risco, última venda) mora na ficha
+ * do produto. Ruptura de produto morto fica de fora: sortimento é outra
+ * decisão, e o lugar dela é o /estoque.
  */
 export default async function ReposicaoPage() {
   const { me, org } = await orgSession();
@@ -26,30 +28,25 @@ export default async function ReposicaoPage() {
             Reposição
           </h1>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            O que levar na próxima visita, pelo ritmo de venda dos últimos{" "}
-            {reposicao.ok ? reposicao.data.dias : 30} dias — ordenado pelo
-            faturamento diário em risco.
+            O que levar na próxima visita — só produto que vende, o mais
+            importante primeiro.
           </p>
         </header>
 
         {reposicao.ok ? (
           <>
-            <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
+            <div className="mb-6 grid grid-cols-2 gap-4">
               <StatTile
-                label="Zerados que vendem"
+                label="Zerados"
                 value={formatInt(reposicao.data.resumo.ruptura)}
                 tone={reposicao.data.resumo.ruptura > 0 ? "critical" : undefined}
+                hint="vendiam e acabaram"
               />
               <StatTile
                 label="Acabando"
                 value={formatInt(reposicao.data.resumo.acabando)}
                 tone={reposicao.data.resumo.acabando > 0 ? "warning" : undefined}
-                hint="saldo cobre menos de 5 dias de venda"
-              />
-              <StatTile
-                label="Risco por dia"
-                value={formatMoney(reposicao.data.resumo.risco_dia)}
-                hint="faturamento diário dos itens desta lista"
+                hint="duram menos de 5 dias"
               />
             </div>
 
@@ -61,7 +58,7 @@ export default async function ReposicaoPage() {
             ) : (
               <Card
                 title="Lista de compra"
-                subtitle="Sugestão cobre uma semana de venda no ritmo atual."
+                subtitle="A sugestão cobre uma semana de venda no ritmo atual."
               >
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -69,9 +66,6 @@ export default async function ReposicaoPage() {
                       <tr className="border-b border-[var(--grid)] text-left text-[11px] uppercase tracking-[0.08em] text-[var(--text-secondary)]">
                         <th className="py-2 font-medium">Produto</th>
                         <th className="py-2 font-medium">Situação</th>
-                        <th className="py-2 text-right font-medium">Vende/dia</th>
-                        <th className="py-2 text-right font-medium">Última venda</th>
-                        <th className="py-2 text-right font-medium">Risco/dia</th>
                         <th className="py-2 text-right font-medium">Levar</th>
                       </tr>
                     </thead>
@@ -89,7 +83,11 @@ export default async function ReposicaoPage() {
                               {i.produto}
                             </Link>
                             <span className="block text-xs text-[var(--text-secondary)]">
-                              {i.local}
+                              vende ~
+                              {i.por_dia.toLocaleString("pt-BR", {
+                                maximumFractionDigits: 1,
+                              })}
+                              /dia
                             </span>
                           </td>
                           <td className="py-2 pr-4">
@@ -99,23 +97,13 @@ export default async function ReposicaoPage() {
                               </span>
                             ) : (
                               <span className="text-[var(--status-warning)]">
-                                acaba em ~{formatInt(i.dias_restantes)} d ({formatInt(i.quantidade)} un.)
+                                restam {formatInt(i.quantidade)} (~
+                                {formatInt(i.dias_restantes)} d)
                               </span>
                             )}
                           </td>
-                          <td className="py-2 text-right tabular-nums">
-                            {i.por_dia.toLocaleString("pt-BR", {
-                              maximumFractionDigits: 2,
-                            })}
-                          </td>
-                          <td className="py-2 text-right tabular-nums text-[var(--text-secondary)]">
-                            {i.ultima_venda ? formatDay(i.ultima_venda.slice(0, 10)) : "—"}
-                          </td>
-                          <td className="py-2 text-right tabular-nums">
-                            {i.risco_dia !== null ? formatMoney(i.risco_dia) : "—"}
-                          </td>
-                          <td className="py-2 text-right font-medium tabular-nums">
-                            {formatInt(i.sugestao)} un.
+                          <td className="py-2 text-right text-base font-semibold tabular-nums">
+                            {formatInt(i.sugestao)}
                           </td>
                         </tr>
                       ))}

@@ -330,12 +330,11 @@ select q.location_id,
        q.product_id,
        p.name as product_name,
        p.barcode,
-       q.foto_anterior,
-       q.snapshot_at,
-       q.saida,
-       coalesce(vd.vendidas, 0) as vendidas,
-       q.saida - coalesce(vd.vendidas, 0) as quebra,
-       coalesce(q.price, p.unit_price) as preco
+       sum(q.saida - coalesce(vd.vendidas, 0)) as quebra,
+       sum(
+           (q.saida - coalesce(vd.vendidas, 0)) * coalesce(q.price, p.unit_price)
+       ) as valor,
+       max(q.snapshot_at) as ultima
   from quedas q
   join core.product  p on p.id = q.product_id
   join core.location l on l.id = q.location_id
@@ -351,48 +350,47 @@ select q.location_id,
          where ll.location_id = q.location_id
        ) vd on true
  where q.saida > coalesce(vd.vendidas, 0)
- order by q.snapshot_at desc, quebra desc
+ group by q.location_id, l.name, q.product_id, p.name, p.barcode
+ order by quebra desc, ultima desc
 """
 
 
 @router.get("/quebras")
 async def stock_losses(ctx: ViewerCtx, session: Session, days: int = 30) -> dict:
-    """Suspeitas de quebra: saldo caiu mais do que as vendas do intervalo."""
+    """Quebra por produto: quanto saiu sem venda registrada no período.
+
+    Agregado por produto de propósito — o operador quer saber O QUE sumiu e
+    quanto custou; o intervalo exato de cada queda é mecânica de detecção, e
+    ficava confuso na tela.
+    """
     days = max(1, min(days, 365))
     rows = (
         await session.execute(
             text(QUEBRAS_SQL), {"org_id": str(ctx.org_id), "days": days}
         )
     ).mappings().all()
-    eventos = [
+    itens = [
         {
             "location_id": str(r["location_id"]),
             "local": r["location_name"],
             "product_id": str(r["product_id"]),
             "produto": r["product_name"],
             "barcode": r["barcode"],
-            "de": r["foto_anterior"].isoformat(),
-            "ate": r["snapshot_at"].isoformat(),
-            "saida": float(r["saida"]),
-            "vendidas": float(r["vendidas"]),
             "quebra": float(r["quebra"]),
-            "preco": float(r["preco"]) if r["preco"] is not None else None,
             "valor": (
-                round(float(r["quebra"]) * float(r["preco"]), 2)
-                if r["preco"] is not None
-                else None
+                round(float(r["valor"]), 2) if r["valor"] is not None else None
             ),
+            "ultima": r["ultima"].isoformat(),
         }
         for r in rows
     ]
     return {
         "dias": days,
         "resumo": {
-            "eventos": len(eventos),
-            "unidades": sum(e["quebra"] for e in eventos),
-            "valor": round(sum(e["valor"] or 0 for e in eventos), 2),
+            "unidades": sum(i["quebra"] for i in itens),
+            "valor": round(sum(i["valor"] or 0 for i in itens), 2),
         },
-        "eventos": eventos,
+        "itens": itens,
     }
 
 

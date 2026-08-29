@@ -49,25 +49,21 @@ export type StockRow = {
   atualizado_em: string;
 };
 
-export type QuebraEvento = {
+export type QuebraItem = {
   location_id: string;
   local: string;
   product_id: string;
   produto: string;
   barcode: string | null;
-  de: string;
-  ate: string;
-  saida: number;
-  vendidas: number;
   quebra: number;
-  preco: number | null;
   valor: number | null;
+  ultima: string;
 };
 
 export type Quebras = {
   dias: number;
-  resumo: { eventos: number; unidades: number; valor: number };
-  eventos: QuebraEvento[];
+  resumo: { unidades: number; valor: number };
+  itens: QuebraItem[];
 };
 
 export type StockHistoryPoint = {

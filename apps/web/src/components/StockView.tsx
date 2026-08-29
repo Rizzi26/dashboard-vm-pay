@@ -39,7 +39,7 @@ export function StockView({
   initialBusca?: string;
   // null = endpoint indisponível (deploy defasado ou erro): o tile some em
   // vez de mostrar zero — zero é uma afirmação, ausência não.
-  quebras?: { eventos: number; unidades: number; valor: number } | null;
+  quebras?: { unidades: number; valor: number } | null;
 }) {
   const router = useRouter();
   const [filtro, setFiltro] = useState(initialBusca ?? "");
