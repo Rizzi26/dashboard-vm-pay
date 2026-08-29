@@ -171,19 +171,12 @@ select b.location_id, l.name as location_name,
 """
 
 
-@router.get("/reposicao")
-async def restock_list(ctx: ViewerCtx, session: Session, days: int = 30) -> dict:
-    """O que levar na próxima visita: produto que VENDE e está zerado/acabando.
-
-    Ruptura sem venda no período não entra — produto morto é decisão de
-    sortimento, não de reposição. A ordem é por faturamento diário em risco.
-    """
-    days = max(7, min(days, 365))
+async def _reposicao_itens(session: AsyncSession, org_id: uuid.UUID, days: int) -> list[dict]:
     rows = (
         await session.execute(
             text(REPOSICAO_SQL),
             {
-                "org_id": str(ctx.org_id),
+                "org_id": str(org_id),
                 "days": days,
                 "horizonte": REPOSICAO_HORIZONTE_DIAS,
             },
@@ -197,6 +190,9 @@ async def restock_list(ctx: ViewerCtx, session: Session, days: int = 30) -> dict
         preco = float(r["preco"]) if r["preco"] is not None else None
         alvo = por_dia * REPOSICAO_ALVO_DIAS
         sugestao = max(1, math.ceil(alvo - quantidade))
+        # Saldo negativo existe: oversell de planograma na VMpay. Para o
+        # repositor é a mesma coisa que zerado — e "restam -1" na tela não.
+        zerado = quantidade <= 0
         itens.append(
             {
                 "location_id": str(r["location_id"]),
@@ -205,9 +201,9 @@ async def restock_list(ctx: ViewerCtx, session: Session, days: int = 30) -> dict
                 "produto": r["product_name"],
                 "barcode": r["barcode"],
                 "quantidade": quantidade,
-                "status": "ruptura" if quantidade == 0 else "acabando",
+                "status": "ruptura" if zerado else "acabando",
                 "dias_restantes": (
-                    round(quantidade / por_dia, 1) if quantidade > 0 else 0.0
+                    0.0 if zerado else round(quantidade / por_dia, 1)
                 ),
                 "vendidas_periodo": float(r["vendidas"]),
                 "por_dia": round(por_dia, 2),
@@ -219,6 +215,18 @@ async def restock_list(ctx: ViewerCtx, session: Session, days: int = 30) -> dict
                 "sugestao": sugestao,
             }
         )
+    return itens
+
+
+@router.get("/reposicao")
+async def restock_list(ctx: ViewerCtx, session: Session, days: int = 30) -> dict:
+    """O que levar na próxima visita: produto que VENDE e está zerado/acabando.
+
+    Ruptura sem venda no período não entra — produto morto é decisão de
+    sortimento, não de reposição. A ordem é por faturamento diário em risco.
+    """
+    days = max(7, min(days, 365))
+    itens = await _reposicao_itens(session, ctx.org_id, days)
     return {
         "dias": days,
         "resumo": {
@@ -228,6 +236,35 @@ async def restock_list(ctx: ViewerCtx, session: Session, days: int = 30) -> dict
         },
         "itens": itens,
     }
+
+
+@router.get("/reposicao/export.csv")
+async def restock_csv(ctx: ViewerCtx, session: Session, days: int = 30) -> Response:
+    """A lista de compra em planilha — para imprimir ou levar no bolso."""
+    days = max(7, min(days, 365))
+    itens = await _reposicao_itens(session, ctx.org_id, days)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";")  # Excel pt-BR abre ; direto
+    writer.writerow(
+        ["produto", "codigo_barras", "situacao", "restam", "dura_dias", "vende_por_dia", "levar"]
+    )
+    for i in itens:
+        writer.writerow(
+            [
+                i["produto"],
+                i["barcode"] or "",
+                "zerado" if i["status"] == "ruptura" else "acabando",
+                max(0, int(i["quantidade"])),
+                str(i["dias_restantes"]).replace(".", ","),
+                str(i["por_dia"]).replace(".", ","),
+                i["sugestao"],
+            ]
+        )
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="reposicao.csv"'},
+    )
 
 
 # ---------------------------------------------------------------- atualização

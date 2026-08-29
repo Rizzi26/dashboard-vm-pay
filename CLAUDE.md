@@ -177,11 +177,16 @@ O kiosk é 100% cashless, um item por transação.
    Revoke + chave nova no Render foi concluído.
 5. ~~**Histórico de estoque + quebras**~~ — FEITO (2026-08-29):
    `core.stock_snapshot` (migration 0004, append-only, só linha que mudou;
-   primeira rodada ancora tudo). Leitura em `/stock/quebras` (queda de saldo ×
-   vendas do intervalo → página /quebras) e `/stock/history/{product_id}`
-   (gráfico em degraus na ficha do produto).
+   primeira rodada ancora tudo). `/stock/history/{product_id}` alimenta o
+   gráfico em degraus na ficha do produto. A **página /quebras foi
+   descontinuada** no mesmo dia (feedback: confusa) — o endpoint
+   `/stock/quebras` (agregado por produto) segue no ar sem UI, e o dado
+   continua acumulando para quando a tela voltar.
 6. ~~**Reposição**~~ — FEITO (2026-08-29): `/stock/reposicao` cruza saldo com
-   ritmo de venda (30d) → página /reposicao, "o que levar na próxima visita".
+   ritmo de venda (30d) → página /reposicao em duas seções (Zerados /
+   Acabando), insight em linguagem corrida, export CSV
+   (`/stock/reposicao/export.csv`). Saldo negativo (oversell de planograma na
+   VMpay) é tratado como zerado.
 7. ~~**Sincronizar sob demanda**~~ — FEITO (2026-08-29): `POST
    /orgs/{org}/stock/sync` (admin, cooldown 120s, BackgroundTasks) + botão
    Atualizar no /estoque. **Depende de `VMPAY_INGEST_TOKEN` no Render** —

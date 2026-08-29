@@ -215,6 +215,33 @@ async def test_reposicao_classifica_ruptura_e_acabando():
     assert body["resumo"] == {"ruptura": 1, "acabando": 1, "risco_dia": 7.0}
 
 
+async def test_reposicao_saldo_negativo_e_tratado_como_zerado():
+    """A VMpay reporta saldo negativo (oversell de planograma).
+
+    Para o repositor é a mesma coisa que zerado — e "restam -1" na tela não
+    ajuda ninguém a decidir nada.
+    """
+    use_role("viewer")
+    use_session([("with vendas", [reposicao_row(quantity=-1)])])
+    body = (await call("GET", "/orgs/mercadinho/stock/reposicao")).json()
+    item = body["itens"][0]
+    assert item["status"] == "ruptura"
+    assert item["dias_restantes"] == 0.0
+    assert item["sugestao"] == 8  # alvo de 7 − (−1) já vendido a descoberto
+
+
+async def test_reposicao_csv_vem_como_anexo_pt_br():
+    use_role("viewer")
+    use_session([("with vendas", [reposicao_row(), reposicao_row(quantity=-1)])])
+    resp = await call("GET", "/orgs/mercadinho/stock/reposicao/export.csv")
+    assert "attachment" in resp.headers["content-disposition"]
+    linhas = resp.text.strip().splitlines()
+    assert linhas[0].startswith("produto;codigo_barras;situacao")
+    assert "Água Mineral" in linhas[1]
+    assert ";zerado;" in linhas[1]
+    assert ";zerado;0;" in linhas[2]  # saldo negativo exporta como 0, não -1
+
+
 async def test_reposicao_sem_preco_nao_inventa_risco():
     use_role("viewer")
     use_session([("with vendas", [reposicao_row(preco=None)])])

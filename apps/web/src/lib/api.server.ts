@@ -12,7 +12,6 @@ import type {
   Me,
   MemberRow,
   ProductDetail,
-  Quebras,
   Reposicao,
   StockHistoryPoint,
   StockRow,
@@ -50,8 +49,6 @@ export const serverApi = {
   product: (org: string, id: string, qs = "") =>
     serverGet<ProductDetail>(`/orgs/${org}/products/${id}${qs}`),
   stock: (org: string) => serverGet<StockRow[]>(`/orgs/${org}/stock`),
-  quebras: (org: string, dias = 30) =>
-    serverGet<Quebras>(`/orgs/${org}/stock/quebras?days=${dias}`),
   reposicao: (org: string, dias = 30) =>
     serverGet<Reposicao>(`/orgs/${org}/stock/reposicao?days=${dias}`),
   stockHistory: (org: string, productId: string, dias = 30) =>
