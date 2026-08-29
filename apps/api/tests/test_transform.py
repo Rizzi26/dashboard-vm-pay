@@ -164,6 +164,10 @@ class FakeSession:
         self._scalar_lists = list(scalar_lists)
         self.statements = []
 
+    async def scalar(self, stmt, params=None):
+        self.statements.append(stmt)
+        return None  # sem foto prévia: comporta-se como a primeira rodada
+
     async def execute(self, stmt, params=None):
         self.statements.append(stmt)
         text = str(stmt).lower()

@@ -20,10 +20,11 @@ create table core.stock_snapshot (
 );
 
 comment on table core.stock_snapshot is
-    'Foto append-only dos saldos a cada rodada de ingestão. Fonte da série '
+    'Foto append-only dos saldos, gravada pela ingestão. Só entram linhas que '
+    'MUDARAM desde a foto anterior (a primeira rodada grava tudo, como '
+    'âncora) — a série em degraus reconstrói o "não mudou". Fonte da série '
     'histórica de estoque e da detecção de quebra (queda de saldo maior que '
-    'as vendas do intervalo). ~800 linhas por rodada; retenção ilimitada é '
-    'barata nesta escala.';
+    'as vendas do intervalo).';
 
 -- Varreduras por janela de tempo (detecção de quebra em todo o catálogo).
 create index stock_snapshot_time_idx on core.stock_snapshot (snapshot_at);

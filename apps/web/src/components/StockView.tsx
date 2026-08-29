@@ -50,6 +50,7 @@ export function StockView({
   const [pagina, setPagina] = useState(0);
   const [modal, setModal] = useState<Modal>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
 
   const canOperate = CAN_OPERATE.has(role);
 
@@ -134,6 +135,50 @@ export function StockView({
       URL.revokeObjectURL(url);
     } catch (err) {
       setFeedback(err instanceof Error ? err.message : "falha na exportação");
+    }
+  }
+
+  async function atualizarAgora() {
+    // O 202 volta na hora; o fim do snapshot aparece como updated_at mais novo
+    // no próprio /stock — é isso que o poll espera antes de recarregar.
+    try {
+      setSincronizando(true);
+      setFeedback(null);
+      const resp = await browserApi.request(`/orgs/${org}/stock/sync`, await token(), {
+        method: "POST",
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(payload.detail ?? `backend respondeu ${resp.status}`);
+      }
+      const antes = rows.reduce((m, r) => Math.max(m, Date.parse(r.atualizado_em)), 0);
+      const inicio = Date.now();
+      const poll = setInterval(async () => {
+        try {
+          const r = await browserApi.request(`/orgs/${org}/stock`, await token());
+          if (r.ok) {
+            const dados = (await r.json()) as StockRow[];
+            const depois = dados.reduce((m, x) => Math.max(m, Date.parse(x.atualizado_em)), 0);
+            if (depois > antes) {
+              clearInterval(poll);
+              setSincronizando(false);
+              setFeedback("Estoque sincronizado com a VMpay.");
+              router.refresh();
+              return;
+            }
+          }
+        } catch {
+          // erro transitório de rede: o próximo tick tenta de novo
+        }
+        if (Date.now() - inicio > 180_000) {
+          clearInterval(poll);
+          setSincronizando(false);
+          setFeedback("A sincronização está demorando — recarregue a página em instantes.");
+        }
+      }, 8000);
+    } catch (err) {
+      setSincronizando(false);
+      setFeedback(err instanceof Error ? err.message : "falha ao sincronizar");
     }
   }
 
@@ -226,13 +271,23 @@ export function StockView({
         />
         <div className="flex gap-2 self-start sm:self-auto">
           {canOperate ? (
-            <button
-              type="button"
-              onClick={() => setModal({ kind: "new" })}
-              className="whitespace-nowrap rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-contrast)]"
-            >
-              Adicionar produto
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={atualizarAgora}
+                disabled={sincronizando}
+                className="whitespace-nowrap rounded-md border border-[var(--grid)] px-3 py-1.5 text-sm text-[var(--text-primary)] hover:border-[var(--accent)] disabled:cursor-wait disabled:opacity-60"
+              >
+                {sincronizando ? "Sincronizando…" : "Atualizar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setModal({ kind: "new" })}
+                className="whitespace-nowrap rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-contrast)]"
+              >
+                Adicionar produto
+              </button>
+            </>
           ) : null}
           <button
             type="button"

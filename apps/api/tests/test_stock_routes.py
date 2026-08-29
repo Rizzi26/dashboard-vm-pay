@@ -53,6 +53,14 @@ class RoutedSession:
     async def commit(self):
         self.commits += 1
 
+    async def scalar(self, stmt, params=None):
+        sql = str(stmt).lower()
+        self.executed.append((sql, params or {}))
+        for needle, rows in self.routes:
+            if needle in sql and rows:
+                return rows[0]
+        return None
+
 
 TARGET_ROW = {
     "location_id": LOC_ID,
@@ -166,6 +174,59 @@ async def test_csv_vem_como_anexo_com_separador_pt_br():
     assert linhas[0].startswith("local;produto")
     assert "Água Mineral" in linhas[1]
     assert "3,50" in linhas[1]  # preço com vírgula
+
+
+# ------------------------------------------------------------- sincronização
+
+
+INTEG_ROW = {
+    "id": uuid.UUID("00000000-0000-0000-0000-00000000dddd"),
+    "config": {"token_env": "VMPAY_INGEST_TOKEN"},
+}
+
+
+async def test_sync_agenda_o_snapshot_em_segundo_plano(monkeypatch):
+    use_role("admin")
+    use_session([("from core.integration", [INTEG_ROW])])
+    monkeypatch.setenv("VMPAY_INGEST_TOKEN", "tok-teste")
+    chamadas: list[str] = []
+
+    async def fake_exec(integration_id: str):
+        chamadas.append(integration_id)
+
+    monkeypatch.setattr(stock_router, "_executar_sync", fake_exec)
+    resp = await call("POST", "/orgs/mercadinho/stock/sync")
+    assert resp.status_code == 202
+    assert chamadas == [str(INTEG_ROW["id"])]
+
+
+async def test_sync_sem_token_no_ambiente_explica_o_que_falta(monkeypatch):
+    """Render sem VMPAY_INGEST_TOKEN: 503 legível, não tarefa morrendo à toa."""
+    use_role("admin")
+    use_session([("from core.integration", [INTEG_ROW])])
+    monkeypatch.delenv("VMPAY_INGEST_TOKEN", raising=False)
+    resp = await call("POST", "/orgs/mercadinho/stock/sync")
+    assert resp.status_code == 503
+    assert "VMPAY_INGEST_TOKEN" in resp.json()["detail"]
+
+
+async def test_sync_respeita_o_cooldown(monkeypatch):
+    use_role("admin")
+    monkeypatch.setenv("VMPAY_INGEST_TOKEN", "tok-teste")
+    use_session(
+        [
+            ("from core.integration", [INTEG_ROW]),
+            ("max(b.updated_at)", [datetime.now(timezone.utc)]),
+        ]
+    )
+    resp = await call("POST", "/orgs/mercadinho/stock/sync")
+    assert resp.status_code == 429
+
+
+async def test_viewer_nao_dispara_sync():
+    use_role("viewer")
+    use_session([])
+    assert (await call("POST", "/orgs/mercadinho/stock/sync")).status_code == 403
 
 
 # ------------------------------------------------------------------ histórico

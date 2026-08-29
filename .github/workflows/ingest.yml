@@ -11,10 +11,14 @@ name: Ingestão VMpay
 # quebraria com o mesmo atraso.
 on:
   schedule:
-    # 23h, 7h e 15h de Brasília (BRT = UTC-3, sem horário de verão desde 2019).
+    # De hora em hora: intervalo curto é o que dá resolução à detecção de
+    # quebra (queda de saldo × vendas do intervalo) e mantém o dashboard
+    # fresco. Custa ~10 req/rodada na VMpay (limite: 300/min) e nada em
+    # minutos de Actions (repo público). A foto histórica só grava linha que
+    # mudou, então rodada sem movimento não incha o banco.
     # O agendamento do Actions é best-effort: atrasos de 5–20 min são normais e
     # inofensivos aqui — a ingestão é por cursor e idempotente.
-    - cron: "0 2,10,18 * * *"
+    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       recurso:

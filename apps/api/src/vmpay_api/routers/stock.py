@@ -13,10 +13,11 @@ import io
 import json
 import os
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,8 +28,9 @@ from vmpay.redact import redact
 from ..auth import OrgContext, require_role
 from ..config import settings
 from ..connector import VMpayConnector
-from ..db import get_session
-from ..sync_core import resolve_token
+from ..db import get_session, session_factory
+from ..models_core import Integration
+from ..sync_core import resolve_token, sync_integration
 
 router = APIRouter(prefix="/orgs/{org}/stock", tags=["estoque"])
 
@@ -123,6 +125,78 @@ async def export_csv(ctx: ViewerCtx, session: Session) -> Response:
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="estoque.csv"'},
     )
+
+
+# ---------------------------------------------------------------- atualização
+
+#: Entre duas sincronizações sob demanda. O cron continua existindo; o botão
+#: serve para "acabei de repor, quero ver agora" — não para polling de UI.
+SYNC_COOLDOWN_S = 120
+
+
+async def _executar_sync(integration_id: str) -> None:
+    """Snapshot fora do request: o 202 volta na hora, a VMpay demora o que for.
+
+    Sessão própria porque a do request fecha junto com a resposta.
+    """
+    async with session_factory()() as sessao:
+        integ = await sessao.get(Integration, uuid.UUID(integration_id))
+        if integ is not None:
+            await sync_integration(sessao, integ)
+
+
+@router.post("/sync", status_code=202)
+async def sync_now(ctx: AdminCtx, session: Session, background: BackgroundTasks) -> dict:
+    """Sincroniza catálogo + saldos da organização agora, sem esperar o cron.
+
+    Não passa pelo action_log de propósito: o log audita escrita NA VMpay;
+    isto é leitura — o rastro fica no updated_at dos saldos.
+    """
+    row = (
+        await session.execute(
+            text(
+                """
+                select i.id, i.config
+                  from core.integration i
+                 where i.org_id = :org_id and i.active and i.kind = 'vmpay'
+                 order by i.created_at
+                 limit 1
+                """
+            ),
+            {"org_id": str(ctx.org_id)},
+        )
+    ).mappings().first()
+    if row is None:
+        raise HTTPException(404, "organização sem integração VMpay ativa")
+    try:
+        # Valida o token ANTES de agendar: sem env no ambiente da API, o 503
+        # explica o que falta em vez de uma tarefa morrer em silêncio.
+        resolve_token(row["config"] or {})
+    except VMpayError as exc:
+        raise HTTPException(503, redact(str(exc))) from None
+
+    ultimo = await session.scalar(
+        text(
+            """
+            select max(b.updated_at)
+              from core.stock_balance b
+              join core.location l on l.id = b.location_id
+             where l.org_id = :org_id
+            """
+        ),
+        {"org_id": str(ctx.org_id)},
+    )
+    if ultimo is not None:
+        idade = (datetime.now(timezone.utc) - ultimo).total_seconds()
+        if idade < SYNC_COOLDOWN_S:
+            raise HTTPException(
+                429,
+                f"estoque sincronizado há {int(idade)}s — aguarde "
+                f"{SYNC_COOLDOWN_S - int(idade)}s para pedir de novo",
+            )
+
+    background.add_task(_executar_sync, str(row["id"]))
+    return {"status": "agendado"}
 
 
 # ------------------------------------------------------------------ histórico

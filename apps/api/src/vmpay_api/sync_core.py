@@ -143,6 +143,22 @@ async def sync_products(
     return count, known
 
 
+def _saldo_mudou(anterior: tuple | None, novo: dict) -> bool:
+    """Compara o saldo do banco (Decimal) com o do relatório (float do JSON).
+
+    A comparação é por valor numérico com 2 casas no preço — Decimal("6.9900")
+    e 6.99 são o mesmo preço, não uma mudança.
+    """
+    if anterior is None:
+        return True
+    qtd_anterior, preco_anterior = anterior
+    if float(qtd_anterior) != float(novo["quantity"]):
+        return True
+    de = None if preco_anterior is None else round(float(preco_anterior), 2)
+    para = None if novo["price"] is None else round(float(novo["price"]), 2)
+    return de != para
+
+
 async def sync_stock(
     client: VMpayClient,
     session: AsyncSession,
@@ -209,6 +225,30 @@ async def sync_stock(
             "updated_at": now,
         }
 
+    # O saldo ANTERIOR é lido antes do upsert que o sobrescreve — é contra ele
+    # que a foto histórica decide o que mudou.
+    location_ids = list({b["location_id"] for b in balances.values()})
+    anterior: dict[tuple, tuple] = {}
+    primeira_foto = True
+    if location_ids:
+        primeira_foto = (
+            await session.scalar(
+                select(core.StockSnapshot.snapshot_at)
+                .where(core.StockSnapshot.location_id.in_(location_ids))
+                .limit(1)
+            )
+        ) is None
+        anterior = {
+            (r.location_id, r.product_id): (r.quantity, r.price)
+            for r in (
+                await session.execute(
+                    select(core.StockBalance).where(
+                        core.StockBalance.location_id.in_(location_ids)
+                    )
+                )
+            ).scalars()
+        }
+
     await _upsert(session, core.Location, list(locations.values()), ["id"])
     await _upsert(
         session, core.LocationLink, list(links.values()), ["integration_id", "external_id"]
@@ -219,8 +259,13 @@ async def sync_stock(
 
     # Foto append-only da rodada, saldo zero incluído — é a chegada ao zero que
     # data uma ruptura. Sem histórico não há como separar venda de quebra: o
-    # balance acima só guarda o presente. Todas as linhas levam o MESMO carimbo
-    # para a leitura reconstituir "a rodada" por igualdade, sem janela.
+    # balance acima só guarda o presente.
+    #
+    # Só entra na foto quem MUDOU desde o saldo anterior: com rodada de hora em
+    # hora, regravar ~800 linhas idênticas 24×/dia incharia a tabela sem
+    # informação nova — e a série em degraus reconstrói o "não mudou" sozinha.
+    # A primeira rodada (tabela de fotos vazia para estes locais) grava tudo,
+    # como âncora; produto novo no planograma se ancora ao aparecer.
     snapshot_rows = [
         {
             "snapshot_at": now,
@@ -229,7 +274,8 @@ async def sync_stock(
             "quantity": b["quantity"],
             "price": b["price"],
         }
-        for b in balances.values()
+        for key, b in balances.items()
+        if primeira_foto or _saldo_mudou(anterior.get(key), b)
     ]
     for start in range(0, len(snapshot_rows), UPSERT_CHUNK):
         await session.execute(
