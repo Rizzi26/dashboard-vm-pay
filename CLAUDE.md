@@ -151,9 +151,8 @@ no centavo:
 - Frontend: https://dashboard-vm-pay.vercel.app (Vercel, root `apps/web`)
 - API: https://vmpay-api.onrender.com (Render, Docker via `render.yaml`, Ohio)
 - Banco: Supabase `bjmcakvubmggwqkigfle` (schemas `core`+`vmpay`, Data API OFF)
-- Ingestão: GitHub Actions 3× ao dia (23h/7h/15h BRT); histórico completo desde o go-live
-  do mercadinho (06/11/2025): 15.612 cashless + 13.986 vends + 5.674 produtos
-  + 1.170 saldos com preço
+- Ingestão: GitHub Actions de hora em hora (desde 2026-08-29; antes 3× ao
+  dia); histórico completo desde o go-live do mercadinho (06/11/2025)
 - **Escrita na VMpay TRAVADA** (`VMPAY_ALLOW_WRITES=0` no Render) até a
   homologação da Nayax — pendente do token de homolog (integracoes@nayax.com)
 
@@ -176,6 +175,20 @@ O kiosk é 100% cashless, um item por transação.
    hoje deriva do valor total do relatório de saldos e fica nulo com saldo 0.
 4. Rotação da `sb_secret` vazada no primeiro deploy da Vercel — CONFERIR se o
    Revoke + chave nova no Render foi concluído.
+5. ~~**Histórico de estoque + quebras**~~ — FEITO (2026-08-29):
+   `core.stock_snapshot` (migration 0004, append-only, só linha que mudou;
+   primeira rodada ancora tudo). Leitura em `/stock/quebras` (queda de saldo ×
+   vendas do intervalo → página /quebras) e `/stock/history/{product_id}`
+   (gráfico em degraus na ficha do produto).
+6. ~~**Reposição**~~ — FEITO (2026-08-29): `/stock/reposicao` cruza saldo com
+   ritmo de venda (30d) → página /reposicao, "o que levar na próxima visita".
+7. ~~**Sincronizar sob demanda**~~ — FEITO (2026-08-29): `POST
+   /orgs/{org}/stock/sync` (admin, cooldown 120s, BackgroundTasks) + botão
+   Atualizar no /estoque. **Depende de `VMPAY_INGEST_TOKEN` no Render** —
+   sem a env o endpoint devolve 503 explicando.
+8. Migrations em produção agora vão pelo workflow **migrate.yml** (dispatch
+   manual, valida com pglast, aplica com o secret DATABASE_URL em transação
+   única). Nenhuma máquina local guarda credencial do banco.
 
 O catálogo do MCP cobre bem os recursos que a doc documenta bem. `audits`,
 `storables` e as tabelas de domínio têm pouca descrição na origem — o extrator

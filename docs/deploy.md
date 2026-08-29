@@ -4,7 +4,7 @@
 |---|---|---|
 | `apps/web` | Vercel | push na `main` (integração da Vercel) |
 | `apps/api` | Render, web service **Docker** (`render.yaml`) | push na `main` |
-| Ingestão | **GitHub Actions**, não Render | cron 3× ao dia (23h/7h/15h BRT = 2,10,18 UTC) |
+| Ingestão | **GitHub Actions**, não Render | cron de hora em hora (`0 * * * *` UTC) |
 | Testes | GitHub Actions | push e pull request |
 
 ## Por que a ingestão não roda no Render
@@ -92,8 +92,9 @@ alcançar.
 
 ## Primeira subida (seed da PoC)
 
-1. Aplique `supabase/migrations/0001_init.sql` e `0002_core.sql` (SQL Editor ou
-   `psql`), nesta ordem.
+1. Aplique as migrations de `supabase/migrations/` em ordem numérica — pelo
+   workflow **Migração de banco** (Actions → Run workflow, um arquivo por vez)
+   ou no SQL Editor.
 2. Crie o primeiro usuário no painel: Authentication → Add user.
 3. Edite o email em `supabase/seed-poc.sql` e rode — cria a organização
    `mercadinho`, a integração VMpay e a membership master.
