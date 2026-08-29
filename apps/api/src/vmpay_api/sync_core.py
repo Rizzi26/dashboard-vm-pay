@@ -217,6 +217,25 @@ async def sync_stock(
         session, core.StockBalance, list(balances.values()), ["location_id", "product_id"]
     )
 
+    # Foto append-only da rodada, saldo zero incluído — é a chegada ao zero que
+    # data uma ruptura. Sem histórico não há como separar venda de quebra: o
+    # balance acima só guarda o presente. Todas as linhas levam o MESMO carimbo
+    # para a leitura reconstituir "a rodada" por igualdade, sem janela.
+    snapshot_rows = [
+        {
+            "snapshot_at": now,
+            "location_id": b["location_id"],
+            "product_id": b["product_id"],
+            "quantity": b["quantity"],
+            "price": b["price"],
+        }
+        for b in balances.values()
+    ]
+    for start in range(0, len(snapshot_rows), UPSERT_CHUNK):
+        await session.execute(
+            insert(core.StockSnapshot).values(snapshot_rows[start : start + UPSERT_CHUNK])
+        )
+
     # O snapshot é a verdade: saldo que sumiu do relatório sai da tabela — senão
     # produto removido da máquina continuaria "em estoque" para sempre. A
     # identificação é por timestamp (linhas destes locais não tocadas nesta

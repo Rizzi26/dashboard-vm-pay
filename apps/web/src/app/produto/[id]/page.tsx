@@ -6,6 +6,7 @@ import { Offline } from "@/components/Offline";
 import { PeriodoNav } from "@/components/PeriodoNav";
 import { RevenueChart } from "@/components/RevenueChart";
 import { StatTile } from "@/components/StatTile";
+import { StockHistoryChart } from "@/components/StockHistoryChart";
 import { serverApi } from "@/lib/api.server";
 import { formatDay, formatInt, formatMoney } from "@/lib/format";
 import { orgSession } from "@/lib/org";
@@ -21,7 +22,13 @@ export default async function ProdutoPage({
   const { me, org } = await orgSession();
   const { id } = await params;
   const { periodo = "30" } = await searchParams;
-  const detail = await serverApi.product(org.slug, id, `?start=${startFor(periodo)}`);
+  // "tudo" vira o teto do endpoint (365): a série começa no deploy do
+  // histórico de qualquer jeito, então o teto nunca corta dado real.
+  const diasHistorico = Number(periodo) || 365;
+  const [detail, historico] = await Promise.all([
+    serverApi.product(org.slug, id, `?start=${startFor(periodo)}`),
+    serverApi.stockHistory(org.slug, id, diasHistorico),
+  ]);
 
   return (
     <div className="viz-root min-h-screen bg-[var(--surface-0)]">
@@ -110,6 +117,17 @@ export default async function ProdutoPage({
                 countLabel="unidades"
               />
             </Card>
+
+            {historico.ok ? (
+              <div className="mt-6">
+                <Card
+                  title="Saldo em prateleira"
+                  subtitle="Uma amostra por sincronização. Degrau para baixo = saiu produto; para cima = reposição."
+                >
+                  <StockHistoryChart points={historico.data} />
+                </Card>
+              </div>
+            ) : null}
           </>
         ) : (
           <div className="mt-6">

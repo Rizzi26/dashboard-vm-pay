@@ -30,12 +30,16 @@ export function StockView({
   role,
   initialDisp,
   initialBusca,
+  quebras,
 }: {
   rows: StockRow[];
   org: string;
   role: string;
   initialDisp?: "com" | "sem";
   initialBusca?: string;
+  // null = endpoint indisponível (deploy defasado ou erro): o tile some em
+  // vez de mostrar zero — zero é uma afirmação, ausência não.
+  quebras?: { eventos: number; unidades: number; valor: number } | null;
 }) {
   const router = useRouter();
   const [filtro, setFiltro] = useState(initialBusca ?? "");
@@ -158,7 +162,24 @@ export function StockView({
 
   return (
     <div>
-      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div
+        className={`mb-6 grid grid-cols-2 gap-4 ${
+          quebras ? "lg:grid-cols-5" : "lg:grid-cols-4"
+        }`}
+      >
+        {quebras ? (
+          <StatTile
+            label="Quebra (30d)"
+            value={formatInt(quebras.unidades)}
+            tone={quebras.unidades > 0 ? "critical" : undefined}
+            hint={
+              quebras.unidades > 0
+                ? `${formatMoney(quebras.valor)} sem venda — toque para ver`
+                : "nenhuma queda de saldo sem venda"
+            }
+            onClick={() => router.push("/quebras")}
+          />
+        ) : null}
         <StatTile
           label="Em ruptura"
           value={formatInt(tiles.ruptura)}

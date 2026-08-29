@@ -125,6 +125,133 @@ async def export_csv(ctx: ViewerCtx, session: Session) -> Response:
     )
 
 
+# ------------------------------------------------------------------ histórico
+
+#: Quedas de saldo entre fotos consecutivas que as vendas do intervalo não
+#: explicam. O confronto é feito na leitura, não na ingestão: um vend que
+#: chegue atrasado (rodada seguinte) entra pelo occurred_at — que é a hora da
+#: máquina — e a "quebra" falsa desaparece sozinha na próxima consulta.
+#: Limite conhecido: reposição e venda no MESMO intervalo se cancelam e podem
+#: esconder quebra; com 3+ fotos por dia o intervalo é curto o bastante.
+QUEBRAS_SQL = """
+with serie as (
+    select s.location_id, s.product_id, s.snapshot_at, s.quantity, s.price,
+           lag(s.quantity)    over w as qtd_anterior,
+           lag(s.snapshot_at) over w as foto_anterior
+      from core.stock_snapshot s
+      join core.location l on l.id = s.location_id
+     where l.org_id = :org_id
+       and s.snapshot_at >= now() - make_interval(days => :days)
+    window w as (partition by s.location_id, s.product_id order by s.snapshot_at)
+), quedas as (
+    select *, (qtd_anterior - quantity) as saida
+      from serie
+     where qtd_anterior is not null and quantity < qtd_anterior
+)
+select q.location_id,
+       l.name as location_name,
+       q.product_id,
+       p.name as product_name,
+       p.barcode,
+       q.foto_anterior,
+       q.snapshot_at,
+       q.saida,
+       coalesce(vd.vendidas, 0) as vendidas,
+       q.saida - coalesce(vd.vendidas, 0) as quebra,
+       coalesce(q.price, p.unit_price) as preco
+  from quedas q
+  join core.product  p on p.id = q.product_id
+  join core.location l on l.id = q.location_id
+  left join lateral (
+        select sum(coalesce(v.quantity, 1)) as vendidas
+          from core.location_link ll
+          join core.product_link  pl on pl.integration_id = ll.integration_id
+                                    and pl.product_id = q.product_id
+          join vmpay.vend v on v.machine_id = ll.machine_id
+                           and v.good_id = cast(pl.external_id as bigint)
+                           and v.occurred_at >  q.foto_anterior
+                           and v.occurred_at <= q.snapshot_at
+         where ll.location_id = q.location_id
+       ) vd on true
+ where q.saida > coalesce(vd.vendidas, 0)
+ order by q.snapshot_at desc, quebra desc
+"""
+
+
+@router.get("/quebras")
+async def stock_losses(ctx: ViewerCtx, session: Session, days: int = 30) -> dict:
+    """Suspeitas de quebra: saldo caiu mais do que as vendas do intervalo."""
+    days = max(1, min(days, 365))
+    rows = (
+        await session.execute(
+            text(QUEBRAS_SQL), {"org_id": str(ctx.org_id), "days": days}
+        )
+    ).mappings().all()
+    eventos = [
+        {
+            "location_id": str(r["location_id"]),
+            "local": r["location_name"],
+            "product_id": str(r["product_id"]),
+            "produto": r["product_name"],
+            "barcode": r["barcode"],
+            "de": r["foto_anterior"].isoformat(),
+            "ate": r["snapshot_at"].isoformat(),
+            "saida": float(r["saida"]),
+            "vendidas": float(r["vendidas"]),
+            "quebra": float(r["quebra"]),
+            "preco": float(r["preco"]) if r["preco"] is not None else None,
+            "valor": (
+                round(float(r["quebra"]) * float(r["preco"]), 2)
+                if r["preco"] is not None
+                else None
+            ),
+        }
+        for r in rows
+    ]
+    return {
+        "dias": days,
+        "resumo": {
+            "eventos": len(eventos),
+            "unidades": sum(e["quebra"] for e in eventos),
+            "valor": round(sum(e["valor"] or 0 for e in eventos), 2),
+        },
+        "eventos": eventos,
+    }
+
+
+HISTORICO_SQL = """
+select s.snapshot_at, s.location_id, l.name as location_name, s.quantity
+  from core.stock_snapshot s
+  join core.location l on l.id = s.location_id
+ where l.org_id = :org_id
+   and s.product_id = :product_id
+   and s.snapshot_at >= now() - make_interval(days => :days)
+ order by s.snapshot_at
+"""
+
+
+@router.get("/history/{product_id}")
+async def stock_history(
+    product_id: uuid.UUID, ctx: ViewerCtx, session: Session, days: int = 30
+) -> list[dict]:
+    """Série do saldo de um produto, uma amostra por rodada de ingestão."""
+    days = max(1, min(days, 365))
+    rows = (
+        await session.execute(
+            text(HISTORICO_SQL),
+            {"org_id": str(ctx.org_id), "product_id": str(product_id), "days": days},
+        )
+    ).mappings().all()
+    return [
+        {
+            "em": r["snapshot_at"].isoformat(),
+            "local": r["location_name"],
+            "quantidade": float(r["quantity"]),
+        }
+        for r in rows
+    ]
+
+
 # --------------------------------------------------------------------- ações
 
 

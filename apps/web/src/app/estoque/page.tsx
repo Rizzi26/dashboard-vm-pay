@@ -26,7 +26,10 @@ export default async function EstoquePage({
   const { me, org } = await orgSession();
   const { disp, q } = await searchParams;
   const initialDisp = disp === "com" || disp === "sem" ? disp : undefined;
-  const stock = await serverApi.stock(org.slug);
+  const [stock, quebras] = await Promise.all([
+    serverApi.stock(org.slug),
+    serverApi.quebras(org.slug),
+  ]);
 
   const atrasoSeg = stock.ok ? atrasoDoEstoque(stock.data) : null;
 
@@ -60,6 +63,7 @@ export default async function EstoquePage({
             role={org.role}
             initialDisp={initialDisp}
             initialBusca={q}
+            quebras={quebras.ok ? quebras.data.resumo : null}
           />
         ) : (
           <Offline error={stock.error} />

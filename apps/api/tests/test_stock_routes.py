@@ -168,6 +168,67 @@ async def test_csv_vem_como_anexo_com_separador_pt_br():
     assert "3,50" in linhas[1]  # preço com vírgula
 
 
+# ------------------------------------------------------------------ histórico
+
+
+QUEBRA_ROW = {
+    "location_id": LOC_ID,
+    "location_name": "Condomínio — 0010",
+    "product_id": PROD_ID,
+    "product_name": "Água Mineral",
+    "barcode": "789",
+    "foto_anterior": AGORA,
+    "snapshot_at": AGORA,
+    "saida": 3,
+    "vendidas": 1,
+    "quebra": 2,
+    "preco": 6.99,
+}
+
+
+async def test_viewer_ve_quebras_com_valor_calculado():
+    use_role("viewer")
+    use_session([("core.stock_snapshot", [QUEBRA_ROW])])
+    body = (await call("GET", "/orgs/mercadinho/stock/quebras")).json()
+
+    evento = body["eventos"][0]
+    assert evento["quebra"] == 2.0
+    assert evento["vendidas"] == 1.0
+    assert evento["valor"] == 13.98  # 2 × 6,99
+    assert body["resumo"] == {"eventos": 1, "unidades": 2.0, "valor": 13.98}
+
+
+async def test_quebra_sem_preco_nao_inventa_valor():
+    use_role("viewer")
+    use_session([("core.stock_snapshot", [{**QUEBRA_ROW, "preco": None}])])
+    body = (await call("GET", "/orgs/mercadinho/stock/quebras")).json()
+    assert body["eventos"][0]["valor"] is None
+    assert body["resumo"]["valor"] == 0  # só soma o que tem preço conhecido
+
+
+async def test_historico_do_produto_vem_em_serie():
+    use_role("viewer")
+    use_session(
+        [
+            (
+                "core.stock_snapshot",
+                [
+                    {
+                        "snapshot_at": AGORA,
+                        "location_id": LOC_ID,
+                        "location_name": "Condomínio — 0010",
+                        "quantity": 5,
+                    }
+                ],
+            )
+        ]
+    )
+    body = (await call("GET", f"/orgs/mercadinho/stock/history/{PROD_ID}")).json()
+    assert body == [
+        {"em": AGORA.isoformat(), "local": "Condomínio — 0010", "quantidade": 5.0}
+    ]
+
+
 # --------------------------------------------------------------------- papéis
 
 

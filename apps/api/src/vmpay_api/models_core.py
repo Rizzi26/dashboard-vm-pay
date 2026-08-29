@@ -141,6 +141,17 @@ class StockBalance(Base):
     )
 
 
+class StockSnapshot(Base):
+    __tablename__ = "stock_snapshot"
+    __table_args__ = {"schema": SCHEMA}
+
+    snapshot_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    location_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric)
+    price: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+
+
 class StockMovement(Base):
     __tablename__ = "stock_movement"
     __table_args__ = {"schema": SCHEMA}

@@ -12,6 +12,8 @@ import type {
   Me,
   MemberRow,
   ProductDetail,
+  Quebras,
+  StockHistoryPoint,
   StockRow,
   Summary,
   SyncRow,
@@ -47,6 +49,10 @@ export const serverApi = {
   product: (org: string, id: string, qs = "") =>
     serverGet<ProductDetail>(`/orgs/${org}/products/${id}${qs}`),
   stock: (org: string) => serverGet<StockRow[]>(`/orgs/${org}/stock`),
+  quebras: (org: string, dias = 30) =>
+    serverGet<Quebras>(`/orgs/${org}/stock/quebras?days=${dias}`),
+  stockHistory: (org: string, productId: string, dias = 30) =>
+    serverGet<StockHistoryPoint[]>(`/orgs/${org}/stock/history/${productId}?days=${dias}`),
   members: (org: string) => serverGet<MemberRow[]>(`/orgs/${org}/members`),
   actions: (org: string) => serverGet<ActionRow[]>(`/orgs/${org}/stock/actions`),
 };

@@ -28,6 +28,18 @@ export const formatDay = (iso: string) => {
   return dataCurta.format(new Date(y, m - 1, d));
 };
 
+// Fuso fixo: o servidor da Vercel renderiza em UTC — sem ele, todo horário
+// apareceria 3h adiantado para quem opera em Brasília.
+const dataHora = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "America/Sao_Paulo",
+});
+
+export const formatDayTime = (iso: string) => dataHora.format(new Date(iso));
+
 export function formatAtraso(segundos: number | null): string {
   if (segundos === null) return "nunca sincronizou";
   if (segundos < 60) return "agora há pouco";
