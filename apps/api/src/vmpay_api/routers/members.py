@@ -67,7 +67,7 @@ async def list_members(ctx: MasterCtx, session: Session) -> list[dict]:
 @router.post("", status_code=201)
 async def invite_member(body: InviteBody, ctx: MasterCtx, session: Session) -> dict:
     _check_role(body.role)
-    user_id = await invite_or_find(body.email)
+    user_id, email_enviado = await invite_or_find(body.email)
     await session.execute(
         text(
             """
@@ -79,7 +79,12 @@ async def invite_member(body: InviteBody, ctx: MasterCtx, session: Session) -> d
         {"user_id": str(user_id), "org_id": str(ctx.org_id), "role": body.role},
     )
     await session.commit()
-    return {"user_id": str(user_id), "email": body.email, "role": body.role}
+    return {
+        "user_id": str(user_id),
+        "email": body.email,
+        "role": body.role,
+        "email_enviado": email_enviado,
+    }
 
 
 @router.patch("/{user_id}")

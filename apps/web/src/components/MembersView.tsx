@@ -47,8 +47,22 @@ export function MembersView({
     setBusy(true);
     setFeedback(null);
     try {
-      await api("/members", { method: "POST", body: JSON.stringify({ email, role: papel }) });
-      setFeedback(`Convite enviado para ${email}.`);
+      const resp = await api("/members", {
+        method: "POST",
+        body: JSON.stringify({ email, role: papel }),
+      });
+      const { email_enviado } = (await resp.json().catch(() => ({}))) as {
+        email_enviado?: "convite" | "redefinir" | null;
+      };
+      // A conta no login sobrevive à remoção da organização: quem volta recebe
+      // o link de redefinir senha, não um convite — a mensagem diz qual saiu.
+      setFeedback(
+        email_enviado === "convite"
+          ? `Convite enviado para ${email}.`
+          : email_enviado === "redefinir"
+            ? `${email} já tinha conta: o acesso voltou e foi enviado um email para definir a senha.`
+            : `${email} já tinha conta e o acesso voltou, mas o email não saiu (limite de envio do Supabase). A pessoa pode entrar com a senha antiga ou usar "esqueci a senha" no login.`,
+      );
       setEmail("");
       router.refresh();
     } catch (err) {

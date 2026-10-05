@@ -159,6 +159,59 @@ async def test_master_convida_e_grava_membership():
     sql, params = sessao.executed[-1]
     assert "on conflict" in sql.lower()
     assert params["role"] == "admin"
+    assert resp.json()["email_enviado"] == "convite"
+
+
+def _service_key():
+    import os
+
+    os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "service-key"
+    from vmpay_api.config import settings
+
+    settings.cache_clear()
+
+
+@respx.mock
+async def test_reconvite_de_conta_existente_manda_redefinir_senha():
+    """Removido e convidado de novo: a conta existe, o email é o de redefinir."""
+    respx.post("https://teste.supabase.co/auth/v1/invite").mock(
+        return_value=httpx.Response(422, json={"msg": "already registered"})
+    )
+    respx.get("https://teste.supabase.co/auth/v1/admin/users").mock(
+        return_value=httpx.Response(200, json={"users": [{"id": str(OUTRO), "email": "Volta@teste.dev"}]})
+    )
+    recover = respx.post("https://teste.supabase.co/auth/v1/recover").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    use_role("master")
+    sessao = use_session()
+    _service_key()
+
+    resp = await call(
+        "POST", "/orgs/mercadinho/members", json={"email": "volta@teste.dev", "role": "viewer"}
+    )
+    assert resp.status_code == 201
+    assert resp.json()["email_enviado"] == "redefinir"
+    assert recover.calls.last.request.url.params["redirect_to"].endswith("/definir-senha")
+    assert sessao.committed
+
+
+@respx.mock
+async def test_reconvite_sem_email_avisa():
+    respx.post("https://teste.supabase.co/auth/v1/invite").mock(return_value=httpx.Response(422))
+    respx.get("https://teste.supabase.co/auth/v1/admin/users").mock(
+        return_value=httpx.Response(200, json={"users": [{"id": str(OUTRO), "email": "volta@teste.dev"}]})
+    )
+    respx.post("https://teste.supabase.co/auth/v1/recover").mock(return_value=httpx.Response(429))
+    use_role("master")
+    use_session()
+    _service_key()
+
+    resp = await call(
+        "POST", "/orgs/mercadinho/members", json={"email": "volta@teste.dev", "role": "viewer"}
+    )
+    assert resp.status_code == 201
+    assert resp.json()["email_enviado"] is None
 
 
 async def test_convite_com_papel_invalido_e_recusado():
