@@ -11,6 +11,8 @@ import type {
   MachineRow,
   Me,
   MemberRow,
+  PicklistCarga,
+  PicklistOpcoes,
   ProductDetail,
   Reposicao,
   StockHistoryPoint,
@@ -55,4 +57,6 @@ export const serverApi = {
     serverGet<StockHistoryPoint[]>(`/orgs/${org}/stock/history/${productId}?days=${dias}`),
   members: (org: string) => serverGet<MemberRow[]>(`/orgs/${org}/members`),
   actions: (org: string) => serverGet<ActionRow[]>(`/orgs/${org}/stock/actions`),
+  picklistOpcoes: (org: string) => serverGet<PicklistOpcoes>(`/orgs/${org}/picklist/opcoes`),
+  picklistHistorico: (org: string) => serverGet<PicklistCarga[]>(`/orgs/${org}/picklist`),
 };

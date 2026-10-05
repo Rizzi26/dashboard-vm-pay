@@ -1,0 +1,780 @@
+
+
+<!DOCTYPE html>
+<html lang="pt-br" dir="ltr">
+<head id="Head"><title>
+	Consulta Resumida NFC-e - Secretaria da Fazenda - Governo do Estado de São Paulo
+</title><meta charset="utf-8" /><meta name="viewport" content="width=device-width,&#32;initial-scale=1" /><meta http-equiv="X-UA-Compatible" content="IE=9,&#32;IE=edge" /><meta name="format-detection" content="telephone=no" />
+    <script src="../Scripts/jquery-3.7.1.min.js"></script>
+    <script src="../Scripts/jquery-ui-1.13.2.min.js"></script>
+    <script type="text/javascript">
+
+        $(document).ready(function () {
+            $('body').hide();
+            ExibirImagemCancelada();
+            ExibirImagemDenegada();
+            setTimeout(AjustarExibicaoEPEC, 200);
+            setTimeout(function () {
+                $('body').show()
+            }, 400);
+        });
+
+        $(window).resize(function () {
+            setTimeout(AjustarExibicaoEPEC, 300);
+            $('body').hide();
+            setTimeout(function () {
+                $('body').show()
+            }, 400);
+        });
+    </script>
+    <script src="../Xsl/nfce_rj_v1.00/js/jquery.mobile.compat.js"></script>
+    <script src="../Xsl/nfce_rj_v1.00/js/jquery.placeholder.min.js"></script>
+    <script src="../Xsl/nfce_rj_v1.00/js/index.js"></script>
+
+    <link rel="stylesheet" media="all" href="../Xsl/nfce_rj_v1.00/css/jquery.mobile.compat.css" type="text/css" /><link rel="stylesheet" media="all" href="../Xsl/nfce_rj_v2.05/css/nfceMob.css" type="text/css" /><link rel="stylesheet" media="all" href="../Xsl/nfce_rj_v2.05/css/nfceMob_ie.css" type="text/css" /><link rel="stylesheet" media="all" href="../Content/botoes.css" type="text/css" />
+    <style>
+        .msgErro {
+            font-size: 80%;
+            font-weight: bold;
+            color: Red;
+        }
+
+        .BotoesResponsivos input:first-child {
+            margin-left: 2px;
+        }
+
+        #erro {
+            margin-top:250px;
+        }
+
+        @media print {
+            .naoImprimir {
+                display: none;
+                visibility: hidden;
+            }
+            #erro {
+                max-height:none !important;
+            }
+            body {
+                height:99% !important;
+            }
+        }
+    </style>
+</head>
+<body >
+    <form method="post" action="ConsultaResponsiva/ConsultaResumidaRJFrame_v400.aspx" id="ctl00">
+<div class="aspNetHidden">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="rkFQnIysxMV+D2VSTBdQBfbX0+mHXD3MJhhVnV/OUWC3ODEj3gI35IyexgfUuQpPtrNB66c7HXE+jeXar0n6woi4lpG6RWELK/vsqXK6TfiS9RP31FfCD/AMrqOEXWbKT3+RLNpyHv0fzfW7ZT56LA9ovUb2THgjfF+UCB7GgeWQaSBdQkMOI+mpFWuvOMIdAvXFsKn5c3Met1z6ukMemebj+KJ8QyXLNf1th/yBV7g=" />
+</div>
+
+        <div style="width: 100%; max-width: 510px; margin: 10px auto;">
+            
+            
+            
+            <div class="page" style="position: relative;">
+                <div class="jqm-header" xmlns:n="http://www.portalfiscal.inf.br/nfe" xmlns:chave="http://exslt.org/chaveacesso" xmlns:r="http://www.serpro.gov.br/nfe/remessanfe.xsd">
+  <h1 class="tit">
+    <img src="../Xsl/nfce_rj_v2.05/imagens/logoNFCe.png" width="90" height="64" alt="NFC-e">
+    <p>DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR ELETRÔNICA</p>
+    <p>
+    </p>
+  </h1>
+</div>
+<div class="jqm-content" xmlns:n="http://www.portalfiscal.inf.br/nfe" xmlns:chave="http://exslt.org/chaveacesso" xmlns:r="http://www.serpro.gov.br/nfe/remessanfe.xsd">
+  <div id="conteudo">
+    <div id="avisos">
+    </div>
+    <div class="txtCenter">
+      <div id="u20" class="txtTopo">DISTRIBUIDORA EXEMPLO LTDA</div>
+      <div class="text">
+								CNPJ:
+								11.222.333/0001-81</div>
+      <div class="text">RUA EXEMPLO, 100, CENTRO, SAO PAULO, SP</div>
+    </div>
+    <table border="0" align="center" cellpadding="0" cellspacing="0" id="tabResult" class="filterable">
+      <tr id="Item + 1">
+        <td valign="top">
+          <span class="txtTit">BISC. BAUDUCCO MEIO AMARGO</span>
+          <span class="RCod">
+										(Código:
+										24344
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>3</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										6,95</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">20,85</span></td>
+      </tr>
+      <tr id="Item + 2">
+        <td valign="top">
+          <span class="txtTit">BISC. LOOK ATREV. 55GR</span>
+          <span class="RCod">
+										(Código:
+										6315
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>2</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										3,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">7,98</span></td>
+      </tr>
+      <tr id="Item + 3">
+        <td valign="top">
+          <span class="txtTit">BISC. POLV. M.D QUEIJO 110GR</span>
+          <span class="RCod">
+										(Código:
+										23770
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>3</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										5,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">17,97</span></td>
+      </tr>
+      <tr id="Item + 4">
+        <td valign="top">
+          <span class="txtTit">PAO PANCO MILHO 500GR</span>
+          <span class="RCod">
+										(Código:
+										501
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>1</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										12,49</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">12,49</span></td>
+      </tr>
+      <tr id="Item + 5">
+        <td valign="top">
+          <span class="txtTit">BISNAG. PANCO 300GR</span>
+          <span class="RCod">
+										(Código:
+										541
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>2</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										9,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">19,98</span></td>
+      </tr>
+      <tr id="Item + 6">
+        <td valign="top">
+          <span class="txtTit">PAO PANCO EGG 250GR</span>
+          <span class="RCod">
+										(Código:
+										502
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>1</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										14,95</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">14,95</span></td>
+      </tr>
+      <tr id="Item + 7">
+        <td valign="top">
+          <span class="txtTit">PAO PANCO FORMA 500GR</span>
+          <span class="RCod">
+										(Código:
+										488
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>3</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										10,49</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">31,47</span></td>
+      </tr>
+      <tr id="Item + 8">
+        <td valign="top">
+          <span class="txtTit">TAPIOCA TERRINHA 500GR</span>
+          <span class="RCod">
+										(Código:
+										1384
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>1</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										6,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">6,99</span></td>
+      </tr>
+      <tr id="Item + 9">
+        <td valign="top">
+          <span class="txtTit">PIPOCA P. YOKI 400GR</span>
+          <span class="RCod">
+										(Código:
+										22238
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>3</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										7,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">23,97</span></td>
+      </tr>
+      <tr id="Item + 10">
+        <td valign="top">
+          <span class="txtTit">DORITOS 37G</span>
+          <span class="RCod">
+										(Código:
+										22926
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>2</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										4,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">9,98</span></td>
+      </tr>
+      <tr id="Item + 11">
+        <td valign="top">
+          <span class="txtTit">WAFER BAUDUCCO CHOCO 140GR</span>
+          <span class="RCod">
+										(Código:
+										1501
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>3</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										4,25</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">12,75</span></td>
+      </tr>
+      <tr id="Item + 12">
+        <td valign="top">
+          <span class="txtTit">FEIJAO FANTASTICO 1KG</span>
+          <span class="RCod">
+										(Código:
+										7437
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>2</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										12,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">25,98</span></td>
+      </tr>
+      <tr id="Item + 13">
+        <td valign="top">
+          <span class="txtTit">ROSQ. MABEL CHOC. 300GR</span>
+          <span class="RCod">
+										(Código:
+										28969
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>2</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										4,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">9,98</span></td>
+      </tr>
+      <tr id="Item + 14">
+        <td valign="top">
+          <span class="txtTit">BISC. TRAKINAS M.MEIO 126GR</span>
+          <span class="RCod">
+										(Código:
+										1912
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>3</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										3,49</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">10,47</span></td>
+      </tr>
+      <tr id="Item + 15">
+        <td valign="top">
+          <span class="txtTit">BISC. BAUDUCCO BISCUIT LEITE 80GR</span>
+          <span class="RCod">
+										(Código:
+										1547
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>3</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										6,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">20,97</span></td>
+      </tr>
+      <tr id="Item + 16">
+        <td valign="top">
+          <span class="txtTit">SUCO MAGUARY CAJU 500ML</span>
+          <span class="RCod">
+										(Código:
+										387
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>1</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										5,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">5,99</span></td>
+      </tr>
+      <tr id="Item + 17">
+        <td valign="top">
+          <span class="txtTit">P.H NEVE 4ROLOS</span>
+          <span class="RCod">
+										(Código:
+										136
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>1</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										9,45</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">9,45</span></td>
+      </tr>
+      <tr id="Item + 18">
+        <td valign="top">
+          <span class="txtTit">ENERG. MONSTER 473ML</span>
+          <span class="RCod">
+										(Código:
+										552
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>6</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										11,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">71,94</span></td>
+      </tr>
+      <tr id="Item + 19">
+        <td valign="top">
+          <span class="txtTit">CHOC. OURO BRANCO 20G</span>
+          <span class="RCod">
+										(Código:
+										45
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>10</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										2</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">20,00</span></td>
+      </tr>
+      <tr id="Item + 20">
+        <td valign="top">
+          <span class="txtTit">CHOC. SONHO VALSA 20G</span>
+          <span class="RCod">
+										(Código:
+										46
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>10</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										2</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">20,00</span></td>
+      </tr>
+      <tr id="Item + 21">
+        <td valign="top">
+          <span class="txtTit">CHOC. LACTA DIAMANTE 80GR</span>
+          <span class="RCod">
+										(Código:
+										17064
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>3</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										11,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">35,97</span></td>
+      </tr>
+      <tr id="Item + 22">
+        <td valign="top">
+          <span class="txtTit">CHOC. LACTA SHOT 80GR</span>
+          <span class="RCod">
+										(Código:
+										18066
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>3</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										11,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">35,97</span></td>
+      </tr>
+      <tr id="Item + 23">
+        <td valign="top">
+          <span class="txtTit">COC. LACTA AO LEITE 80GR</span>
+          <span class="RCod">
+										(Código:
+										18158
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>3</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										11,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">35,97</span></td>
+      </tr>
+      <tr id="Item + 24">
+        <td valign="top">
+          <span class="txtTit">REFRIG. COCA\FANTA RET. 2LTS</span>
+          <span class="RCod">
+										(Código:
+										13
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>10</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										8,49</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">84,90</span></td>
+      </tr>
+      <tr id="Item + 25">
+        <td valign="top">
+          <span class="txtTit">SORV. GAROTO BOMBOM</span>
+          <span class="RCod">
+										(Código:
+										19758
+										)
+									</span>
+          <br>
+          <span class="Rqtd">
+            <strong>Qtde.:</strong>5</span>
+          <span class="RUN">
+            <strong>UN: </strong>UN</span>
+          <span class="RvlUnit">
+            <strong>Vl. Unit.:</strong>
+										 
+										9,99</span>
+        </td>
+        <td align="right" valign="top" class="txtTit noWrap">
+									Vl. Total
+									<br><span class="valor">49,95</span></td>
+      </tr>
+    </table>
+    <div id="totalNota" class="txtRight">
+      <div id="linhaTotal">
+        <label>Qtd. total de itens:</label>
+        <span class="totalNumb">25</span>
+      </div>
+      <div id="linhaTotal" class="linhaShade">
+        <label>Valor a pagar R$:</label>
+        <span class="totalNumb txtMax">616,92</span>
+      </div>
+      <div id="linhaForma">
+        <label>Forma de pagamento:</label>
+        <span class="totalNumb txtTitR">Valor pago R$:</span>
+      </div>
+      <div id="linhaTotal">
+        <label class="tx">
+											Dinheiro
+										</label>
+        <span class="totalNumb">616,92</span>
+      </div>
+      <div id="linhaTotal">
+        <label class="tx">Troco </label>
+        <span class="totalNumb">NaN</span>
+      </div>
+    </div>
+  </div>
+  <div id="infos" class="txtCenter">
+    <div class="jqm-collapsible v400 icon-collapsed-carat-d icon-expanded-carat-u expanded">
+      <h4>Informações gerais da Nota</h4>
+      <ul class="jqm-listview">
+        <li>
+          <strong>EMISSÃO NORMAL</strong>
+          <br>
+          <br>
+          <strong>Número: </strong>14192<strong> Série: </strong>1<strong> Emissão: </strong>28/09/2026 19:03:58
+								- Via Consumidor
+								<br><br><strong>Protocolo de Autorização: </strong>135260000000001       28/09/2026 19:01:33<br><br><strong>
+										Ambiente de Produção -
+									
+									Versão XML:
+									4.00
+									- Versão XSLT: 2.05
+								</strong></li>
+      </ul>
+    </div>
+    <div class="jqm-collapsible v400 icon-collapsed-carat-d icon-expanded-carat-u expanded">
+      <h4>Chave de acesso</h4>
+      <ul class="jqm-listview">
+        <li>
+								Consulte pela Chave de Acesso em
+								
+								https://www.nfce.fazenda.sp.gov.br/consulta<br><br><strong>Chave de acesso:</strong><br><span class="chave">3526 0911 2223 3300 0181 6500 1000 0141 9213 8652 0530</span></li>
+      </ul>
+    </div>
+    <div class="jqm-collapsible v400 icon-collapsed-carat-d icon-expanded-carat-u expanded">
+      <h4>Consumidor</h4>
+      <ul class="jqm-listview">
+        <li>
+          <strong>CNPJ: </strong>99.888.777/0001-60</li>
+        <li>
+          <strong>Razão Social: </strong>
+        </li>
+      </ul>
+    </div>
+    <div class="jqm-collapsible v400 icon-collapsed-carat-d icon-expanded-carat-u expanded">
+      <h4>Informações de interesse do contribuinte</h4>
+      <ul class="jqm-listview">
+        <li>Agradecemos a preferencia,;Obrigado e volte sempre!;APLICATIVO: MSL_NFCE Ver. 26.1.30.5;SOFTWARE PDV;Val Aprox Tributos: Federal R$ 43,76 (7,09%);Estadual R$ 78,23 (12,68%) Municipal R$ 0,00 (0,00%);Fonte:IBPT;MD5:00000000000000000000000000000000;PDV: 1 SENHA: 347 CP: 625832 Loja N.: 1;Pedido Picpay: 000000 Aut. Picpay: 000000;Mesa/Comanda: 0 NSU1: 000000 NSU2: 000000 NSU3: 000000;</li>
+      </ul>
+    </div>
+  </div>
+</div>
+            </div>
+        </div>
+        <div style="width: 100%; max-width: 510px; margin: 10px auto; background-color: white;">
+            <div>
+                <div style="width: 50%; float: left; text-align: left">
+                    
+<span class="timestampConsulta">Data/Hora: 05/10/2026 15:55</span>
+
+                </div>
+                <div style="width: 50%; float: right; text-align: right;">
+                    
+
+                </div>
+            </div>
+            <div id="Botoes" class="naoImprimir BotoesResponsivos" style="float: left; margin-top: 20px; margin-bottom: 80px; width: 100%;">
+                <div style="width: 39%; float: left;">
+                    <input type="button" name="btnImprimir" value="Imprimir&#32;DANFE&#32;NFC-e" onclick="window.print();&#32;return&#32;true;__doPostBack(&#39;btnImprimir&#39;,&#39;&#39;)" id="btnImprimir" class="primario&#32;|&#32;imprimir" />
+                </div>
+                <div style="width: 34%; float: left;">
+                    <input type="button" name="btnVisualizarAbas" value="Visualizar&#32;em&#32;Abas" onclick="javascript:__doPostBack(&#39;btnVisualizarAbas&#39;,&#39;&#39;)" id="btnVisualizarAbas" class="primario&#32;|&#32;visualizar" />
+                </div>
+                <div style="width: 25%; float: left">
+                    <input type="button" name="btnNovaConsulta" value="Nova&#32;consulta" onclick="javascript:__doPostBack(&#39;btnNovaConsulta&#39;,&#39;&#39;)" id="btnNovaConsulta" class="primario&#32;|&#32;consultar" />
+                </div>
+            </div>
+        </div>
+    
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="2CB5E186" />
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="50BFvqXLx8lEFuIwbKauO+alYDPE7P84z6ufCWYwtR4vIoup0BpHYO7CCl008MEBrMKL4+ZztM86Tw31hD7h9YFRkqSY/pJgeQSZpaeC2pW168/tczgKHNxPjyax+CSV9b9zFbxLSmyw5mjmNYwUbY7F7pzkL4tg7tbQ3XkOrJ8=" />
+</div></form>
+    <script type="text/javascript">
+      
+        function ExibirImagemCancelada() {
+            var objImg = document.getElementById('imgInvalido1');
+            if ($('#hdfNotaCancelada').length) {
+                AcertarDivErro(objImg);
+            }
+        }
+
+        function ExibirImagemDenegada() {
+            var objImg = document.getElementById('imgInvalido2');
+            if ($('#hdfNotaDenegada').length) {
+                AcertarDivErro(objImg);
+            }
+        }
+
+        function AjustarExibicaoEPEC()
+        {
+            if ($('#hdfSomenteEPEC').length) {
+                $('.jqm-page').css({ "minHeight": "500px" });
+            }
+        }
+
+        function AcertarDivErro(objImg) {
+            $('#erro').css({ "display": "block" });
+            $('#erro').css({ "maxWidth": "510px" });
+            $('#erro').css({ "maxHeight": "200px" });
+            objImg.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

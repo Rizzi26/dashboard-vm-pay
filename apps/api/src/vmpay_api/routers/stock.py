@@ -582,9 +582,12 @@ async def _close_action(
     await session.commit()
 
 
-@router.post("/restock", status_code=201)
-async def restock(body: RestockBody, ctx: AdminCtx, session: Session) -> dict:
-    """Entrada de estoque: empurra o ajuste para a VMpay e registra localmente."""
+async def preparar_restock(session: AsyncSession, ctx: OrgContext, body: RestockBody) -> dict:
+    """Validações do restock, sem escrever nada.
+
+    Separado da execução para o pick list gravar o cupom entre as duas: o
+    commit do action_log pendente leva o cupom junto.
+    """
     require_writes_enabled()
     target = await _load_target(session, ctx.org_id, body.location_id)
     externals = await _external_ids(
@@ -593,13 +596,29 @@ async def restock(body: RestockBody, ctx: AdminCtx, session: Session) -> dict:
     faltando = [str(i.product_id) for i in body.items if i.product_id not in externals]
     if faltando:
         raise HTTPException(422, f"produtos sem vínculo com a integração: {', '.join(faltando)}")
+    return {"body": body, "target": target, "externals": externals}
 
+
+async def executar_restock(
+    session: AsyncSession,
+    ctx: OrgContext,
+    plano: dict,
+    *,
+    action: str = "stock.restock",
+    extra_params: dict | None = None,
+) -> dict:
+    """action_log pendente → ajuste na VMpay → reflexo local → log fechado."""
+    body: RestockBody = plano["body"]
+    target, externals = plano["target"], plano["externals"]
     action_id = await _open_action(
         session,
         ctx,
-        "stock.restock",
+        action,
         {"location_id": str(body.location_id), "machine_id": target["machine_id"]},
-        {"items": [{"product_id": str(i.product_id), "quantity": float(i.quantity)} for i in body.items]},
+        {
+            "items": [{"product_id": str(i.product_id), "quantity": float(i.quantity)} for i in body.items],
+            **(extra_params or {}),
+        },
     )
     try:
         connector = get_connector(target["config"])
@@ -612,7 +631,7 @@ async def restock(body: RestockBody, ctx: AdminCtx, session: Session) -> dict:
     except VMpayError as exc:
         detail = redact(str(exc))
         await _close_action(session, action_id, error=detail)
-        raise HTTPException(502, f"a VMpay recusou o ajuste: {detail}") from None
+        raise RestockRecusado(action_id, detail) from None
 
     # Write-back aceito: refletir localmente e fechar o log.
     for item in body.items:
@@ -648,6 +667,21 @@ async def restock(body: RestockBody, ctx: AdminCtx, session: Session) -> dict:
         )
     await _close_action(session, action_id)
     return {"action_id": action_id, "status": "success", "vmpay": result}
+
+
+class RestockRecusado(HTTPException):
+    """502 da VMpay, carregando o action_id para quem precisa marcar o erro."""
+
+    def __init__(self, action_id: int, detail: str):
+        super().__init__(502, f"a VMpay recusou o ajuste: {detail}")
+        self.action_id = action_id
+
+
+@router.post("/restock", status_code=201)
+async def restock(body: RestockBody, ctx: AdminCtx, session: Session) -> dict:
+    """Entrada de estoque: empurra o ajuste para a VMpay e registra localmente."""
+    plano = await preparar_restock(session, ctx, body)
+    return await executar_restock(session, ctx, plano)
 
 
 @router.post("/price")

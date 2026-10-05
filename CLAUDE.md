@@ -191,6 +191,14 @@ O kiosk é 100% cashless, um item por transação.
    /orgs/{org}/stock/sync` (admin, cooldown 120s, BackgroundTasks) + botão
    Atualizar no /estoque. **Depende de `VMPAY_INGEST_TOKEN` no Render** —
    sem a env o endpoint devolve 503 explicando.
+9. **Pick list** (EM HOMOLOGAÇÃO, 2026-10-05): entrada de estoque pelo cupom
+   fiscal de compra (NFC-e SP). `apps/api/.../nfce.py` lê a página do **QR
+   Code** (sem CAPTCHA; a consulta só pela chave tem CAPTCHA → lançamento
+   manual). A URL colada nunca é requisitada como veio — só o `p`, contra host
+   fixo (anti-SSRF). Aprovação = restock (`preparar_restock`/`executar_restock`)
+   com o cupom no mesmo commit do action_log; de-para por (CNPJ emitente,
+   código do item) com fator de conversão. Migration 0005. Custo fora do
+   escopo por decisão. A fixture de teste é anonimizada — repo público.
 8. Migrations em produção agora vão pelo workflow **migrate.yml** (dispatch
    manual, valida com pglast, aplica com o secret DATABASE_URL em transação
    única). Nenhuma máquina local guarda credencial do banco.

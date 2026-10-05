@@ -135,6 +135,55 @@ export type ProductDetail = {
   diario: { dia: string; faturamento: number; unidades: number }[];
 };
 
+export type PicklistItem = {
+  linha: number;
+  codigo: string | null;
+  descricao: string;
+  quantidade: number;
+  unidade: string | null;
+  valor_unitario: number | null;
+  valor_total: number | null;
+  product_id: string | null;
+  fator: number;
+  ignorar: boolean;
+  vinculo: "lembrado" | null;
+  sugestoes: string[];
+};
+
+export type PicklistConsulta = {
+  chave: string;
+  origem: "qrcode" | "manual";
+  fornecedor_cnpj: string;
+  consulta_url: string;
+  ja_carregado: { status: string; em: string } | null;
+  cupom: {
+    numero: string;
+    serie: string;
+    emitido_em: string | null;
+    fornecedor_nome: string;
+    valor_total: number;
+    itens: PicklistItem[];
+  } | null;
+};
+
+export type PicklistOpcoes = {
+  locais: { id: string; name: string }[];
+  produtos: { id: string; name: string; barcode: string | null }[];
+};
+
+export type PicklistCarga = {
+  id: string;
+  access_key: string;
+  number: string | null;
+  supplier_name: string | null;
+  total: number | null;
+  status: "pending" | "approved" | "error";
+  source: "qrcode" | "manual";
+  created_at: string;
+  location_name: string;
+  itens: number;
+};
+
 export type Fetched<T> = { ok: true; data: T } | { ok: false; error: string };
 
 /** Chamadas disparadas no browser (ações, export). Recebem o token da sessão. */
