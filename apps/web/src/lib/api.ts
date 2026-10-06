@@ -10,6 +10,8 @@ const BROWSER_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type Summary = {
   periodo: { inicio: string; fim: string };
+  /** Janela de mesmo tamanho logo antes — base do "vs período anterior". */
+  anterior?: { inicio: string; fim: string; faturamento: number; transacoes: number; ticket_medio: number };
   faturamento: number;
   transacoes: number;
   itens: number;
@@ -294,6 +296,27 @@ export type PicklistCupom = {
     ignorado: boolean;
     produto: { id: string; nome: string } | null;
     entrou: number | null;
+  }[];
+};
+
+export type Heatmap = {
+  periodo: { inicio: string; fim: string };
+  celulas: { dia: number; hora: number; faturamento: number; transacoes: number }[];
+};
+
+export type CurvaAbc = {
+  periodo: { inicio: string; fim: string };
+  total: number;
+  resumo: Record<"A" | "B" | "C", { produtos: number; faturamento: number }>;
+  itens: {
+    posicao: number;
+    product_id: string | null;
+    produto: string;
+    faturamento: number;
+    unidades: number;
+    participacao: number;
+    acumulado: number;
+    classe: "A" | "B" | "C";
   }[];
 };
 

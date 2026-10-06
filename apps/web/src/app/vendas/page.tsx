@@ -6,11 +6,21 @@ import { RevenueChart } from "@/components/RevenueChart";
 import { StatTile } from "@/components/StatTile";
 import { SyncStatus } from "@/components/SyncStatus";
 
+import { CurvaAbc } from "@/components/CurvaAbc";
 import { Header } from "@/components/Header";
+import { VendasHeatmap } from "@/components/VendasHeatmap";
 import { serverApi } from "@/lib/api.server";
 import { formatDay, formatInt, formatMoney } from "@/lib/format";
 import { lojaQs, orgSession } from "@/lib/org";
 import { startFor } from "@/lib/periodos";
+
+/** "+12% vs período anterior" — ou nada, quando não há base para comparar. */
+function variacao(atual: number, antes: number | undefined): string | null {
+  if (antes === undefined || antes <= 0) return null;
+  const v = ((atual - antes) / antes) * 100;
+  const sinal = v > 0 ? "+" : v < 0 ? "−" : "±";
+  return `${sinal}${Math.abs(v).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% vs período anterior`;
+}
 
 export default async function VendasPage({
   searchParams,
@@ -23,12 +33,16 @@ export default async function VendasPage({
 
   // Em paralelo: um bloco lento não segura os outros, e um que falha não
   // derruba a página.
-  const [summary, daily, machines, sync] = await Promise.all([
+  const [summary, daily, machines, sync, heat, abc] = await Promise.all([
     serverApi.summary(org.slug, qs),
     serverApi.daily(org.slug, qs),
     serverApi.byMachine(org.slug, `${qs}&limit=10`),
     serverApi.syncStatus(org.slug),
+    serverApi.heatmap(org.slug, qs),
+    serverApi.abc(org.slug, qs),
   ]);
+  // "Tudo" não tem período anterior que faça sentido.
+  const anterior = periodo !== "tudo" && summary.ok ? summary.data.anterior : undefined;
 
   return (
     <div className="viz-root min-h-screen bg-[var(--surface-0)]">
@@ -52,19 +66,21 @@ export default async function VendasPage({
             label="Faturamento"
             value={formatMoney(summary.data.faturamento)}
             hint={
-              summary.data.descontos > 0
+              variacao(summary.data.faturamento, anterior?.faturamento) ??
+              (summary.data.descontos > 0
                 ? `descontos de ${formatMoney(summary.data.descontos)}`
-                : "transações confirmadas"
+                : "transações confirmadas")
             }
           />
           <StatTile
             label="Transações"
             value={formatInt(summary.data.transacoes)}
-            hint={`${formatInt(summary.data.itens)} itens vendidos`}
+            hint={variacao(summary.data.transacoes, anterior?.transacoes) ?? `${formatInt(summary.data.itens)} itens vendidos`}
           />
           <StatTile
             label="Ticket médio"
             value={formatMoney(summary.data.ticket_medio)}
+            hint={variacao(summary.data.ticket_medio, anterior?.ticket_medio) ?? undefined}
           />
           <StatTile
             label="Máquinas ativas"
@@ -87,6 +103,20 @@ export default async function VendasPage({
           ) : (
             <Offline error={daily.error} />
           )}
+        </Card>
+
+        <Card
+          title="Quando a loja vende"
+          subtitle="Faturamento por dia da semana e hora, no horário de Brasília — bom para escolher a hora da reposição."
+        >
+          {heat.ok ? <VendasHeatmap celulas={heat.data.celulas} /> : <Offline error={heat.error} />}
+        </Card>
+
+        <Card
+          title="Curva ABC"
+          subtitle="Produtos por faturamento no período: A faz 80%, B os 15% seguintes, C o resto."
+        >
+          {abc.ok ? <CurvaAbc dados={abc.data} /> : <Offline error={abc.error} />}
         </Card>
 
         <Card title="Máquinas" subtitle="Top 10 por faturamento no período">

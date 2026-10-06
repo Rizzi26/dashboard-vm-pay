@@ -58,6 +58,15 @@ pre {
   --shadow-card: 0 1px 2px 0 rgb(27 25 20 / 0.05);
   /* color-mix sobre --text-primary acompanha o tema sozinho. */
   --row-hover: color-mix(in oklab, var(--text-primary) 5%, transparent);
+  /* Faixas do mapa de calor: azul, claro → escuro, passos 250/350/450/550/650
+     da rampa de referência. Validadas como ordinais (validate_palette.js
+     --ordinal): a faixa mais leve passa 2:1 contra a superfície — "pouca
+     venda" não pode sumir no fundo, porque célula vazia é "sem venda". */
+  --seq-1: #86b6ef;
+  --seq-2: #5598e7;
+  --seq-3: #2a78d6;
+  --seq-4: #1c5cab;
+  --seq-5: #104281;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -71,6 +80,13 @@ pre {
     --series-1: #3987e5;
     --accent: #3987e5;
     --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.45);
+    /* No escuro: passos 600/500/400/300/200 — a faixa mais leve não desce de
+       600 (2,15:1 contra o fundo); "muito" acende. Não é inversão automática. */
+    --seq-1: #184f95;
+    --seq-2: #256abf;
+    --seq-3: #3987e5;
+    --seq-4: #6da7ec;
+    --seq-5: #9ec5f4;
   }
 }
 
@@ -84,6 +100,13 @@ pre {
   --series-1: #3987e5;
   --accent: #3987e5;
   --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.45);
+  /* No escuro: passos 600/500/400/300/200 — a faixa mais leve não desce de
+     600 (2,15:1 contra o fundo); "muito" acende. Não é inversão automática. */
+  --seq-1: #184f95;
+  --seq-2: #256abf;
+  --seq-3: #3987e5;
+  --seq-4: #6da7ec;
+  --seq-5: #9ec5f4;
 }
 
 /* Foco visível em qualquer controle, nos dois temas. */

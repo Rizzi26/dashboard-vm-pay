@@ -7,6 +7,8 @@ import type {
   ActionRow,
   Auditoria,
   Central,
+  CurvaAbc,
+  Heatmap,
   Encalhe,
   ContaVmpay,
   DailyPoint,
@@ -51,6 +53,8 @@ export const serverApi = {
   daily: (org: string, qs = "") => serverGet<DailyPoint[]>(`/orgs/${org}/sales/daily${qs}`),
   byMachine: (org: string, qs = "") =>
     serverGet<MachineRow[]>(`/orgs/${org}/sales/by-machine${qs}`),
+  heatmap: (org: string, qs = "") => serverGet<Heatmap>(`/orgs/${org}/sales/heatmap${qs}`),
+  abc: (org: string, qs = "") => serverGet<CurvaAbc>(`/orgs/${org}/sales/abc${qs}`),
   syncStatus: (org: string) => serverGet<SyncRow[]>(`/orgs/${org}/sales/sync-status`),
   lost: (org: string, qs = "") => serverGet<LostSales>(`/orgs/${org}/sales/lost${qs}`),
   product: (org: string, id: string, qs = "") =>
