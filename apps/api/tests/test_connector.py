@@ -49,6 +49,20 @@ async def test_restock_monta_o_ajuste_com_planograma_e_saldo():
 
 
 @respx.mock
+async def test_restock_manda_quantidade_inteira_mesmo_vinda_como_float():
+    """A rota entrega float(Decimal); a VMpay recusa "6.0" (provado na demo)."""
+    respx.get(PLANOGRAM_URL).mock(return_value=httpx.Response(200, json=PLANOGRAMA))
+    rota = respx.post(
+        f"{BASE}/machines/49/installations/857/inventory_adjustments"
+    ).mock(return_value=httpx.Response(201, json={"id": 1}))
+
+    await connector().restock(49, 857, [(10, 6.0), (12, 1.5)])
+
+    itens = json.loads(rota.calls.last.request.content)["inventory_adjustment"]["items_attributes"]
+    assert [i["added"] for i in itens] == ["6", "1.5"]
+
+
+@respx.mock
 async def test_produto_fora_do_planograma_e_erro_nosso_antes_da_escrita():
     respx.get(PLANOGRAM_URL).mock(return_value=httpx.Response(200, json=PLANOGRAMA))
     escrita = respx.post(

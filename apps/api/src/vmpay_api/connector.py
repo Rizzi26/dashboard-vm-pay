@@ -15,9 +15,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 from vmpay import VMpayClient, VMpayError
+
+
+def _quantidade(valor: float | int | Decimal) -> str:
+    """Quantidade no formato que o ajuste de inventário aceita.
+
+    A VMpay recusa "6.0" com 422 ("não é um número inteiro") — e a rota entrega
+    float, então str() direto quebrava toda carga. Inteiro vai sem casa
+    decimal; fracionado (granel) segue como veio, e a API decide.
+    """
+    d = Decimal(str(valor))
+    if d == d.to_integral_value():
+        return str(int(d))
+    return format(d.normalize(), "f")
 
 
 class ConnectorError(VMpayError):
@@ -73,7 +87,7 @@ class VMpayConnector:
                 {
                     "planogram_item_id": item["id"],
                     "balance_before": item.get("current_balance") or 0,
-                    "added": str(quantity),
+                    "added": _quantidade(quantity),
                     "removed": "",
                     "observed": "",
                 }
