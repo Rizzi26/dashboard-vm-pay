@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
     // invalida. Cache por usuário, no browser dele — nada compartilhado.
     staleTimes: { dynamic: 180 },
   },
+  // Telas tiradas do menu: o link salvo cai numa tela viva, não num 404.
+  // Os endpoints delas seguem na API (/sales/lost, /stock/quebras).
+  async redirects() {
+    return [{ source: "/perdidas", destination: "/vendas", permanent: false }];
+  },
 };
 
 export default nextConfig;

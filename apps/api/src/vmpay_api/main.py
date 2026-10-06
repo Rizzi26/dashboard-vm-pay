@@ -4,13 +4,23 @@ from __future__ import annotations
 
 import logging
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from . import rotinas
 from .config import settings
-from .routers import auditoria, contas, health, lojas, me, members, picklist, products, sales, stock, sync
+from .routers import auditoria, contas, health, interno, lojas, me, members, picklist, products, sales, stock, sync
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+
+
+@asynccontextmanager
+async def _ciclo_de_vida(_app: FastAPI):
+    # Agenda as rotinas no pg_cron (só no Render; idempotente; falha só loga).
+    await rotinas.agendar()
+    yield
 
 
 def create_app() -> FastAPI:
@@ -23,6 +33,7 @@ def create_app() -> FastAPI:
             "agrega nada e limita 300 req/min por token, por isso o dashboard lê "
             "daqui e não de lá."
         ),
+        lifespan=_ciclo_de_vida,
     )
     app.add_middleware(
         CORSMiddleware,
@@ -41,6 +52,7 @@ def create_app() -> FastAPI:
     app.include_router(auditoria.router)
     app.include_router(lojas.router)
     app.include_router(contas.router)
+    app.include_router(interno.router)
     return app
 
 
