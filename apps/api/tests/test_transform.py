@@ -264,3 +264,18 @@ async def test_falha_da_api_faz_rollback_e_registra_sem_token(monkeypatch):
     assert report.error is not None
     assert "tok-secreto" not in report.error
     assert "ROLLBACK" in sessao.statements
+
+
+@respx.mock
+async def test_falha_de_rede_no_meio_nao_abre_transacao(monkeypatch):
+    """Rede primeiro, banco depois: se a VMpay cai no meio da leitura, o banco
+    não foi tocado — nada de conexão ociosa esperando a rede (05/10/2026)."""
+    monkeypatch.setenv(sync_core.DEFAULT_TOKEN_ENV, "tok")
+    monkeypatch.setenv("VMPAY_BASE", BASE)
+    respx.get(f"{BASE}/products").mock(return_value=httpx.Response(200, json=[PRODUTO]))
+    respx.get(f"{BASE}/installations").mock(side_effect=httpx.ReadTimeout("lento"))
+
+    sessao = FakeSession(scalar_lists=[[]])
+    report = await sync_core.sync_integration(sessao, integration(), client_factory=fast_client)
+    assert report.error is not None
+    assert [s for s in sessao.statements if s not in ("ROLLBACK",)] == []

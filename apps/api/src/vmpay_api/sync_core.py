@@ -303,6 +303,25 @@ async def sync_stock(
     return len(locations), len(balances), removed
 
 
+SNAPSHOT_RESOURCES = ("products", "installations", "installation_stock_balances")
+
+
+class _Baixado:
+    """Os recursos do snapshot já lidos da VMpay, servidos com a mesma
+    interface `paginate` do cliente — a fase de banco não espera rede."""
+
+    def __init__(self, dados: dict[str, list[dict[str, Any]]]):
+        self._dados = dados
+
+    @classmethod
+    async def de(cls, client: VMpayClient, recursos: tuple[str, ...]) -> _Baixado:
+        return cls({r: [p async for p in client.paginate(r)] for r in recursos})
+
+    async def paginate(self, path: str, **_: Any):
+        for item in self._dados[path]:
+            yield item
+
+
 async def sync_integration(
     session: AsyncSession,
     integration: core.Integration,
@@ -313,11 +332,16 @@ async def sync_integration(
     try:
         token = resolve_token(integration.config or {})
         base = os.environ.get("VMPAY_BASE") or PRODUCTION
+        # Rede primeiro, banco depois. Baixar o catálogo de produção leva
+        # minutos; com a transação já aberta, a conexão ficava ociosa esse
+        # tempo todo, o pooler a derrubava, e o rollback do erro estourava em
+        # MissingGreenlet — três rodadas seguidas sem estoque em 05/10/2026.
         async with client_factory(token, base_url=base) as client:
-            report.products, by_external = await sync_products(client, session, integration)
-            report.locations, report.balances, report.stale_balances_removed = (
-                await sync_stock(client, session, integration, by_external)
-            )
+            baixado = await _Baixado.de(client, SNAPSHOT_RESOURCES)
+        report.products, by_external = await sync_products(baixado, session, integration)
+        report.locations, report.balances, report.stale_balances_removed = (
+            await sync_stock(baixado, session, integration, by_external)
+        )
         await session.commit()
     except VMpayError as exc:
         await session.rollback()

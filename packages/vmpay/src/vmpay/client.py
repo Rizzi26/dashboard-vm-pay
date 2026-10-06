@@ -59,6 +59,7 @@ class VMpayClient:
         rate_limit: int = 300,
         max_retries: int = 5,
         timeout: float = 30.0,
+        read_timeout: float = 120.0,
         client: httpx.AsyncClient | None = None,
     ):
         if not token:
@@ -68,7 +69,12 @@ class VMpayClient:
         self.base_url = base_url.rstrip("/")
         self.max_retries = max_retries
         self._bucket = TokenBucket(rate_limit)
-        self._http = client or httpx.AsyncClient(timeout=timeout)
+        # Leitura com folga própria: uma página de 1000 produtos da conta de
+        # produção passou de 30s em out/2026 e derrubava a rodada inteira.
+        # Conectar e escrever continuam curtos — servidor fora do ar falha rápido.
+        self._http = client or httpx.AsyncClient(
+            timeout=httpx.Timeout(timeout, read=max(timeout, read_timeout))
+        )
         self._owns_http = client is None
 
     @classmethod
