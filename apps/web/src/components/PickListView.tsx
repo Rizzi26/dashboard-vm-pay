@@ -89,14 +89,28 @@ export function PickListView({
     () => false,
   );
 
-  const nomeProduto = useMemo(() => new Map(produtos.map((p) => [p.id, p.name])), [produtos]);
+  // Várias contas VMpay: só os produtos da conta da loja escolhida — produto
+  // de outra conta a VMpay recusaria na carga.
+  const contaDaLoja = opcoes.locais.find((l) => l.id === localId)?.conta ?? null;
+  const produtosDaLoja = useMemo(
+    () => (contaDaLoja ? produtos.filter((p) => !p.conta || p.conta === contaDaLoja) : produtos),
+    [produtos, contaDaLoja],
+  );
+  // A dica "Parece ser…" só cita produto que a loja escolhida pode receber.
+  const nomeProduto = useMemo(
+    () => new Map(produtosDaLoja.map((p) => [p.id, p.name])),
+    [produtosDaLoja],
+  );
 
   const carregarRefs = useCallback(async (): Promise<ProductRefs> => {
-    const resp = await browserApi.request(`/orgs/${org}/products/refs`, await token());
+    const resp = await browserApi.request(
+      `/orgs/${org}/products/refs${localId ? `?loja=${localId}` : ""}`,
+      await token(),
+    );
     const payload = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(payload.detail ?? `backend respondeu ${resp.status}`);
     return payload as ProductRefs;
-  }, [org]);
+  }, [org, localId]);
 
   const buscar = useCallback(
     async (texto: string) => {
@@ -383,7 +397,7 @@ export function PickListView({
                         Produto no sistema
                         {l.vinculo === "lembrado" ? <span className="ml-1 normal-case">· lembrado</span> : null}
                         <ProductPicker
-                          produtos={produtos}
+                          produtos={produtosDaLoja}
                           value={l.product_id}
                           sugestoes={l.sugestoes}
                           destacado={falta}
@@ -493,12 +507,12 @@ export function PickListView({
           onSubmit={async (body) => {
             const resp = await browserApi.request(`/orgs/${org}/products`, await token(), {
               method: "POST",
-              body: JSON.stringify(body),
+              body: JSON.stringify({ ...body, loja: localId || null }),
             });
             const payload = await resp.json().catch(() => ({}));
             if (!resp.ok) throw new Error(payload.detail ?? `backend respondeu ${resp.status}`);
             const id = payload.product_id as string;
-            setProdutos((ps) => [...ps, { id, name: body.nome, barcode: body.barcode }]);
+            setProdutos((ps) => [...ps, { id, name: body.nome, barcode: body.barcode, conta: contaDaLoja ?? undefined }]);
             editar(cadastrando, { product_id: id, vinculo: null, novo: true });
             setCadastrando(null);
           }}

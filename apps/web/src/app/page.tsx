@@ -1,3 +1,4 @@
+import { ContasVmpay } from "@/components/ContasVmpay";
 import { Header } from "@/components/Header";
 import { LojaCards } from "@/components/LojaCards";
 import { Offline } from "@/components/Offline";
@@ -13,7 +14,12 @@ import { orgSession } from "@/lib/org";
  */
 export default async function CentralPage() {
   const { me, org } = await orgSession();
-  const central = await serverApi.lojas(org.slug);
+  const ehMaster = org.role === "master" || me.platform_admin;
+  // Contas só para master: é ele quem conecta loja nova (o servidor nega a quem não for).
+  const [central, contas] = await Promise.all([
+    serverApi.lojas(org.slug),
+    ehMaster ? serverApi.contas(org.slug) : Promise.resolve(null),
+  ]);
 
   return (
     <div className="viz-root min-h-screen bg-[var(--surface-0)]">
@@ -51,12 +57,9 @@ export default async function CentralPage() {
               </div>
             ) : null}
             <LojaCards lojas={central.data.lojas} />
-            <p className="mt-6 text-xs text-[var(--text-secondary)]">
-              Loja nova entra sozinha: instale a máquina na VMpay e ela aparece aqui na próxima
-              atualização dos dados.
-            </p>
           </>
         )}
+        {contas?.ok ? <ContasVmpay org={org.slug} contas={contas.data} /> : null}
       </main>
     </div>
   );

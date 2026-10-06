@@ -103,7 +103,7 @@ class FakeConnector:
 
 def use_connector(monkeypatch, fail=None) -> FakeConnector:
     fake = FakeConnector(fail)
-    monkeypatch.setattr(products_router, "get_connector", lambda config: fake)
+    monkeypatch.setattr(products_router, "get_connector", lambda config, token=None: fake)
     return fake
 
 

@@ -21,6 +21,7 @@ from vmpay.redact import redact
 
 from ..auth import OrgContext, require_role
 from ..db import get_session
+from ..sync_core import token_da_conta
 from .sales import MAQUINAS_DA_ORG
 from .stock import _close_action, _open_action, get_connector, require_writes_enabled
 
@@ -47,37 +48,56 @@ def _window(start: date | None, end: date | None) -> tuple[date, date]:
 # Rotas literais ANTES de /{product_id}: a ordem de registro decide o match.
 
 
-async def _load_integration(session: AsyncSession, org_id: uuid.UUID) -> dict:
-    row = (
+async def _load_integration(
+    session: AsyncSession, org_id: uuid.UUID, loja: uuid.UUID | None = None
+) -> dict:
+    """A conta VMpay onde o cadastro acontece — com o token já resolvido.
+
+    Com mais de uma conta, a loja decide (fabricantes e categorias também são
+    de cada conta). Sem loja e com várias contas, 409: adivinhar cadastraria
+    o produto na conta errada.
+    """
+    rows = (
         await session.execute(
             text(
                 """
-                select id, config from core.integration
-                 where org_id = :org_id and active
-                 order by created_at
-                 limit 1
+                select distinct i.id, i.config, i.created_at
+                  from core.integration i
+                  left join core.location_link ll on ll.integration_id = i.id
+                  left join core.location l on l.id = ll.location_id
+                 where i.org_id = :org_id and i.active
+                   and (cast(:loja as uuid) is null or l.id = cast(:loja as uuid))
+                 order by i.created_at
                 """
             ),
-            {"org_id": str(org_id)},
+            {"org_id": str(org_id), "loja": str(loja) if loja else None},
         )
-    ).mappings().first()
-    if row is None:
-        raise HTTPException(409, "organização sem integração ativa — configure antes")
-    return dict(row)
+    ).mappings().all()
+    if not rows:
+        raise HTTPException(409, "nenhuma conta VMpay ativa para esta loja — configure antes")
+    if len(rows) > 1:
+        raise HTTPException(
+            409, "esta organização tem mais de uma conta VMpay: escolha a loja antes de cadastrar"
+        )
+    integ = dict(rows[0])
+    try:
+        integ["token"] = await token_da_conta(session, integ["config"] or {})
+    except VMpayError as exc:
+        raise HTTPException(502, f"conta VMpay sem token utilizável: {redact(str(exc))}") from None
+    return integ
 
 
 @router.get("/refs")
-async def product_refs(ctx: AdminCtx, session: Session) -> dict:
+async def product_refs(ctx: AdminCtx, session: Session, loja: uuid.UUID | None = None) -> dict:
     """Fabricantes/categorias da conta VMpay — as opções do formulário.
 
     É leitura ao vivo (sem trava de escrita): os registries não têm cursor e o
     formulário precisa do estado atual, não do último snapshot.
     """
-    integration = await _load_integration(session, ctx.org_id)
-    # get_connector DENTRO do try: resolve_token levanta VMpayError se a env do
-    # token não existe no ambiente — fora daqui viraria 500 sem headers de CORS.
+    integration = await _load_integration(session, ctx.org_id, loja)
+    await session.commit()  # fecha a leitura do cofre antes da rede
     try:
-        connector = get_connector(integration["config"])
+        connector = get_connector(integration["config"], integration["token"])
         async with connector.client:
             return await connector.product_refs()
     except VMpayError as exc:
@@ -91,6 +111,8 @@ class NewProductBody(BaseModel):
     categoria_abastecimento_id: int
     barcode: str | None = Field(default=None, max_length=64)
     preco: Decimal | None = Field(default=None, gt=0)
+    # Loja onde o produto vai ser usado: decide a conta VMpay (várias contas).
+    loja: uuid.UUID | None = None
 
 
 @router.post("", status_code=201)
@@ -101,7 +123,7 @@ async def create_product(body: NewProductBody, ctx: AdminCtx, session: Session) 
     prateleira) continua sendo passo manual na VMpay — a resposta avisa.
     """
     require_writes_enabled()
-    integration = await _load_integration(session, ctx.org_id)
+    integration = await _load_integration(session, ctx.org_id, body.loja)
 
     fields: dict = {
         "name": body.nome,
@@ -122,7 +144,7 @@ async def create_product(body: NewProductBody, ctx: AdminCtx, session: Session) 
         fields,
     )
     try:
-        connector = get_connector(integration["config"])
+        connector = get_connector(integration["config"], integration["token"])
         async with connector.client:
             created = await connector.create_product(fields)
     except VMpayError as exc:

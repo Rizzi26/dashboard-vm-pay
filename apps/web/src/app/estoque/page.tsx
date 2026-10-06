@@ -64,6 +64,7 @@ export default async function EstoquePage({
             role={org.role}
             initialDisp={initialDisp}
             initialBusca={q}
+            loja={org.loja}
           />
         ) : (
           <Offline error={stock.error} />

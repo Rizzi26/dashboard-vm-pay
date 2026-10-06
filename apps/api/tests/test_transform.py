@@ -5,7 +5,7 @@ import uuid
 import httpx
 import pytest
 import respx
-from vmpay import VMpayClient
+from vmpay import VMpayClient, VMpayError
 
 from vmpay_api import sync_core
 from vmpay_api.transform import (
@@ -278,7 +278,8 @@ async def test_falha_de_rede_no_meio_nao_abre_transacao(monkeypatch):
     sessao = FakeSession(scalar_lists=[[]])
     report = await sync_core.sync_integration(sessao, integration(), client_factory=fast_client)
     assert report.error is not None
-    assert [s for s in sessao.statements if s not in ("ROLLBACK",)] == []
+    # Só fechamentos de transação: nenhum SQL de escrita antes da rede terminar.
+    assert [s for s in sessao.statements if s not in ("ROLLBACK", "COMMIT")] == []
 
 
 @respx.mock
@@ -316,3 +317,10 @@ async def test_atualizacao_manual_baixa_catalogo_se_aparece_produto_novo(monkeyp
     )
     assert report.catalogo == "completo"
     assert produtos.called
+
+
+def test_conta_do_cofre_nao_cai_no_token_da_env(monkeypatch):
+    """Se caísse, leria OUTRA conta em silêncio."""
+    monkeypatch.setenv(sync_core.DEFAULT_TOKEN_ENV, "token-da-conta-original")
+    with pytest.raises(VMpayError, match="cofre"):
+        sync_core.resolve_token({"secret_id": "00000000-0000-0000-0000-000000000001"})
