@@ -1,35 +1,49 @@
-import Link from "next/link";
+import { Segmentado } from "@/components/ui/Segmentado";
 import { PERIODOS } from "@/lib/periodos";
 
+type Params = Record<string, string | string[] | undefined>;
+
+/** Link de um período mantendo o resto da URL (loja, filtros). 30 é o padrão e sai da URL. */
+function hrefPeriodo(basePath: string, chave: string, params: Params): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (k === "periodo" || v === undefined) continue;
+    for (const item of Array.isArray(v) ? v : [v]) q.append(k, item);
+  }
+  if (chave !== "30") q.set("periodo", chave);
+  const s = q.toString();
+  return s ? `${basePath}?${s}` : basePath;
+}
+
 /**
- * Segmented control de período — neutro de propósito: cor fica para dados e
- * ações. Server component; a seleção viaja pela URL, não por estado.
+ * Segmentado de período — neutro de propósito: cor fica para dados e ações.
+ * A seleção viaja pela URL, não por estado, então cada opção é um link.
  */
 export function PeriodoNav({
   basePath,
   periodo,
+  params = {},
+  largo = false,
+  className = "",
 }: {
   basePath: string;
   periodo: string;
+  /** searchParams atuais, para a troca de período não perder o resto. */
+  params?: Params;
+  largo?: boolean;
+  className?: string;
 }) {
   return (
-    <nav
-      aria-label="Período"
-      className="mt-3 inline-flex max-w-full overflow-x-auto rounded-lg border border-[var(--grid)] bg-[var(--surface-0)] p-0.5"
-    >
-      {PERIODOS.map((p) => (
-        <Link
-          key={p.key}
-          href={p.key === "30" ? basePath : `${basePath}?periodo=${p.key}`}
-          className={
-            p.key === periodo
-              ? "flex min-h-11 items-center whitespace-nowrap rounded-md px-3 text-sm bg-[var(--surface-1)] font-medium text-[var(--text-primary)] shadow-[var(--shadow-card)]"
-              : "flex min-h-11 items-center whitespace-nowrap rounded-md px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-          }
-        >
-          {p.label}
-        </Link>
-      ))}
-    </nav>
+    <Segmentado
+      rotulo="Período"
+      valor={periodo}
+      largo={largo}
+      className={className}
+      opcoes={PERIODOS.map((p) => ({
+        valor: p.key,
+        rotulo: p.label,
+        href: hrefPeriodo(basePath, p.key, params),
+      }))}
+    />
   );
 }

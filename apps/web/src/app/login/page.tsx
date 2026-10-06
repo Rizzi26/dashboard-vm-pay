@@ -2,7 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Botao } from "@/components/ui/Botao";
+import { IconeLoja } from "@/components/ui/icones";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+
+// Campo de 48px e fonte de 16px (form_login da proposta): abaixo de 16px o
+// iOS dá zoom ao focar.
+const CAMPO =
+  "mt-1 block h-12 w-full rounded-xl border border-campo-borda bg-campo px-3.5 text-[16px] text-texto outline-none focus:border-azul";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -45,17 +52,24 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="viz-root flex min-h-screen items-center justify-center bg-[var(--surface-0)] px-6">
+    <main className="flex min-h-screen items-center justify-center px-4 py-6 md:p-6">
       <form
         onSubmit={submit}
-        className="w-full max-w-sm rounded-xl border border-[var(--grid)] bg-[var(--surface-1)] p-6 shadow-[var(--shadow-card)]"
+        className="vidro-forte flex w-full max-w-[358px] flex-col gap-3.5 rounded-[28px] px-7 py-8 md:max-w-[400px]"
       >
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Entrar</h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Acesso ao painel do mercadinho.
+        <span
+          aria-hidden="true"
+          className="flex h-14 w-14 items-center justify-center self-center rounded-2xl text-white"
+          style={{ background: "var(--marca)" }}
+        >
+          <IconeLoja tamanho={28} />
+        </span>
+        <h1 className="m-0 mt-1 text-center text-[28px] font-bold tracking-[-0.02em] text-texto">Entrar no painel</h1>
+        <p className="m-0 mb-1.5 text-center text-[15px] text-sec">
+          Vendas, prateleira e reposição das suas lojas.
         </p>
 
-        <label className="mt-5 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+        <label className="text-[13px] text-sec">
           Email
           <input
             type="email"
@@ -63,11 +77,11 @@ export default function LoginPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
+            className={CAMPO}
           />
         </label>
 
-        <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+        <label className="text-[13px] text-sec">
           Senha
           <input
             type="password"
@@ -75,39 +89,35 @@ export default function LoginPage() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
+            className={CAMPO}
           />
         </label>
 
         {error ? (
-          <p role="alert" className="mt-3 text-sm text-[var(--status-critical)]">
-            {error}
+          <p role="alert" className="m-0 text-[14px] text-vermelho-texto">
+            ■ {error}
           </p>
         ) : null}
         {notice ? (
-          <p role="status" className="mt-3 text-sm text-[var(--text-secondary)]">
+          <p role="status" className="m-0 text-[14px] text-sec">
             {notice}
           </p>
         ) : null}
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="mt-5 w-full rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
-        >
+        <Botao type="submit" variante="cheio" tamanho="g" largo disabled={busy} className="mt-1.5">
           {busy ? "Entrando…" : "Entrar"}
-        </button>
+        </Botao>
 
         <button
           type="button"
           onClick={forgot}
           disabled={busy}
-          className="mt-3 w-full text-xs text-[var(--text-secondary)] underline disabled:opacity-60"
+          className="min-h-11 self-center border-0 bg-transparent font-[inherit] text-[15px] text-azul-texto disabled:opacity-50"
         >
           Esqueci a senha
         </button>
 
-        <p className="mt-4 text-xs text-[var(--text-secondary)]">
+        <p className="m-0 text-center text-[13px] text-sec">
           Sem acesso? Peça um convite ao responsável pela sua organização.
         </p>
       </form>

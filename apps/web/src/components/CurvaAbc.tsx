@@ -1,84 +1,72 @@
 "use client";
 
-import Link from "next/link";
 import type { CurvaAbc as Dados } from "@/lib/api";
 import { Paginacao, usePaginacao } from "@/components/Paginacao";
+import { LinhaLista, Lista } from "@/components/ui/Lista";
+import { Selo, type TomSelo } from "@/components/ui/Selo";
 import { formatInt, formatMoney } from "@/lib/format";
 
 const pct = (v: number) => `${(v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 
 const SIGNIFICADO: Record<string, string> = {
-  A: "fazem 80% do faturamento",
+  A: "80% do faturamento",
   B: "os 15% seguintes",
   C: "os últimos 5%",
 };
 
+// Só A ganha tinta: é a classe que pede atenção. B e C se distinguem pela
+// letra — a classe é rótulo, não magnitude, então não entra numa rampa.
+const TOM: Record<"A" | "B" | "C", TomSelo> = { A: "azul", B: "cinza", C: "cinza" };
+
 /**
- * Curva ABC: os poucos produtos que carregam o faturamento. A classe vai em
- * texto (letra), não em cor — é rótulo, não magnitude. Junto com Encalhados,
- * orienta o que manter, destacar ou tirar do planograma.
+ * Curva ABC: os poucos produtos que carregam o faturamento. Orienta o que
+ * manter, destacar ou tirar do planograma.
  */
 export function CurvaAbc({ dados }: { dados: Dados }) {
   const pag = usePaginacao(dados.itens, 20);
   if (dados.itens.length === 0) {
-    return <p className="text-sm text-[var(--text-secondary)]">Sem vendas no período.</p>;
+    return <p className="text-sm text-sec">Sem vendas no período.</p>;
   }
-  const vendidos = dados.itens.length;
 
   return (
     <div>
-      <p className="text-sm text-[var(--text-primary)]">
-        <strong>{formatInt(dados.resumo.A.produtos)}</strong> de {formatInt(vendidos)} produtos vendidos (
-        {pct(dados.resumo.A.produtos / vendidos)}) fazem 80% do faturamento.
+      <p className="mb-3 text-[13px] text-sec">
+        {(["A", "B", "C"] as const).map((c, k) => (
+          <span key={c}>
+            {k > 0 ? " · " : ""}
+            <strong className="font-semibold text-texto">{c}</strong> {formatInt(dados.resumo[c].produtos)}{" "}
+            produto{dados.resumo[c].produtos === 1 ? "" : "s"}, {SIGNIFICADO[c]}
+          </span>
+        ))}
       </p>
 
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        {(["A", "B", "C"] as const).map((c) => (
-          <div key={c} className="rounded-lg border border-[var(--grid)] px-3 py-2">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--text-secondary)]">Classe {c}</div>
-            <div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">
-              {formatInt(dados.resumo[c].produtos)} <span className="text-xs font-normal text-[var(--text-secondary)]">produtos</span>
-            </div>
-            <div className="text-xs text-[var(--text-secondary)]">{SIGNIFICADO[c]}</div>
-          </div>
+      <Lista como="ol" rotulo="Produtos por faturamento">
+        {pag.visiveis.map((i) => (
+          <LinhaLista
+            key={i.posicao}
+            esquerda={
+              <Selo tom={TOM[i.classe]} simbolo={null} className="min-w-7 justify-center">
+                <span className="sr-only">Classe </span>
+                {i.classe}
+              </Selo>
+            }
+            principal={
+              <>
+                <span className="mr-1.5 text-[13px] tabular-nums text-sec">{i.posicao}.</span>
+                {i.produto}
+              </>
+            }
+            // As porcentagens só a partir do tablet: no celular a classe já diz o essencial.
+            secundario={
+              <span className="hidden tabular-nums md:inline">
+                {pct(i.participacao)} do faturamento · {pct(i.acumulado)} acumulado
+              </span>
+            }
+            direita={<span className="tabular-nums text-texto">{formatMoney(i.faturamento)}</span>}
+            href={i.product_id ? `/produto/${i.product_id}` : undefined}
+          />
         ))}
-      </div>
-
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-[var(--text-secondary)]">
-              <th className="py-1 pr-2 font-normal">#</th>
-              <th className="py-1 font-normal">Produto</th>
-              <th className="py-1 text-right font-normal">Faturamento</th>
-              {/* As porcentagens só a partir do tablet: no celular a classe já diz o essencial. */}
-              <th className="hidden py-1 text-right font-normal sm:table-cell">% do total</th>
-              <th className="hidden py-1 text-right font-normal sm:table-cell">Acumulado</th>
-              <th className="py-1 pl-3 text-center font-normal">Classe</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pag.visiveis.map((i) => (
-              <tr key={i.posicao} className="border-t border-[var(--grid)] tabular-nums text-[var(--text-primary)]">
-                <td className="py-1.5 pr-2 text-[var(--text-secondary)]">{i.posicao}</td>
-                <td className="py-1.5">
-                  {i.product_id ? (
-                    <Link href={`/produto/${i.product_id}`} className="hover:underline">
-                      {i.produto}
-                    </Link>
-                  ) : (
-                    i.produto
-                  )}
-                </td>
-                <td className="py-1.5 text-right">{formatMoney(i.faturamento)}</td>
-                <td className="hidden py-1.5 text-right sm:table-cell">{pct(i.participacao)}</td>
-                <td className="hidden py-1.5 text-right text-[var(--text-secondary)] sm:table-cell">{pct(i.acumulado)}</td>
-                <td className="py-1.5 pl-3 text-center font-semibold">{i.classe}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      </Lista>
       <Paginacao {...pag.rodape} rotulo="produtos" />
     </div>
   );

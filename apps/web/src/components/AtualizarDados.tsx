@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { browserApi } from "@/lib/api";
 import { formatAtraso } from "@/lib/format";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import { IconeAtualizar } from "@/components/ui/icones";
 
 type Situacao = {
   rodando: boolean;
@@ -91,44 +92,28 @@ export function AtualizarDados({ org }: { org: string }) {
   const velho = idadeSeg !== null && idadeSeg > 6 * 3600;
   const ocupado = atualizando || situacao?.rodando === true;
 
+  // Uma instância só nos dois tamanhos (o GET de situação não dobra): no
+  // celular, botão redondo só com ícone no topo compacto; de md para cima, a
+  // pílula "Atualizar" da barra, com o "há X min" ao lado em telas largas.
   return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={atualizar}
-        disabled={ocupado}
-        title={`Busca agora as vendas e o estoque na VMpay. Atualização ${situacao?.automatica ?? "automática a cada hora"}.`}
-        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[var(--grid)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--row-hover)] disabled:opacity-60"
-      >
-        <svg
-          aria-hidden
-          viewBox="0 0 16 16"
-          className={`h-3.5 w-3.5 ${ocupado ? "animate-spin" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" />
-          <path d="M13.5 2.5v3h-3" />
-        </svg>
-        {ocupado ? (
-          "Atualizando…"
-        ) : (
-          <>
-            <span className="sm:hidden">Atualizar</span>
-            <span className="hidden sm:inline">Atualizar dados do sistema</span>
-          </>
-        )}
-      </button>
+    <div className="relative flex items-center gap-2.5">
       <span
         role="status"
-        // Aviso (erro, "aguarde 90s") aparece em qualquer tela; o "há X min"
-        // só onde cabe ao lado do botão — no celular o title do botão explica.
-        className={`text-[11px] leading-tight ${aviso ? "block max-w-48" : "hidden lg:block"} ${
-          velho || aviso?.alerta ? "text-[var(--status-warning)]" : "text-[var(--text-secondary)]"
-        }`}
+        // Aviso (erro, "aguarde 90s") aparece em qualquer tela — no celular
+        // num balão sob o botão, porque o topo não tem espaço; o "há X min"
+        // só onde cabe ao lado do botão (lg+). No celular o title explica.
+        className={
+          aviso
+            ? `vidro-forte absolute right-0 top-full z-30 mt-2 w-64 rounded-2xl px-3.5 py-2.5 text-[13px] lg:static lg:mt-0 lg:w-auto lg:max-w-48 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:text-right lg:text-xs lg:shadow-none lg:backdrop-blur-none ${
+                aviso.alerta ? "text-laranja-texto" : "text-texto"
+              }`
+            : // A proposta não tem o "há X min" na barra, e com ele a barra
+              // quebra em duas linhas mesmo a 1440px. Fica no title do botão
+              // (e para leitor de tela); só aparece quando o dado está velho.
+              velho
+              ? "hidden text-right text-xs leading-tight text-laranja-texto lg:block"
+              : "sr-only"
+        }
       >
         {aviso?.texto ??
           (idadeSeg !== null ? (
@@ -139,6 +124,16 @@ export function AtualizarDados({ org }: { org: string }) {
             </>
           ) : null)}
       </span>
+      <button
+        type="button"
+        onClick={atualizar}
+        disabled={ocupado}
+        title={`${idadeSeg !== null ? `Dados atualizados ${formatAtraso(idadeSeg)}. ` : ""}Busca agora as vendas e o estoque na VMpay. Atualização ${situacao?.automatica ?? "automática a cada hora"}.`}
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border-0 bg-azul-tinta text-[14px] font-medium text-azul-texto hover:brightness-95 disabled:opacity-60 md:h-9 md:w-auto md:px-3.5"
+      >
+        <IconeAtualizar tamanho={16} className={ocupado ? "motion-safe:animate-spin" : ""} />
+        <span className="sr-only md:not-sr-only">{ocupado ? "Atualizando…" : "Atualizar"}</span>
+      </button>
     </div>
   );
 }

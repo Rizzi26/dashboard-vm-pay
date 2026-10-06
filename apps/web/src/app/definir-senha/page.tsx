@@ -2,10 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Botao } from "@/components/ui/Botao";
+import { IconeLoja } from "@/components/ui/icones";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
+// O mesmo campo da tela de entrada (form_login da proposta).
 const inputClass =
-  "mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm";
+  "mt-1 block h-12 w-full rounded-xl border border-campo-borda bg-campo px-3.5 text-[16px] text-texto outline-none focus:border-azul";
 
 /**
  * Destino do email de convite e do "esqueci a senha". O Supabase manda o
@@ -79,26 +82,33 @@ export default function DefinirSenhaPage() {
   }
 
   return (
-    <main className="viz-root flex min-h-screen items-center justify-center bg-[var(--surface-0)] px-6">
+    <main className="flex min-h-screen items-center justify-center px-4 py-6 md:p-6">
       <form
         onSubmit={submit}
-        className="w-full max-w-sm rounded-xl border border-[var(--grid)] bg-[var(--surface-1)] p-6 shadow-[var(--shadow-card)]"
+        className="vidro-forte flex w-full max-w-[358px] flex-col gap-3.5 rounded-[28px] px-7 py-8 md:max-w-[400px]"
       >
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">Definir senha</h1>
+        <span
+          aria-hidden="true"
+          className="flex h-14 w-14 items-center justify-center self-center rounded-2xl text-white"
+          style={{ background: "var(--marca)" }}
+        >
+          <IconeLoja tamanho={28} />
+        </span>
+        <h1 className="m-0 mt-1 text-center text-[28px] font-bold tracking-[-0.02em] text-texto">Definir senha</h1>
 
         {ready === "loading" ? (
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">Validando o link…</p>
+          <p role="status" className="m-0 text-center text-[15px] text-sec">Validando o link…</p>
         ) : null}
 
         {ready === "invalid" ? (
           <>
-            <p role="alert" className="mt-1 text-sm text-[var(--status-critical)]">
-              Este link é inválido ou expirou.
+            <p role="alert" className="m-0 text-center text-[15px] text-vermelho-texto">
+              ■ Este link é inválido ou expirou.
             </p>
-            <p className="mt-4 text-xs text-[var(--text-secondary)]">
+            <p className="m-0 text-center text-[13px] text-sec">
               Peça um novo convite ao responsável pela sua organização, ou use
               &ldquo;esqueci a senha&rdquo; na{" "}
-              <a href="/login" className="underline">
+              <a href="/login" className="text-azul-texto">
                 tela de entrada
               </a>
               .
@@ -108,11 +118,11 @@ export default function DefinirSenhaPage() {
 
         {ready === "ok" ? (
           <>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            <p className="m-0 mb-1.5 text-center text-[15px] text-sec">
               Escolha a senha que você vai usar para entrar no painel.
             </p>
 
-            <label className="mt-5 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+            <label className="text-[13px] text-sec">
               Nova senha
               <input
                 type="password"
@@ -125,7 +135,7 @@ export default function DefinirSenhaPage() {
               />
             </label>
 
-            <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+            <label className="text-[13px] text-sec">
               Confirmar senha
               <input
                 type="password"
@@ -139,18 +149,14 @@ export default function DefinirSenhaPage() {
             </label>
 
             {error ? (
-              <p role="alert" className="mt-3 text-sm text-[var(--status-critical)]">
-                {error}
+              <p role="alert" className="m-0 text-[14px] text-vermelho-texto">
+                ■ {error}
               </p>
             ) : null}
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="mt-5 w-full rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
-            >
+            <Botao type="submit" variante="cheio" tamanho="g" largo disabled={busy} className="mt-1.5">
               {busy ? "Salvando…" : "Salvar e entrar"}
-            </button>
+            </Botao>
           </>
         ) : null}
       </form>

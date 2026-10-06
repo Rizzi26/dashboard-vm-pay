@@ -19,6 +19,9 @@ function faixa(valor: number, maximo: number): number {
  * Magnitude → uma cor só, claro → escuro (tokens --seq-*). Célula vazia =
  * sem venda. Cada célula tem tooltip no hover e no foco; a tabela dos
  * melhores horários é a alternativa sem cor.
+ *
+ * Vai dentro de SuperficieGrafico: a rampa foi validada sobre fundo sólido, e
+ * a coluna fixa dos dias usa --surface-1 (= --solido) para cobrir a grade.
  */
 export function VendasHeatmap({ celulas }: { celulas: Celula[] }) {
   const [ativa, setAtiva] = useState<Celula | null>(null);
@@ -32,7 +35,7 @@ export function VendasHeatmap({ celulas }: { celulas: Celula[] }) {
   }, [celulas]);
 
   if (celulas.length === 0) {
-    return <p className="text-sm text-[var(--text-secondary)]">Sem vendas no período.</p>;
+    return <p className="text-sm text-sec">Sem vendas no período.</p>;
   }
 
   const rotulo = (c: Celula) =>
@@ -41,12 +44,13 @@ export function VendasHeatmap({ celulas }: { celulas: Celula[] }) {
   return (
     <div>
       {/* Linha do tooltip: fixa acima da grade, para não cobrir as células. */}
-      <p aria-live="polite" className="mb-2 h-5 text-sm tabular-nums text-[var(--text-primary)]">
-        {ativa ? rotulo(ativa) : <span className="text-[var(--text-secondary)]">Passe o cursor ou toque numa hora.</span>}
+      <p aria-live="polite" className="mb-2 min-h-5 text-sm tabular-nums text-texto">
+        {ativa ? rotulo(ativa) : <span className="text-sec">Passe o cursor ou toque numa hora.</span>}
       </p>
 
+      {/* Só a grade rola de lado no celular; a linha do tooltip e a legenda ficam paradas. */}
       <div className="overflow-x-auto pb-1">
-        <div className="grid min-w-[560px] gap-[2px]" style={{ gridTemplateColumns: "2.25rem repeat(24, minmax(0, 1fr))" }}>
+        <div className="grid min-w-[520px] gap-[2px]" style={{ gridTemplateColumns: "2.25rem repeat(24, minmax(0, 1fr))" }}>
           {/* Coluna dos dias fixa: no celular a grade rola de lado e o dia não some. */}
           <span className="sticky left-0 z-10 bg-[var(--surface-1)]" />
           {Array.from({ length: 24 }, (_, h) => (
@@ -84,7 +88,7 @@ export function VendasHeatmap({ celulas }: { celulas: Celula[] }) {
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-sec">
         <span className="flex items-center gap-1.5" aria-hidden>
           menos
           {Array.from({ length: FAIXAS }, (_, k) => (
@@ -93,16 +97,16 @@ export function VendasHeatmap({ celulas }: { celulas: Celula[] }) {
           mais
           <span className="ml-2 inline-block h-3 w-4 rounded-[2px] border border-[var(--grid)]" /> sem venda
         </span>
-        <button type="button" onClick={() => setTabela((t) => !t)} className="underline hover:text-[var(--text-primary)]">
+        <button type="button" onClick={() => setTabela((t) => !t)} className="min-h-11 text-[13px] text-azul-texto md:min-h-0">
           {tabela ? "ocultar tabela" : "ver como tabela"}
         </button>
       </div>
 
       {tabela ? (
         <table className="mt-3 w-full text-sm">
-          <caption className="mb-1 text-left text-xs text-[var(--text-secondary)]">Os 10 horários que mais faturaram</caption>
+          <caption className="mb-1 text-left text-xs text-sec">Os 10 horários que mais faturaram</caption>
           <thead>
-            <tr className="text-left text-xs text-[var(--text-secondary)]">
+            <tr className="text-left text-xs text-sec">
               <th className="py-1 font-normal">Dia</th>
               <th className="py-1 font-normal">Hora</th>
               <th className="py-1 text-right font-normal">Faturamento</th>
@@ -111,7 +115,7 @@ export function VendasHeatmap({ celulas }: { celulas: Celula[] }) {
           </thead>
           <tbody>
             {melhores.map((c) => (
-              <tr key={`${c.dia}-${c.hora}`} className="border-t border-[var(--grid)] tabular-nums text-[var(--text-primary)]">
+              <tr key={`${c.dia}-${c.hora}`} className="border-t border-sep tabular-nums text-texto">
                 <td className="py-1">{DIAS[c.dia - 1]}</td>
                 <td className="py-1">{String(c.hora).padStart(2, "0")}h</td>
                 <td className="py-1 text-right">{formatMoney(c.faturamento)}</td>

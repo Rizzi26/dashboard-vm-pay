@@ -1,28 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { AtualizarDados } from "@/components/AtualizarDados";
 import { LojaSelector } from "@/components/LojaSelector";
-import { browserApi } from "@/lib/api";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { AbasInferiores } from "@/components/ui/AbasInferiores";
+import { IconeLoja } from "@/components/ui/icones";
+import { MenuConta } from "@/components/ui/MenuConta";
+import { LINKS, linkAtivo } from "@/components/ui/navegacao";
 
-const LINKS = [
-  { href: "/", label: "Central", roles: ["viewer", "admin", "master"] },
-  { href: "/vendas", label: "Vendas", roles: ["viewer", "admin", "master"] },
-  { href: "/prateleira", label: "Prateleira", roles: ["viewer", "admin", "master"] },
-  { href: "/reposicao", label: "Reposição", roles: ["viewer", "admin", "master"] },
-  { href: "/picklist", label: "Pick list", roles: ["admin", "master"] },
-  { href: "/usuarios", label: "Usuários", roles: ["master"] },
-  { href: "/auditoria", label: "Auditoria", roles: ["master"] },
-];
-
-const ROLE_LABEL: Record<string, string> = {
-  viewer: "leitura",
-  admin: "operação",
-  master: "master",
-};
-
+/**
+ * Barra do painel (barra() da proposta). Uma árvore só para os dois tamanhos
+ * — LojaSelector e AtualizarDados não duplicam (cada AtualizarDados consulta
+ * a API): de md para cima é a pílula de vidro fixa no topo com marca,
+ * navegação segmentada e avatar; no celular vira o topo compacto (loja em
+ * azul + atualizar), a navegação desce para a barra de abas e a conta vai
+ * para a tela Mais. O título grande da tela é da página (ui/Titulo).
+ */
 export function Header({
   org,
   orgName,
@@ -41,21 +35,6 @@ export function Header({
   loja?: string | null;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function sair() {
-    const supabase = supabaseBrowser();
-    // Logout na auditoria ANTES de encerrar: depois não há token para mandar.
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
-      await browserApi
-        .request(`/orgs/${org}/sessao/sair`, data.session.access_token, { method: "POST" })
-        .catch(() => undefined);
-    }
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
 
   // O período selecionado sobrevive à troca de aba — sem useSearchParams,
   // que exigiria boundary de Suspense: as páginas que o conhecem passam a prop.
@@ -67,53 +46,56 @@ export function Header({
   }
 
   return (
-    <header className="sticky top-0 z-20 border-b border-[var(--grid)] bg-[var(--surface-0)]">
-      {/* Duas linhas: identidade + ações em cima, navegação embaixo. Numa linha
-          só, o botão de atualizar empurrava os links por cima do nome. */}
-      <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-2 sm:gap-2 sm:px-6 sm:py-3">
-        <div className="flex min-w-0 items-center justify-between gap-3">
+    <>
+      <header
+        className="barra-topo relative z-20 mx-auto flex w-full max-w-[1240px] items-center justify-between gap-3 px-4 pt-[max(12px,env(safe-area-inset-top))] md:sticky md:top-4 md:mt-5 md:w-[calc(100%-48px)] md:flex-wrap md:rounded-[22px] md:py-2.5 md:pl-3.5 md:pr-3"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="hidden h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] text-white md:flex"
+            style={{ background: "var(--marca)" }}
+          >
+            <IconeLoja tamanho={18} />
+          </span>
           <div className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-[var(--text-primary)]">
+            {/* No celular o nome da organização só aparece se não houver loja
+                para mostrar no lugar (topo_cel mostra só a loja). */}
+            <span
+              className={`${lojas.length ? "hidden md:block" : "block"} truncate text-[15px] font-semibold tracking-[-0.01em] text-texto`}
+            >
               {orgName}
             </span>
             <LojaSelector lojas={lojas} loja={loja} />
           </div>
-          <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
-            <AtualizarDados org={org} />
-            <span>
-              <span className="hidden md:inline">{email} · </span>
-              {ROLE_LABEL[role] ?? role}
-            </span>
-            <button
-              type="button"
-              onClick={sair}
-              className="rounded-lg border border-[var(--grid)] px-3 py-2 hover:bg-[var(--row-hover)] hover:text-[var(--text-primary)]"
-            >
-              Sair
-            </button>
-          </div>
         </div>
-        <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:-mx-3 sm:gap-2 sm:overflow-visible sm:px-0">
+
+        <nav aria-label="Seções" className="hidden flex-wrap gap-0.5 rounded-[14px] bg-trilho p-[3px] md:flex">
           {LINKS.filter((l) => l.roles.includes(role)).map((l) => {
-            const ativo =
-              pathname === l.href ||
-              (l.href === "/prateleira" && pathname.startsWith("/produto"));
+            const ativo = linkAtivo(l.href, pathname);
             return (
               <Link
                 key={l.href}
                 href={hrefFor(l.href)}
-                className={
-                  ativo
-                    ? "whitespace-nowrap rounded-md px-3 py-2.5 text-sm font-medium text-[var(--text-primary)] underline decoration-2 decoration-[var(--accent)] underline-offset-4"
-                    : "whitespace-nowrap rounded-md px-3 py-2.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }
+                aria-current={ativo ? "page" : undefined}
+                className={`whitespace-nowrap rounded-[11px] px-[13px] py-[7px] text-[14px] no-underline ${
+                  ativo ? "bg-ativo font-semibold text-texto shadow-ativo" : "text-sec hover:text-texto"
+                }`}
               >
                 {l.label}
               </Link>
             );
           })}
         </nav>
-      </div>
-    </header>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <AtualizarDados org={org} />
+          <span className="hidden md:block">
+            <MenuConta org={org} orgName={orgName} role={role} email={email} />
+          </span>
+        </div>
+      </header>
+      <AbasInferiores role={role} hrefVendas={hrefFor("/vendas")} />
+    </>
   );
 }

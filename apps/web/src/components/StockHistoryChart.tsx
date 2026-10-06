@@ -68,7 +68,7 @@ export function StockHistoryChart({ points }: { points: StockHistoryPoint[] }) {
 
   if (!geo || serie.length < 2) {
     return (
-      <p className="py-10 text-center text-sm text-[var(--text-secondary)]">
+      <p className="m-0 py-10 text-center text-[14px] text-sec">
         O histórico acumula a cada sincronização — volte após algumas rodadas
         para ver a curva.
       </p>
@@ -189,15 +189,15 @@ export function StockHistoryChart({ points }: { points: StockHistoryPoint[] }) {
         </text>
       </svg>
 
-      <div className="mt-2 min-h-[1.5rem] text-sm">
+      <div className="mt-2 min-h-[1.5rem] text-[13px]" aria-live="polite">
         {ativo ? (
-          <span className="text-[var(--text-primary)]">
+          <span className="text-texto">
             <span className="font-medium">{formatDayTime(ativo.em)}</span>
             {" · "}
             <span className="tabular-nums">{formatInt(ativo.quantidade)} un.</span>
           </span>
         ) : (
-          <span className="text-[var(--text-secondary)]">
+          <span className="text-sec">
             Toque ou passe o cursor para ver cada sincronização.
           </span>
         )}

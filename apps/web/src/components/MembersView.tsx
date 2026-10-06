@@ -6,12 +6,20 @@ import type { MemberRow } from "@/lib/api";
 import { browserApi } from "@/lib/api";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { Paginacao, usePaginacao } from "@/components/Paginacao";
+import { Botao } from "@/components/ui/Botao";
+import { Cartao } from "@/components/ui/Cartao";
+import { Lista } from "@/components/ui/Lista";
+import { Selo } from "@/components/ui/Selo";
 
 const PAPEIS = [
   { value: "viewer", label: "leitura" },
   { value: "admin", label: "operação" },
   { value: "master", label: "master" },
 ] as const;
+
+// 16px no celular: abaixo disso o Safari do iPhone dá zoom ao focar o campo.
+const CAMPO =
+  "mt-1 block h-11 rounded-xl border border-campo-borda bg-campo px-3.5 text-[16px] text-texto placeholder:text-terc md:text-[15px]";
 
 export function MembersView({
   rows,
@@ -96,84 +104,92 @@ export function MembersView({
   }
 
   return (
-    <div>
-      <form
-        onSubmit={convidar}
-        className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-[var(--grid)] p-4"
-      >
-        <label className="grow text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-          Email do convidado
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
-          />
-        </label>
-        <label className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-          Papel
-          <select
-            value={papel}
-            onChange={(e) => setPapel(e.target.value)}
-            className="mt-1 block rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] sm:text-sm"
-          >
-            {PAPEIS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
-        >
-          {busy ? "Convidando…" : "Convidar"}
-        </button>
-      </form>
+    <>
+      <Cartao compacto>
+        <form onSubmit={convidar} className="flex flex-col gap-3 md:flex-row md:items-end">
+          <label className="text-[13px] text-sec md:flex-1">
+            Email do convidado
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="pessoa@email.com"
+              className={`${CAMPO} w-full`}
+            />
+          </label>
+          <label className="text-[13px] text-sec">
+            Papel
+            <select value={papel} onChange={(e) => setPapel(e.target.value)} className={`${CAMPO} w-full md:w-auto`}>
+              {PAPEIS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Botao type="submit" variante="cheio" disabled={busy} className="w-full md:h-11 md:w-auto">
+            {busy ? "Convidando…" : "Convidar"}
+          </Botao>
+        </form>
+      </Cartao>
 
       {feedback ? (
-        <p role="status" className="mb-4 text-sm text-[var(--text-primary)]">
+        <p role="status" className="m-0 px-1 text-[15px] text-texto">
           {feedback}
         </p>
       ) : null}
 
-      <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-[var(--grid)] text-left text-[11px] uppercase tracking-[0.08em] text-[var(--text-secondary)]">
-            <th className="py-2.5 font-medium">Email</th>
-            <th className="py-2.5 font-medium">Papel</th>
-            <th className="hidden py-2.5 font-medium sm:table-cell">Desde</th>
-            <th className="py-2.5 text-right font-medium">Ações</th>
-          </tr>
-        </thead>
-        <tbody className="text-[var(--text-primary)]">
+      {/* Texto conferido contra os require_role da API: viewer também pede a
+          atualização dos dados; restock/preço/cadastro/sincronizar são admin;
+          membros, contas VMpay e auditoria são master. */}
+      <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1.5 px-1 text-[13px] text-sec">
+        <span className="inline-flex items-center gap-2">
+          <Selo tom="cinza" simbolo={null}>leitura</Selo> vê, exporta e atualiza os dados
+        </span>
+        <span aria-hidden="true" className="hidden md:inline">·</span>
+        <span className="inline-flex items-center gap-2">
+          <Selo tom="azul" simbolo={null}>operação</Selo> + pick list, reabastecimento, preço e cadastro
+        </span>
+        <span aria-hidden="true" className="hidden md:inline">·</span>
+        <span className="inline-flex items-center gap-2">
+          <Selo tom="verde" simbolo={null}>master</Selo> + usuários, contas VMpay e auditoria
+        </span>
+      </p>
+
+      <div>
+        <Lista rotulo="Pessoas com acesso">
           {pagMembros.visiveis.map((m) => {
             const self = m.user_id === selfId;
+            const rotulo = PAPEIS.find((p) => p.value === m.role)?.label ?? m.role;
             return (
-              <tr
-                key={m.user_id}
-                className="border-t border-[var(--grid)] hover:bg-[var(--row-hover)]"
-              >
-                <td className="py-2.5">
-                  {m.email}
-                  {self ? (
-                    <span className="ml-2 text-xs text-[var(--text-secondary)]">(você)</span>
-                  ) : null}
-                </td>
-                <td className="py-2.5">
-                  {self ? (
-                    <span className="text-[var(--text-secondary)]">
-                      {PAPEIS.find((p) => p.value === m.role)?.label ?? m.role}
-                    </span>
-                  ) : (
+              // Linha própria em vez de LinhaLista: no celular os controles
+              // descem para baixo do email, senão o select espreme o texto.
+              <li key={m.user_id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-[13px]">
+                <span
+                  aria-hidden="true"
+                  className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full font-semibold text-white"
+                  style={{ background: "var(--avatar)" }}
+                >
+                  {m.email.charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block break-words text-[16px] text-texto md:text-[15px]">{m.email}</span>
+                  <span className="block text-[13px] text-sec">
+                    {rotulo} · desde {new Date(m.member_since).toLocaleDateString("pt-BR")}
+                  </span>
+                </span>
+                {self ? (
+                  <Selo tom="cinza" simbolo={null}>
+                    você
+                  </Selo>
+                ) : (
+                  <span className="flex w-full items-center gap-1.5 pl-[50px] md:w-auto md:pl-0">
                     <select
+                      aria-label={`Papel de ${m.email}`}
                       value={m.role}
                       onChange={(e) => mudarPapel(m.user_id, e.target.value)}
-                      className="rounded-md border border-[var(--grid)] bg-transparent px-2 py-1 text-base sm:text-sm"
+                      className="h-11 flex-1 rounded-[10px] border border-campo-borda bg-campo px-2.5 text-[16px] text-texto md:h-[34px] md:flex-none md:text-[14px]"
                     >
                       {PAPEIS.map((p) => (
                         <option key={p.value} value={p.value}>
@@ -181,29 +197,22 @@ export function MembersView({
                         </option>
                       ))}
                     </select>
-                  )}
-                </td>
-                <td className="hidden py-2.5 text-[var(--text-secondary)] sm:table-cell">
-                  {new Date(m.member_since).toLocaleDateString("pt-BR")}
-                </td>
-                <td className="py-2.5 text-right">
-                  {self ? null : (
-                    <button
-                      type="button"
+                    <Botao
+                      variante="texto"
+                      tamanho="p"
                       onClick={() => remover(m.user_id, m.email)}
-                      className="text-xs text-[var(--status-critical)] underline underline-offset-2"
+                      className="text-vermelho-texto! hover:bg-vermelho-fundo!"
                     >
-                      remover
-                    </button>
-                  )}
-                </td>
-              </tr>
+                      Remover
+                    </Botao>
+                  </span>
+                )}
+              </li>
             );
           })}
-        </tbody>
-      </table>
-      <Paginacao {...pagMembros.rodape} rotulo="pessoas" />
+        </Lista>
+        <Paginacao {...pagMembros.rodape} rotulo="pessoas" />
       </div>
-    </div>
+    </>
   );
 }
