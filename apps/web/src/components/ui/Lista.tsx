@@ -43,6 +43,7 @@ export function LinhaLista({
   href,
   chevron,
   className = "",
+  onClick,
 }: {
   principal: ReactNode;
   secundario?: ReactNode;
@@ -51,8 +52,10 @@ export function LinhaLista({
   href?: string;
   chevron?: boolean;
   className?: string;
+  /** Sem href: a linha inteira vira botão (abre uma folha de ações, p. ex.). */
+  onClick?: () => void;
 }) {
-  const mostraChevron = chevron ?? Boolean(href);
+  const mostraChevron = chevron ?? Boolean(href || onClick);
   const corpo = (
     <>
       {esquerda ? <span className="flex shrink-0 items-center">{esquerda}</span> : null}
@@ -65,6 +68,19 @@ export function LinhaLista({
     </>
   );
   const pad = "flex min-h-11 items-center gap-3 px-4 py-[13px]";
+  if (onClick && !href) {
+    return (
+      <li className={className}>
+        <button
+          type="button"
+          onClick={onClick}
+          className={`${pad} w-full border-0 bg-transparent text-left font-[inherit] text-texto hover:bg-[var(--row-hover)]`}
+        >
+          {corpo}
+        </button>
+      </li>
+    );
+  }
   return (
     <li className={href ? className : `${pad} ${className}`}>
       {href ? (

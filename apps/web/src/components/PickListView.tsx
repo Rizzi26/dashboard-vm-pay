@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type {
   PicklistCarga,
   PicklistConsulta,
   PicklistItem,
   PicklistOpcoes,
+  PicklistSaldo,
   ProductRefs,
   ReposicaoItem,
 } from "@/lib/api";
@@ -15,7 +16,13 @@ import { browserApi } from "@/lib/api";
 import { NewProductModal } from "@/components/NewProductModal";
 import { Paginacao, usePaginacao } from "@/components/Paginacao";
 import { ProductPicker } from "@/components/ProductPicker";
-import { formatDayTime, formatMoney } from "@/lib/format";
+import { Botao } from "@/components/ui/Botao";
+import { Cartao } from "@/components/ui/Cartao";
+import { CabecalhoLista, LinhaLista, Lista } from "@/components/ui/Lista";
+import { Selo } from "@/components/ui/Selo";
+import type { TomSelo } from "@/components/ui/Selo";
+import { Titulo } from "@/components/ui/Titulo";
+import { formatDayTime, formatInt, formatMoney } from "@/lib/format";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 async function token(): Promise<string> {
@@ -64,11 +71,63 @@ function linhaVazia(linha: number): Linha {
 
 const nadaMuda = () => () => {};
 
-const STATUS_LABEL: Record<PicklistCarga["status"], string> = {
-  approved: "carregado",
-  error: "recusado pela VMpay",
-  pending: "em andamento",
+const STATUS: Record<PicklistCarga["status"], { rotulo: string; tom: TomSelo }> = {
+  approved: { rotulo: "carregado", tom: "verde" },
+  error: { rotulo: "recusado pela VMpay", tom: "vermelho" },
+  pending: { rotulo: "em andamento", tom: "laranja" },
 };
+
+const POR_PAGINA = 20;
+
+const CAMPO =
+  "block h-11 w-full rounded-xl border border-campo-borda bg-campo px-3 text-base text-texto placeholder:text-terc disabled:opacity-60 md:text-[15px]";
+const CAMPO_NUM =
+  "mt-[3px] block h-11 w-full rounded-[10px] border border-campo-borda bg-campo px-2.5 text-base tabular-nums text-texto disabled:opacity-60 md:h-10 md:text-[15px]";
+const DICA_FATOR =
+  "Quantas unidades de prateleira vêm em cada unidade do cupom (1 fardo = 6, 1 display = 24)";
+
+/** "cód. 552 · 6 UN × R$ 11,99 · preço de compra" — só para conferir com o papel. */
+function linhaDeCompra(l: Linha, comCodigo: boolean): string {
+  const partes: string[] = [];
+  if (comCodigo && l.codigo) partes.push(`cód. ${l.codigo}`);
+  if (l.valor_unitario !== null) {
+    const q = valido(l.quantidade) ? String(num(l.quantidade)).replace(".", ",") : "?";
+    partes.push(`${q} ${l.unidade ?? ""} × ${formatMoney(l.valor_unitario)}`.replace("  ", " "));
+    partes.push("preço de compra");
+  }
+  return partes.join(" · ");
+}
+
+/** O que a linha do "Comprado sem estar na lista" diz sobre o saldo de antes da compra. */
+function textoSaldo(s: PicklistSaldo | undefined): string {
+  if (!s) return "sem saldo registrado nesta loja";
+  const q = formatInt(s.quantidade);
+  if (s.dias_restantes !== null) return `ainda tinha ${q} un., dava para ~${formatInt(s.dias_restantes)} dias`;
+  // Sem venda no período a Reposição não pede nada — nem zerado.
+  if (s.quantidade <= 0) return "estava zerado, mas sem venda nos últimos 30 dias";
+  return `ainda tinha ${q} un.`;
+}
+
+function Aviso({ tom, children }: { tom: "laranja" | "vermelho" | "verde" | "cinza"; children: ReactNode }) {
+  const cls = {
+    laranja: "border-laranja-borda bg-laranja-fundo",
+    vermelho: "border-vermelho-borda bg-vermelho-fundo",
+    verde: "border-transparent bg-verde-fundo",
+    cinza: "border-borda bg-vidro-fraco",
+  }[tom];
+  const simbolo = { laranja: "▲", vermelho: "■", verde: "●", cinza: null }[tom];
+  const cor = { laranja: "text-laranja-texto", vermelho: "text-vermelho-texto", verde: "text-verde-texto", cinza: "" }[tom];
+  return (
+    <div className={`flex gap-2 rounded-2xl border px-4 py-3 text-[14px] text-texto ${cls}`}>
+      {simbolo ? (
+        <span aria-hidden="true" className={cor}>
+          {simbolo}
+        </span>
+      ) : null}
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
 
 export function PickListView({
   org,
@@ -158,6 +217,14 @@ export function PickListView({
     setLinhas((ls) => ls.map((l, i) => (i === idx ? { ...l, ...campos } : l)));
   }
 
+  // Stepper do celular: passo de 1, sem deixar a quantidade chegar a zero —
+  // tirar o item é "Ignorar", não quantidade 0.
+  function passo(idx: number, delta: number) {
+    const atual = valido(linhas[idx].quantidade) ? num(linhas[idx].quantidade) : 0;
+    const novo = atual + delta;
+    if (novo > 0) editar(idx, { quantidade: String(Math.round(novo * 1000) / 1000) });
+  }
+
   function recomecar() {
     setConsulta(null);
     setLinhas([]);
@@ -165,36 +232,57 @@ export function PickListView({
     setErro(null);
   }
 
-  // Lista de Reposição da loja escolhida: o que ela pedia antes desta compra.
-  const [reposicao, setReposicao] = useState<ReposicaoItem[] | null>(null);
+  // Lista de Reposição da loja escolhida (o que ela pedia antes desta compra)
+  // e o saldo/ritmo de cada produto, para explicar o que veio fora da lista.
+  const [reposicao, setReposicao] = useState<{ loja: string; itens: ReposicaoItem[] } | null>(null);
+  const [saldos, setSaldos] = useState<{ loja: string; porProduto: Map<string, PicklistSaldo> } | null>(null);
   useEffect(() => {
     if (!consulta || !localId) return;
     let vivo = true;
     (async () => {
-      const resp = await browserApi.request(`/orgs/${org}/stock/reposicao`, await token());
-      if (!resp.ok) return;
-      const dados = (await resp.json()) as { itens: ReposicaoItem[] };
-      if (vivo) setReposicao(dados.itens.filter((i) => i.location_id === localId));
+      const t = await token();
+      const [rResp, sResp] = await Promise.all([
+        browserApi.request(`/orgs/${org}/stock/reposicao`, t),
+        browserApi.request(`/orgs/${org}/picklist/saldos?loja=${localId}`, t),
+      ]);
+      if (rResp.ok) {
+        const dados = (await rResp.json()) as { itens: ReposicaoItem[] };
+        if (vivo) setReposicao({ loja: localId, itens: dados.itens.filter((i) => i.location_id === localId) });
+      }
+      // Sem o saldo o quadro ainda funciona — só não diz quanto havia.
+      if (sResp.ok) {
+        const dados = (await sResp.json()) as { itens: PicklistSaldo[] };
+        if (vivo) setSaldos({ loja: localId, porProduto: new Map(dados.itens.map((i) => [i.product_id, i])) });
+      }
     })().catch(() => undefined);
     return () => {
       vivo = false;
     };
   }, [org, consulta, localId]);
 
-  // Compra × reposição: o que a lista pedia e não veio, e o que veio fora dela.
+  // Cupom × Reposição: o que a lista pedia e não veio, e o que veio sem a lista pedir.
   const confronto = useMemo(() => {
-    if (!reposicao) return null;
+    // Lista de outra loja (troca no meio da conferência) não vale para esta.
+    if (!reposicao || reposicao.loja !== localId) return null;
     const noCupom = new Set(linhas.filter((l) => !l.ignorar && l.product_id).map((l) => l.product_id));
-    const naLista = new Set(reposicao.map((i) => i.product_id));
+    const naLista = new Set(reposicao.itens.map((i) => i.product_id));
+    // O mesmo produto em duas linhas do cupom aparece uma vez só.
+    const fora = new Map<string, Linha>();
+    for (const l of linhas) {
+      if (!l.ignorar && l.product_id && !naLista.has(l.product_id) && !fora.has(l.product_id)) {
+        fora.set(l.product_id, l);
+      }
+    }
     return {
-      faltou: reposicao.filter((i) => !noCupom.has(i.product_id)),
-      fora: linhas.filter((l) => !l.ignorar && l.product_id && !naLista.has(l.product_id)),
+      faltou: reposicao.itens.filter((i) => !noCupom.has(i.product_id)),
+      fora: [...fora.values()],
     };
-  }, [reposicao, linhas]);
+  }, [reposicao, linhas, localId]);
+  const saldoDaLoja = saldos && saldos.loja === localId ? saldos.porProduto : null;
 
   // Cupom grande (atacado) passa de 50 linhas: a conferência pagina, mas a
   // edição e a aprovação valem para TODAS as linhas — só a vista é fatiada.
-  const pagLinhas = usePaginacao(linhas, 20);
+  const pagLinhas = usePaginacao(linhas, POR_PAGINA);
   const pagHistorico = usePaginacao(historico, 10);
 
   const pendencias = useMemo(
@@ -206,6 +294,7 @@ export function PickListView({
       ).length,
     [linhas],
   );
+  const semProduto = linhas.filter((l) => !l.ignorar && !l.product_id).length;
   const totalUnidades = useMemo(
     () =>
       linhas
@@ -264,145 +353,346 @@ export function PickListView({
     }
   }
 
-  const inputCls =
-    "w-full rounded-md border border-[var(--grid)] bg-transparent px-2 py-1.5 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm";
-  const botaoPrimario =
-    "rounded-md bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-50";
-  const botaoSecundario =
-    "rounded-md border border-[var(--grid)] px-4 py-2.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]";
+  const manual = consulta?.origem === "manual";
+  const fornecedor = consulta
+    ? consulta.cupom?.fornecedor_nome || `Fornecedor ${consulta.fornecedor_cnpj}`
+    : "";
+  const resumoCupom = consulta?.cupom
+    ? [
+        `NFC-e ${consulta.cupom.numero}`,
+        consulta.cupom.emitido_em ? formatDayTime(consulta.cupom.emitido_em) : null,
+        formatMoney(consulta.cupom.valor_total),
+        `${consulta.cupom.itens.length} itens`,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : consulta
+      ? `Chave ${consulta.chave}`
+      : "";
+  const nomeLoja = opcoes.locais.find((l) => l.id === localId)?.name;
+
+  /** Produto no sistema + as dicas embaixo dele — igual no computador e no celular. */
+  function blocoProduto(l: Linha, idx: number) {
+    if (l.ignorar) {
+      return <p className="m-0 flex min-h-10 items-center text-[13px] text-sec">Ignorado — não entra na prateleira.</p>;
+    }
+    const falta = !l.product_id;
+    return (
+      <>
+        <ProductPicker
+          produtos={produtosDaLoja}
+          value={l.product_id}
+          sugestoes={l.sugestoes}
+          destacado={falta}
+          lembrado={l.vinculo === "lembrado"}
+          rotulo={`Produto no sistema para ${l.descricao || `a linha ${l.linha}`}`}
+          onChange={(id) => editar(idx, { product_id: id, vinculo: null, novo: false })}
+          onCadastrar={() => setCadastrando(idx)}
+        />
+        {falta && l.sugestoes[0] && nomeProduto.has(l.sugestoes[0]) ? (
+          <p className="m-0 mt-1.5 text-[13px] text-sec">
+            Parece ser <strong className="font-semibold text-texto">{nomeProduto.get(l.sugestoes[0])}</strong>{" "}
+            <button
+              type="button"
+              onClick={() => editar(idx, { product_id: l.sugestoes[0] })}
+              className="inline-flex min-h-11 items-center px-0.5 font-medium text-azul-texto md:min-h-0"
+            >
+              usar
+            </button>
+          </p>
+        ) : null}
+        {l.novo ? (
+          <p className="m-0 mt-1.5 text-[13px] text-laranja-texto">
+            <span aria-hidden="true">▲ </span>
+            Produto recém-cadastrado: inclua-o no planograma da máquina na VMpay antes de aprovar — fora
+            do planograma a VMpay recusa a carga do cupom inteiro.
+          </p>
+        ) : null}
+        {l.product_id && valido(l.quantidade) && valido(l.fator) && num(l.fator) !== 1 ? (
+          <p className="m-0 mt-1.5 text-[13px] tabular-nums text-sec">
+            Entram {num(l.quantidade) * num(l.fator)} unidades
+          </p>
+        ) : null}
+      </>
+    );
+  }
+
+  function campoDescricao(l: Linha, idx: number) {
+    return (
+      <input
+        value={l.descricao}
+        onChange={(e) => editar(idx, { descricao: e.target.value })}
+        placeholder="Descrição no cupom"
+        aria-label={`Descrição da linha ${l.linha}`}
+        disabled={l.ignorar}
+        className={CAMPO}
+      />
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="flex min-w-0 flex-col gap-3.5 md:gap-4">
+      {!consulta ? (
+        <Titulo
+          titulo="Pick list"
+          subtitulo="Reposição da prateleira pelo cupom fiscal da compra: leia o QR Code, confira e aprove."
+        />
+      ) : (
+        <>
+          {/* Celular: topo compacto + título grande; o fornecedor desce para a linha de resumo. */}
+          <div className="flex flex-col gap-2 md:hidden">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={recomecar}
+                className="inline-flex min-h-11 items-center text-[16px] text-azul-texto"
+              >
+                <span aria-hidden="true">‹&nbsp;</span>Cupons
+              </button>
+              {temCamera ? (
+                <Botao
+                  tamanho="p"
+                  onClick={() => {
+                    recomecar();
+                    setLendoQR(true);
+                  }}
+                >
+                  Ler QR Code
+                </Botao>
+              ) : null}
+            </div>
+            <Titulo
+              titulo="Conferir cupom"
+              subtitulo={
+                <>
+                  <strong className="font-semibold text-texto">{fornecedor}</strong> · {resumoCupom}
+                  {nomeLoja ? (
+                    <>
+                      {" "}
+                      · loja <strong className="font-semibold text-texto">{nomeLoja}</strong>
+                    </>
+                  ) : null}
+                </>
+              }
+            />
+          </div>
+          <div className="hidden md:block">
+            <Titulo
+              sobretitulo={resumoCupom}
+              titulo={fornecedor}
+              subtitulo="Confira cada item e ligue a um produto do sistema."
+              acoes={<Botao onClick={recomecar}>Outro cupom</Botao>}
+            />
+          </div>
+        </>
+      )}
+
       {feedback ? (
-        <p role="status" className="rounded-md border border-[var(--grid)] px-3 py-2 text-sm text-[var(--text-primary)]">
-          {feedback}
-          <button type="button" className="ml-3 text-xs text-[var(--text-secondary)] underline" onClick={() => setFeedback(null)}>
-            fechar
-          </button>
-        </p>
+        <div role="status">
+          <Aviso tom="verde">
+            {feedback}{" "}
+            <button
+              type="button"
+              className="ml-1 inline-flex min-h-11 items-center text-[13px] text-azul-texto md:min-h-0"
+              onClick={() => setFeedback(null)}
+            >
+              fechar
+            </button>
+          </Aviso>
+        </div>
       ) : null}
 
       {!consulta ? (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (entrada.trim()) void buscar(entrada);
-          }}
-          className="rounded-xl border border-[var(--grid)] bg-[var(--surface-1)] p-4 sm:p-5"
-        >
-          <label className="block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-            Link do QR Code ou chave de acesso
-            <input
-              autoFocus
-              value={entrada}
-              onChange={(e) => setEntrada(e.target.value)}
-              placeholder="https://www.nfce.fazenda.sp.gov.br/…?p=3526… ou os 44 dígitos"
-              className={`mt-1 ${inputCls}`}
-            />
-          </label>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="submit" disabled={busy || !entrada.trim()} className={botaoPrimario}>
-              {busy ? "Consultando a SEFAZ…" : "Buscar cupom"}
-            </button>
-            {temCamera ? (
-              <button type="button" onClick={() => setLendoQR(true)} className={botaoSecundario}>
-                Ler QR Code
-              </button>
-            ) : null}
-          </div>
-          <p className="mt-3 text-xs text-[var(--text-secondary)]">
-            Pelo QR Code os itens vêm sozinhos. Só com a chave, a SEFAZ pede CAPTCHA — os itens
-            são lançados à mão.
-          </p>
-        </form>
+        <>
+          <Cartao>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (entrada.trim()) void buscar(entrada);
+              }}
+            >
+              <label className="block text-[13px] text-sec">
+                Link do QR Code ou chave de acesso
+                <input
+                  autoFocus
+                  value={entrada}
+                  onChange={(e) => setEntrada(e.target.value)}
+                  placeholder="https://www.nfce.fazenda.sp.gov.br/…?p=3526… ou os 44 dígitos"
+                  className={`mt-1 ${CAMPO}`}
+                />
+              </label>
+              <div className="mt-3 flex flex-col gap-2.5 md:flex-row md:flex-wrap">
+                <Botao type="submit" variante="cheio" disabled={busy || !entrada.trim()}>
+                  {busy ? "Consultando a SEFAZ…" : "Buscar cupom"}
+                </Botao>
+                {temCamera ? <Botao onClick={() => setLendoQR(true)}>Ler QR Code</Botao> : null}
+              </div>
+              <p className="m-0 mt-3 text-[13px] text-sec">
+                Pelo QR Code os itens vêm sozinhos. Só com a chave, a SEFAZ pede CAPTCHA — os itens são
+                lançados à mão.
+              </p>
+            </form>
+          </Cartao>
+          {erro ? (
+            <div role="alert">
+              <Aviso tom="vermelho">{erro}</Aviso>
+            </div>
+          ) : null}
+
+          {historico.length > 0 ? (
+            <section className="flex flex-col gap-2">
+              <CabecalhoLista>Cupons carregados</CabecalhoLista>
+              <Lista>
+                {pagHistorico.visiveis.map((h) => (
+                  <LinhaLista
+                    key={h.id}
+                    href={`/picklist/cupom/${h.id}`}
+                    principal={
+                      <>
+                        {h.supplier_name || "Fornecedor"}
+                        {h.number ? ` · NFC-e ${h.number}` : ""}
+                      </>
+                    }
+                    secundario={
+                      <>
+                        {formatDayTime(h.created_at)} · {h.location_name} · {h.itens} itens
+                        {h.total !== null ? ` · ${formatMoney(h.total)}` : ""}
+                      </>
+                    }
+                    direita={<Selo tom={STATUS[h.status].tom}>{STATUS[h.status].rotulo}</Selo>}
+                  />
+                ))}
+              </Lista>
+              <Paginacao {...pagHistorico.rodape} rotulo="cupons" />
+            </section>
+          ) : null}
+        </>
       ) : (
-        <section className="rounded-xl border border-[var(--grid)] bg-[var(--surface-1)] p-4 sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold text-[var(--text-primary)]">
-                {consulta.cupom?.fornecedor_nome || `Fornecedor ${consulta.fornecedor_cnpj}`}
-              </h2>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                {consulta.cupom ? (
-                  <>
-                    NFC-e {consulta.cupom.numero}
-                    {consulta.cupom.emitido_em ? ` · ${formatDayTime(consulta.cupom.emitido_em)}` : ""}
-                    {" · "}
-                    {formatMoney(consulta.cupom.valor_total)} · {consulta.cupom.itens.length} itens
-                  </>
-                ) : (
-                  <>Chave {consulta.chave}</>
-                )}
+        <>
+          {consulta.ja_carregado ? (
+            <div role="alert">
+              <Aviso tom="laranja">
+                Este cupom já foi carregado em {formatDayTime(consulta.ja_carregado.em)} — aprovar de novo
+                dobraria o saldo.
+              </Aviso>
+            </div>
+          ) : null}
+
+          {manual ? (
+            <Aviso tom="cinza">
+              <span className="text-sec">
+                Sem o QR Code a consulta da SEFAZ pede CAPTCHA.{" "}
+                <a href={consulta.consulta_url} target="_blank" rel="noreferrer" className="text-azul-texto">
+                  Abra a nota na SEFAZ
+                </a>{" "}
+                e lance os itens abaixo.
+              </span>
+            </Aviso>
+          ) : null}
+
+          <Cartao compacto>
+            <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+              <label className="min-w-0 flex-[0_1_380px] text-[13px] text-sec">
+                Loja que recebeu
+                <select
+                  value={localId}
+                  onChange={(e) => setLocalId(e.target.value)}
+                  className={`mt-1 ${CAMPO} ${localId ? "" : "border-[1.5px] border-laranja-borda bg-laranja-campo"}`}
+                >
+                  <option value="">Escolha…</option>
+                  {opcoes.locais.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="m-0 text-[14px] text-sec md:pb-3">
+                Os produtos oferecidos são só os da conta VMpay desta loja.
               </p>
             </div>
-            <button type="button" onClick={recomecar} className={botaoSecundario}>
-              Outro cupom
-            </button>
-          </div>
+          </Cartao>
 
-          {consulta.ja_carregado ? (
-            <p role="alert" className="mt-4 rounded-md border border-[var(--status-warning)] px-3 py-2 text-sm text-[var(--text-primary)]">
-              Este cupom já foi carregado em {formatDayTime(consulta.ja_carregado.em)} — aprovar de
-              novo dobraria o saldo.
-            </p>
-          ) : null}
+          {/* Computador: uma superfície de vidro, uma linha por item do cupom. */}
+          <section aria-label="Itens do cupom" className="vidro hidden overflow-hidden rounded-[22px] md:block">
+            <ul className="m-0 list-none p-0 [&>li+li]:border-t [&>li+li]:border-sep">
+              {pagLinhas.visiveis.map((l, k) => {
+                const idx = pagLinhas.pagina * POR_PAGINA + k;
+                const compra = linhaDeCompra(l, true);
+                return (
+                  <li
+                    key={l.linha}
+                    className={`grid grid-cols-[minmax(0,1.2fr)_90px_90px_minmax(0,1.4fr)_90px] items-start gap-3.5 px-[18px] py-3.5 ${
+                      l.ignorar ? "opacity-45" : ""
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      {manual ? (
+                        campoDescricao(l, idx)
+                      ) : (
+                        <div className="break-words text-[15px] font-medium text-texto">{l.descricao}</div>
+                      )}
+                      {compra ? <div className="mt-0.5 text-xs tabular-nums text-sec">{compra}</div> : null}
+                    </div>
+                    <label className="text-[11px] text-sec">
+                      Qtde.
+                      <input
+                        inputMode="decimal"
+                        value={l.quantidade}
+                        disabled={l.ignorar}
+                        onChange={(e) => editar(idx, { quantidade: e.target.value })}
+                        className={CAMPO_NUM}
+                      />
+                    </label>
+                    <label className="text-[11px] text-sec" title={DICA_FATOR}>
+                      Un./emb.
+                      <input
+                        inputMode="decimal"
+                        value={l.fator}
+                        disabled={l.ignorar}
+                        onChange={(e) => editar(idx, { fator: e.target.value })}
+                        className={CAMPO_NUM}
+                      />
+                    </label>
+                    <div className="min-w-0">
+                      <div className="mb-[3px] text-[11px] text-sec">Produto no sistema</div>
+                      {blocoProduto(l, idx)}
+                    </div>
+                    <label className="flex items-center gap-1.5 pt-[22px] text-[13px] text-sec">
+                      <input
+                        type="checkbox"
+                        checked={l.ignorar}
+                        onChange={(e) => editar(idx, { ignorar: e.target.checked })}
+                      />
+                      Ignorar
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+            {pagLinhas.totalPaginas > 1 ? (
+              <div className="px-[18px] pb-3.5">
+                <Paginacao {...pagLinhas.rodape} rotulo="linhas do cupom" />
+              </div>
+            ) : null}
+          </section>
 
-          {consulta.origem === "manual" ? (
-            <p className="mt-4 rounded-md border border-[var(--grid)] px-3 py-2 text-sm text-[var(--text-secondary)]">
-              Sem o QR Code a consulta da SEFAZ pede CAPTCHA.{" "}
-              <a href={consulta.consulta_url} target="_blank" rel="noreferrer" className="underline">
-                Abra a nota na SEFAZ
-              </a>{" "}
-              e lance os itens abaixo.
-            </p>
-          ) : null}
-
-          <label className="mt-4 block max-w-sm text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-            Local que recebeu
-            <select value={localId} onChange={(e) => setLocalId(e.target.value)} className={`mt-1 ${inputCls}`}>
-              <option value="">Escolha…</option>
-              {opcoes.locais.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <ul className="mt-4 divide-y divide-[var(--grid)]">
+          {/* Celular: cada item vira um cartão, com stepper na quantidade. */}
+          <ul aria-label="Itens do cupom" className="m-0 flex list-none flex-col gap-3 p-0 md:hidden">
             {pagLinhas.visiveis.map((l, k) => {
-              const idx = pagLinhas.pagina * 20 + k;
-              const manual = consulta.origem === "manual";
-              const falta = !l.ignorar && !l.product_id;
+              const idx = pagLinhas.pagina * POR_PAGINA + k;
+              const compra = linhaDeCompra(l, false);
               return (
-                <li key={l.linha} className={`py-3 ${l.ignorar ? "opacity-50" : ""}`}>
-                  <div className="flex items-start justify-between gap-3">
+                <li key={l.linha} className={`vidro rounded-[18px] p-3.5 ${l.ignorar ? "opacity-45" : ""}`}>
+                  <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       {manual ? (
-                        <input
-                          value={l.descricao}
-                          onChange={(e) => editar(idx, { descricao: e.target.value })}
-                          placeholder="Descrição no cupom"
-                          className={inputCls}
-                        />
+                        campoDescricao(l, idx)
                       ) : (
-                        <p className="text-sm font-medium text-[var(--text-primary)]">
-                          {l.descricao}
-                          {l.codigo ? (
-                            <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">cód. {l.codigo}</span>
-                          ) : null}
-                        </p>
+                        <span className="block break-words text-[15px] font-semibold text-texto">{l.descricao}</span>
                       )}
-                      {l.valor_unitario !== null ? (
-                        <p className="mt-0.5 text-xs tabular-nums text-[var(--text-secondary)]">
-                          No cupom: {valido(l.quantidade) ? num(l.quantidade) : "?"} {l.unidade} ×{" "}
-                          {formatMoney(l.valor_unitario)}
-                          {valido(l.quantidade) ? ` = ${formatMoney(num(l.quantidade) * l.valor_unitario)}` : ""}
-                          {" · preço de compra, só para conferir"}
-                        </p>
-                      ) : null}
                     </div>
-                    <label className="flex shrink-0 items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                    <label className="-mt-2.5 flex min-h-11 shrink-0 items-center gap-1 text-xs text-sec">
                       <input
                         type="checkbox"
                         checked={l.ignorar}
@@ -411,178 +701,175 @@ export function PickListView({
                       Ignorar
                     </label>
                   </div>
-
+                  <div className="mb-2.5 mt-0.5 text-xs tabular-nums text-sec">
+                    {[l.codigo ? `cód. ${l.codigo}` : null, compra || null].filter(Boolean).join(" · ")}
+                  </div>
+                  {blocoProduto(l, idx)}
                   {!l.ignorar ? (
-                    <div className="mt-2 grid grid-cols-[4.5rem_6rem_1fr] gap-2">
-                      <label className="text-[11px] uppercase tracking-wide text-[var(--text-secondary)]">
-                        Qtde.
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2.5 text-[13px] text-sec">
+                      Qtde.
+                      <span className="inline-flex items-center rounded-[10px] bg-trilho">
+                        <button
+                          type="button"
+                          aria-label="Menos"
+                          onClick={() => passo(idx, -1)}
+                          className="h-11 w-11 text-[20px] text-azul-texto"
+                        >
+                          −
+                        </button>
                         <input
                           inputMode="decimal"
+                          aria-label="Quantidade"
                           value={l.quantidade}
                           onChange={(e) => editar(idx, { quantidade: e.target.value })}
-                          className={`mt-0.5 tabular-nums ${inputCls}`}
+                          className="h-11 w-12 bg-transparent text-center text-base font-semibold tabular-nums text-texto"
                         />
-                      </label>
-                      <label
-                        className="text-[11px] uppercase tracking-wide text-[var(--text-secondary)]"
-                        title="Quantas unidades de prateleira vêm em cada unidade do cupom (1 fardo = 6, 1 display = 24)"
-                      >
-                        Un. por emb.
+                        <button
+                          type="button"
+                          aria-label="Mais"
+                          onClick={() => passo(idx, 1)}
+                          className="h-11 w-11 text-[20px] text-azul-texto"
+                        >
+                          +
+                        </button>
+                      </span>
+                      ×
+                      <label className="flex items-center gap-1.5" title={DICA_FATOR}>
                         <input
                           inputMode="decimal"
                           value={l.fator}
                           onChange={(e) => editar(idx, { fator: e.target.value })}
-                          className={`mt-0.5 tabular-nums ${inputCls}`}
+                          className="h-11 w-14 rounded-[10px] border border-campo-borda bg-campo px-2 text-center text-base font-semibold tabular-nums text-texto"
                         />
-                      </label>
-                      <label className="min-w-0 text-[11px] uppercase tracking-wide text-[var(--text-secondary)]">
-                        Produto no sistema
-                        {l.vinculo === "lembrado" ? <span className="ml-1 normal-case">· lembrado</span> : null}
-                        <ProductPicker
-                          produtos={produtosDaLoja}
-                          value={l.product_id}
-                          sugestoes={l.sugestoes}
-                          destacado={falta}
-                          onChange={(id) => editar(idx, { product_id: id, vinculo: null, novo: false })}
-                          onCadastrar={() => setCadastrando(idx)}
-                        />
+                        un./emb.
                       </label>
                     </div>
-                  ) : null}
-
-                  {!l.ignorar && falta && l.sugestoes[0] && nomeProduto.has(l.sugestoes[0]) ? (
-                    <p className="mt-1.5 text-xs text-[var(--text-secondary)]">
-                      Parece ser <strong className="text-[var(--text-primary)]">{nomeProduto.get(l.sugestoes[0])}</strong>{" "}
-                      <button
-                        type="button"
-                        onClick={() => editar(idx, { product_id: l.sugestoes[0] })}
-                        className="underline"
-                      >
-                        usar
-                      </button>
-                    </p>
-                  ) : null}
-                  {!l.ignorar && l.novo ? (
-                    <p className="mt-1.5 text-xs text-[var(--status-warning)]">
-                      Produto recém-cadastrado: inclua-o no planograma da máquina na VMpay antes de
-                      aprovar — fora do planograma a VMpay recusa a carga do cupom inteiro.
-                    </p>
-                  ) : null}
-                  {!l.ignorar && l.product_id && valido(l.quantidade) && valido(l.fator) && num(l.fator) !== 1 ? (
-                    <p className="mt-1.5 text-xs tabular-nums text-[var(--text-secondary)]">
-                      Entram {num(l.quantidade) * num(l.fator)} unidades
-                    </p>
                   ) : null}
                 </li>
               );
             })}
           </ul>
-          <Paginacao {...pagLinhas.rodape} rotulo="linhas do cupom" />
-
-          {consulta.origem === "manual" ? (
-            <button
-              type="button"
-              onClick={() => setLinhas((ls) => [...ls, linhaVazia(Math.max(0, ...ls.map((x) => x.linha)) + 1)])}
-              className={`mt-2 ${botaoSecundario}`}
-            >
-              Adicionar item
-            </button>
-          ) : null}
-
-          {erro ? (
-            <p role="alert" className="mt-4 text-sm text-[var(--status-critical)]">
-              {erro}
-            </p>
-          ) : null}
-
-          {confronto && (confronto.faltou.length > 0 || confronto.fora.length > 0) ? (
-            <div className="mt-5 grid gap-3 border-t border-[var(--grid)] pt-4 sm:grid-cols-2">
-              <div>
-                <h3 className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-                  Faltou trazer ({confronto.faltou.length})
-                </h3>
-                {confronto.faltou.length === 0 ? (
-                  <p className="mt-1 text-sm text-[var(--text-secondary)]">Tudo da lista de reposição veio.</p>
-                ) : (
-                  <ul className="mt-1 space-y-0.5 text-sm text-[var(--text-primary)]">
-                    {confronto.faltou.slice(0, 12).map((i) => (
-                      <li key={i.product_id}>
-                        <span className={i.status === "ruptura" ? "text-[var(--status-warning)]" : ""}>
-                          {i.status === "ruptura" ? "▲ " : ""}
-                          {i.produto}
-                        </span>
-                        <span className="text-xs text-[var(--text-secondary)]"> · levar {i.sugestao}</span>
-                      </li>
-                    ))}
-                    {confronto.faltou.length > 12 ? (
-                      <li className="text-xs text-[var(--text-secondary)]">e mais {confronto.faltou.length - 12} na Reposição</li>
-                    ) : null}
-                  </ul>
-                )}
-              </div>
-              <div>
-                <h3 className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-                  Veio fora da lista ({confronto.fora.length})
-                </h3>
-                {confronto.fora.length === 0 ? (
-                  <p className="mt-1 text-sm text-[var(--text-secondary)]">Nada além do que a lista pedia.</p>
-                ) : (
-                  <ul className="mt-1 space-y-0.5 text-sm text-[var(--text-primary)]">
-                    {confronto.fora.map((l) => (
-                      <li key={l.linha}>{nomeProduto.get(l.product_id) ?? l.descricao}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+          {pagLinhas.totalPaginas > 1 ? (
+            <div className="md:hidden">
+              <Paginacao {...pagLinhas.rodape} rotulo="linhas do cupom" />
             </div>
           ) : null}
 
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--grid)] pt-4">
-            <p className="text-sm text-[var(--text-secondary)]">
-              <span className="tabular-nums text-[var(--text-primary)]">{totalUnidades}</span> unidades entram
-              {pendencias > 0 ? (
-                <span className="text-[var(--status-warning)]"> · {pendencias} item(ns) sem produto</span>
-              ) : null}
-              {!localId ? <span className="text-[var(--status-warning)]"> · escolha o local</span> : null}
-            </p>
-            <button type="button" onClick={aprovar} disabled={!podeAprovar} className={botaoPrimario}>
-              {busy ? "Carregando…" : "Aprovar e carregar"}
-            </button>
-          </div>
-        </section>
-      )}
+          {manual ? (
+            <div>
+              <Botao
+                onClick={() => setLinhas((ls) => [...ls, linhaVazia(Math.max(0, ...ls.map((x) => x.linha)) + 1)])}
+              >
+                Adicionar item
+              </Botao>
+            </div>
+          ) : null}
 
-      {!consulta && erro ? (
-        <p role="alert" className="text-sm text-[var(--status-critical)]">
-          {erro}
-        </p>
-      ) : null}
+          {confronto ? (
+            <section aria-labelledby="cupom-x-lista" className="flex flex-col gap-3.5 md:gap-4">
+              <h2 id="cupom-x-lista" className="m-0 mt-3 text-[20px] font-bold tracking-[-0.015em] text-texto">
+                Cupom × lista de Reposição
+              </h2>
+              <div className="grid gap-3.5 md:grid-cols-2 md:gap-4">
+                <Cartao
+                  titulo={`Estava na lista e não veio · ${confronto.faltou.length}`}
+                  subtitulo="A Reposição desta loja pedia estes itens, e eles não estão no cupom. Ficam para a próxima compra."
+                >
+                  {confronto.faltou.length === 0 ? (
+                    <p className="m-0 text-[14px] text-sec">Tudo o que a lista pedia veio.</p>
+                  ) : (
+                    <Lista className="rounded-[14px]">
+                      {confronto.faltou.slice(0, 12).map((i) => (
+                        <LinhaLista
+                          key={i.product_id}
+                          esquerda={
+                            i.status === "ruptura" ? (
+                              <span className="text-vermelho-texto">
+                                <span aria-hidden="true">■</span>
+                                <span className="sr-only">Zerado:</span>
+                              </span>
+                            ) : (
+                              <span className="text-laranja-texto">
+                                <span aria-hidden="true">▲</span>
+                                <span className="sr-only">Acabando:</span>
+                              </span>
+                            )
+                          }
+                          principal={i.produto}
+                          secundario={
+                            i.status === "ruptura"
+                              ? `zerado · a lista pedia levar ${formatInt(i.sugestao)}`
+                              : `restam ${formatInt(i.quantidade)} · a lista pedia levar ${formatInt(i.sugestao)}`
+                          }
+                        />
+                      ))}
+                      {confronto.faltou.length > 12 ? (
+                        <LinhaLista
+                          href="/reposicao"
+                          principal={`e mais ${confronto.faltou.length - 12} na Reposição`}
+                        />
+                      ) : null}
+                    </Lista>
+                  )}
+                </Cartao>
+                <Cartao
+                  titulo={`Comprado sem estar na lista · ${confronto.fora.length}`}
+                  subtitulo="Veio no cupom, mas ainda havia saldo para mais de 5 dias. Não é erro — só confira se não está comprando antes da hora."
+                >
+                  {confronto.fora.length === 0 ? (
+                    <p className="m-0 text-[14px] text-sec">Nada além do que a lista pedia.</p>
+                  ) : (
+                    <Lista className="rounded-[14px]">
+                      {confronto.fora.map((l) => (
+                        <LinhaLista
+                          key={l.product_id}
+                          principal={nomeProduto.get(l.product_id) ?? l.descricao}
+                          secundario={saldoDaLoja ? textoSaldo(saldoDaLoja.get(l.product_id)) : undefined}
+                        />
+                      ))}
+                    </Lista>
+                  )}
+                </Cartao>
+              </div>
+            </section>
+          ) : null}
 
-      {historico.length > 0 ? (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-[var(--text-primary)]">Cupons carregados</h2>
-          <ul className="divide-y divide-[var(--grid)] rounded-xl border border-[var(--grid)] bg-[var(--surface-1)]">
-            {pagHistorico.visiveis.map((h) => (
-              <li key={h.id} className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3 text-sm">
-                <Link href={`/picklist/cupom/${h.id}`} className="min-w-0 text-[var(--text-primary)] hover:underline">
-                  {h.supplier_name || "Fornecedor"}
-                  {h.number ? ` · NFC-e ${h.number}` : ""}
-                  <span className="block text-xs text-[var(--text-secondary)]">
-                    {formatDayTime(h.created_at)} · {h.location_name} · {h.itens} itens
-                  </span>
-                </Link>
-                <span className="text-xs text-[var(--text-secondary)]">
-                  {h.total !== null ? `${formatMoney(h.total)} · ` : ""}
-                  <span className={h.status === "approved" ? "" : "text-[var(--status-warning)]"}>
-                    {STATUS_LABEL[h.status]}
-                  </span>
+          {erro ? (
+            <div role="alert">
+              <Aviso tom="vermelho">{erro}</Aviso>
+            </div>
+          ) : null}
+
+          {/* Rodapé flutuante: no celular fica acima da barra de abas. */}
+          <div className="vidro-forte sticky bottom-[calc(var(--abas-altura)+env(safe-area-inset-bottom)+4px)] z-20 mt-2 flex items-center justify-between gap-3 rounded-[20px] py-2.5 pl-4 pr-2.5 md:bottom-6 md:flex-wrap md:rounded-[22px] md:py-3.5 md:pl-[22px] md:pr-4">
+            <p className="m-0 min-w-0 text-[13px] text-texto md:text-[15px]">
+              <strong className="tabular-nums">{formatInt(totalUnidades)}</strong>
+              <span className="md:hidden"> un. entram</span>
+              <span className="hidden md:inline"> unidades entram na prateleira</span>
+              {semProduto > 0 ? (
+                <span className="block text-laranja-texto md:inline">
+                  <span className="hidden md:inline"> · </span>
+                  {semProduto} {semProduto === 1 ? "item" : "itens"} sem produto
                 </span>
-              </li>
-            ))}
-          </ul>
-          <Paginacao {...pagHistorico.rodape} rotulo="cupons" />
-        </section>
-      ) : null}
+              ) : pendencias > 0 ? (
+                <span className="block text-laranja-texto md:inline">
+                  <span className="hidden md:inline"> · </span>
+                  confira as quantidades
+                </span>
+              ) : null}
+              {!localId ? (
+                <span className="block text-laranja-texto md:inline">
+                  <span className="hidden md:inline"> · </span>
+                  escolha a loja
+                </span>
+              ) : null}
+            </p>
+            <Botao variante="cheio" onClick={aprovar} disabled={!podeAprovar} className="shrink-0">
+              {busy ? "Carregando…" : "Aprovar e carregar"}
+            </Botao>
+          </div>
+        </>
+      )}
 
       {cadastrando !== null && linhas[cadastrando] ? (
         <NewProductModal
@@ -690,23 +977,17 @@ function LeitorQR({ onLido, onClose }: { onLido: (texto: string) => void; onClos
       aria-label="Ler QR Code"
       className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
     >
-      <div className="w-full rounded-t-xl border border-[var(--grid)] bg-[var(--surface-1)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:max-w-md sm:rounded-xl">
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">Aponte para o QR Code do cupom</h2>
+      <div className="w-full rounded-t-[22px] border border-solido-borda bg-solido p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-vidro-forte sm:max-w-md sm:rounded-[22px] sm:p-5">
+        <h2 className="m-0 text-[17px] font-semibold text-texto">Aponte para o QR Code do cupom</h2>
         {erro ? (
-          <p role="alert" className="mt-3 text-sm text-[var(--status-critical)]">
+          <p role="alert" className="mt-3 text-[14px] text-vermelho-texto">
             {erro}
           </p>
         ) : (
-          <video ref={videoRef} muted playsInline className="mt-3 aspect-square w-full rounded-lg bg-black object-cover" />
+          <video ref={videoRef} muted playsInline className="mt-3 aspect-square w-full rounded-2xl bg-black object-cover" />
         )}
         <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-[var(--grid)] px-4 py-2.5 text-sm text-[var(--text-secondary)]"
-          >
-            Cancelar
-          </button>
+          <Botao onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>

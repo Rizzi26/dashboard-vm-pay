@@ -483,6 +483,57 @@ async def historico(ctx: AdminCtx, session: Session, limit: int = 30) -> list[di
     ]
 
 
+# ------------------------------------------------------- saldo para o confronto
+
+SALDOS_SQL = """
+with vendas as (
+    select pl.product_id, sum(coalesce(v.quantity, 1)) as unidades
+      from vmpay.vend v
+      join core.location_link ll on ll.machine_id = v.machine_id
+      join core.product_link  pl on pl.integration_id = ll.integration_id
+                                and cast(pl.external_id as bigint) = v.good_id
+     where ll.location_id = :loja
+       and v.occurred_at >= now() - make_interval(days => :days)
+     group by pl.product_id
+)
+select b.product_id, b.quantity, va.unidades
+  from core.stock_balance b
+  join core.location l on l.id = b.location_id
+  left join vendas va on va.product_id = b.product_id
+ where b.location_id = :loja
+   and l.org_id = :org_id
+"""
+
+
+# Declarada antes de /{receipt_id}: "saldos" não é uuid e cairia lá com 422.
+@router.get("/saldos")
+async def saldos(loja: uuid.UUID, ctx: AdminCtx, session: Session, days: int = 30) -> dict:
+    """Saldo e ritmo de venda de cada produto da loja, para o "Comprado sem
+    estar na lista" dizer quanto ainda havia. A /stock/reposicao só devolve o
+    que está abaixo do horizonte — justamente o que esse quadro NÃO mostra."""
+    days = max(7, min(days, 365))
+    rows = (
+        await session.execute(
+            text(SALDOS_SQL), {"loja": str(loja), "org_id": str(ctx.org_id), "days": days}
+        )
+    ).mappings().all()
+    itens = []
+    for r in rows:
+        quantidade = float(r["quantity"])
+        por_dia = float(r["unidades"]) / days if r["unidades"] else 0.0
+        itens.append(
+            {
+                "product_id": str(r["product_id"]),
+                # Negativo é oversell de planograma; para quem compra, é zero.
+                "quantidade": max(0.0, quantidade),
+                "por_dia": round(por_dia, 2),
+                # Sem venda no período não há ritmo — e "dava para ∞ dias" não ajuda.
+                "dias_restantes": round(max(0.0, quantidade) / por_dia, 1) if por_dia else None,
+            }
+        )
+    return {"dias": days, "itens": itens}
+
+
 @router.get("/{receipt_id}")
 async def detalhe(receipt_id: uuid.UUID, ctx: AdminCtx, session: Session) -> dict:
     """Um cupom carregado: o que entrou, em qual produto, quem aprovou e o

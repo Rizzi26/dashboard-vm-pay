@@ -205,6 +205,15 @@ export type PicklistCarga = {
   itens: number;
 };
 
+/** Saldo e ritmo de um produto na loja (GET /picklist/saldos), para o cupom × lista. */
+export type PicklistSaldo = {
+  product_id: string;
+  quantidade: number;
+  por_dia: number;
+  /** null quando não houve venda no período: sem ritmo, sem previsão. */
+  dias_restantes: number | null;
+};
+
 export type LojaCard = {
   id: string;
   nome: string;
@@ -303,6 +312,20 @@ export type CurvaAbc = {
     acumulado: number;
     classe: "A" | "B" | "C";
   }[];
+};
+
+/** Uma carga do produto pelo pick list (GET /stock/cargas/{id}). */
+export type CargaProduto = {
+  receipt_id: string;
+  numero: string | null;
+  chave: string;
+  carregado_em: string;
+  loja: string;
+  /** Unidades de venda que entraram (quantidade do cupom × fator). */
+  unidades: number;
+  aprovado_por: string;
+  status: "pending" | "approved" | "error";
+  vmpay: { status: "pending" | "success" | "error" | null; erro: string | null };
 };
 
 export type Fetched<T> = { ok: true; data: T } | { ok: false; error: string };

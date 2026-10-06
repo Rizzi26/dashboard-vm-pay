@@ -9,9 +9,9 @@ import { formatAtraso, formatInt } from "@/lib/format";
  * sozinha: vem sempre com ícone e texto.
  */
 const ESTADOS = {
-  ok: { cor: "var(--status-good)", icone: "●", texto: "em dia" },
-  atrasado: { cor: "var(--status-warning)", icone: "▲", texto: "atrasado" },
-  falha: { cor: "var(--status-critical)", icone: "■", texto: "com falha" },
+  ok: { cor: "text-verde-texto", icone: "●", texto: "em dia" },
+  atrasado: { cor: "text-laranja-texto", icone: "▲", texto: "atrasado" },
+  falha: { cor: "text-vermelho-texto", icone: "■", texto: "com falha" },
 } as const;
 
 function estado(row: SyncRow): keyof typeof ESTADOS {
@@ -26,23 +26,24 @@ function estado(row: SyncRow): keyof typeof ESTADOS {
 export function SyncStatus({ rows }: { rows: SyncRow[] }) {
   if (rows.length === 0) {
     return (
-      <p className="text-xs text-[var(--text-secondary)]">
+      <p className="m-0 text-[13px] text-sec">
         Sem informação de sincronização.
       </p>
     );
   }
   return (
-    <ul className="flex flex-wrap gap-x-6 gap-y-2 text-xs">
+    <ul className="m-0 flex list-none flex-wrap gap-x-6 gap-y-2 p-0 text-[13px]">
       {rows.map((row) => {
         const e = ESTADOS[estado(row)];
         return (
-          <li key={row.recurso} className="flex items-center gap-2">
-            <span aria-hidden style={{ color: e.cor }}>
+          <li key={row.recurso} className="flex min-w-0 flex-wrap items-center gap-x-2">
+            <span aria-hidden className={e.cor}>
               {e.icone}
             </span>
-            <span className="text-[var(--text-primary)]">{row.recurso}</span>
-            <span className="text-[var(--text-secondary)]">
-              {e.texto} · {formatAtraso(row.atraso_segundos)} ·{" "}
+            <span className="font-medium text-texto">{row.recurso}</span>
+            <span className="text-sec">
+              <span className={e.cor}>{e.texto}</span>
+              {" · "}{formatAtraso(row.atraso_segundos)} ·{" "}
               {formatInt(row.registros_ingeridos)} registros
             </span>
           </li>

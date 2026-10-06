@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Botao } from "@/components/ui/Botao";
+import { CAMPO, Folha, ROTULO_CAMPO, RodapeFolha } from "@/components/ui/Folha";
 import type { ProductRefs } from "@/lib/api";
 
 /** Cadastro de produto na VMpay — usado pela Prateleira e pelo pick list. */
@@ -45,7 +47,7 @@ export function NewProductModal({
       );
   }, [loadRefs]);
 
-  async function confirmar(e: React.FormEvent) {
+  async function confirmar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!nome.trim() || !fabricante || !categoria || !abastecimento) {
       setErro("Preencha nome, fabricante e as duas categorias.");
@@ -83,107 +85,80 @@ export function NewProductModal({
       : [];
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Adicionar produto"
-      className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
+    <Folha
+      titulo="Adicionar produto"
+      subtitulo={
+        aviso ??
+        "O produto entra no cadastro da VMpay. Para aparecer na máquina e na prateleira, inclua-o depois no planograma da instalação."
+      }
+      onFechar={onClose}
+      onSubmit={confirmar}
+      largura="md:max-w-[480px]"
     >
-      <form
-        onSubmit={confirmar}
-        className="max-h-[90dvh] w-full overflow-y-auto rounded-t-xl border border-[var(--grid)] bg-[var(--surface-1)] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-card)] sm:max-w-sm sm:rounded-xl"
-      >
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">Adicionar produto</h2>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          {aviso ??
-            "O produto entra no cadastro da VMpay. Para aparecer na máquina e na prateleira, inclua-o depois no planograma da instalação."}
-        </p>
+      <label className={ROTULO_CAMPO}>
+        Nome
+        <input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} className={CAMPO} />
+      </label>
 
-        <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-          Nome
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className={ROTULO_CAMPO}>
+          Código de barras
           <input
-            autoFocus
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
+            inputMode="numeric"
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            className={CAMPO}
           />
         </label>
+        <label className={ROTULO_CAMPO}>
+          Preço sugerido (R$)
+          <input
+            inputMode="decimal"
+            value={preco}
+            onChange={(e) => setPreco(e.target.value)}
+            className={CAMPO}
+          />
+        </label>
+      </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-            Código de barras
-            <input
-              inputMode="numeric"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
-            />
+      {refsErro ? (
+        <p role="alert" className="mt-4 text-[14px] text-vermelho-texto">
+          ■ {refsErro}
+        </p>
+      ) : refs === null ? (
+        <p role="status" className="mt-4 text-[14px] text-sec">
+          Carregando os cadastros da VMpay…
+        </p>
+      ) : (
+        selects.map(([rotulo, valor, mudar, opcoes]) => (
+          <label key={rotulo} className={`mt-3 ${ROTULO_CAMPO}`}>
+            {rotulo}
+            <select value={valor} onChange={(e) => mudar(e.target.value)} className={CAMPO}>
+              <option value="">Selecione…</option>
+              {opcoes.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nome}
+                </option>
+              ))}
+            </select>
           </label>
-          <label className="block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-            Preço sugerido (R$)
-            <input
-              inputMode="decimal"
-              value={preco}
-              onChange={(e) => setPreco(e.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
-            />
-          </label>
-        </div>
+        ))
+      )}
 
-        {refsErro ? (
-          <p role="alert" className="mt-4 text-sm text-[var(--status-critical)]">
-            {refsErro}
-          </p>
-        ) : refs === null ? (
-          <p className="mt-4 text-sm text-[var(--text-secondary)]">
-            Carregando os cadastros da VMpay…
-          </p>
-        ) : (
-          selects.map(([rotulo, valor, mudar, opcoes]) => (
-            <label
-              key={rotulo}
-              className="mt-3 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]"
-            >
-              {rotulo}
-              <select
-                value={valor}
-                onChange={(e) => mudar(e.target.value)}
-                className="mt-1 w-full rounded-md border border-[var(--grid)] bg-[var(--surface-1)] px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
-              >
-                <option value="">Selecione…</option>
-                {opcoes.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.nome}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))
-        )}
+      {erro ? (
+        <p role="alert" className="mt-3 text-[14px] text-vermelho-texto">
+          ■ {erro}
+        </p>
+      ) : null}
 
-        {erro ? (
-          <p role="alert" className="mt-3 text-sm text-[var(--status-critical)]">
-            {erro}
-          </p>
-        ) : null}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-[var(--grid)] px-4 py-2.5 text-sm text-[var(--text-secondary)]"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={busy || refs === null}
-            className="rounded-md bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
-          >
-            {busy ? "Criando…" : "Criar produto"}
-          </button>
-        </div>
-      </form>
-    </div>
+      <RodapeFolha>
+        <Botao variante="tingido" tamanho="g" onClick={onClose}>
+          Cancelar
+        </Botao>
+        <Botao type="submit" variante="cheio" tamanho="g" disabled={busy || refs === null}>
+          {busy ? "Criando…" : "Criar produto"}
+        </Botao>
+      </RodapeFolha>
+    </Folha>
   );
 }

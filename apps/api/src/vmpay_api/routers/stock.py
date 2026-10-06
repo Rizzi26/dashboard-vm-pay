@@ -547,6 +547,59 @@ async def stock_history(
     ]
 
 
+# Um cupom pode trazer o mesmo produto em mais de uma linha (fardo e avulso,
+# fornecedor que repete o item): a carga é a soma do que entrou, por cupom.
+CARGAS_SQL = """
+select r.id, r.number, r.access_key, r.created_at, r.status,
+       l.name as location_name, u.email as aprovado_por,
+       a.status as vmpay_status, a.error as vmpay_erro,
+       sum(i.quantity * i.factor) as unidades
+  from core.purchase_receipt_item i
+  join core.purchase_receipt r on r.id = i.receipt_id
+  join core.location l on l.id = r.location_id
+  left join auth.users u on u.id = r.approved_by
+  left join core.action_log a on a.id = r.action_id
+ where r.org_id = :org_id
+   and i.product_id = :product_id
+   and not i.ignored
+ group by r.id, l.name, u.email, a.status, a.error
+ order by r.created_at desc
+ limit :limit
+"""
+
+
+@router.get("/cargas/{product_id}")
+async def product_loads(
+    product_id: uuid.UUID, ctx: AdminCtx, session: Session, limit: int = 5
+) -> list[dict]:
+    """Últimas cargas do produto pelo pick list. Admin, como o próprio pick
+    list: expõe quem aprovou e o que a VMpay respondeu."""
+    rows = (
+        await session.execute(
+            text(CARGAS_SQL),
+            {
+                "org_id": str(ctx.org_id),
+                "product_id": str(product_id),
+                "limit": max(1, min(limit, 50)),
+            },
+        )
+    ).mappings().all()
+    return [
+        {
+            "receipt_id": str(r["id"]),
+            "numero": r["number"],
+            "chave": r["access_key"],
+            "carregado_em": r["created_at"].isoformat(),
+            "loja": r["location_name"],
+            "unidades": float(r["unidades"]),
+            "aprovado_por": r["aprovado_por"] or "(conta removida)",
+            "status": r["status"],
+            "vmpay": {"status": r["vmpay_status"], "erro": r["vmpay_erro"]},
+        }
+        for r in rows
+    ]
+
+
 # --------------------------------------------------------------------- ações
 
 

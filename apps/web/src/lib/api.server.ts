@@ -6,6 +6,7 @@
 import type {
   ActionRow,
   Auditoria,
+  CargaProduto,
   Central,
   CurvaAbc,
   Heatmap,
@@ -63,6 +64,8 @@ export const serverApi = {
     serverGet<Reposicao>(`/orgs/${org}/stock/reposicao?days=${dias}`),
   stockHistory: (org: string, productId: string, dias = 30) =>
     serverGet<StockHistoryPoint[]>(`/orgs/${org}/stock/history/${productId}?days=${dias}`),
+  cargasProduto: (org: string, productId: string, limite = 5) =>
+    serverGet<CargaProduto[]>(`/orgs/${org}/stock/cargas/${productId}?limit=${limite}`),
   members: (org: string) => serverGet<MemberRow[]>(`/orgs/${org}/members`),
   actions: (org: string) => serverGet<ActionRow[]>(`/orgs/${org}/stock/actions`),
   lojas: (org: string) => serverGet<Central>(`/orgs/${org}/lojas`),

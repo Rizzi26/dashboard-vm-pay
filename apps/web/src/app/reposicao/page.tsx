@@ -1,9 +1,19 @@
-import Link from "next/link";
-
 import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { Header } from "@/components/Header";
 import { PaginacaoLinks, paginaDaUrl } from "@/components/PaginacaoLinks";
 import { Offline } from "@/components/Offline";
+import { ReposicaoCelular } from "@/components/ReposicaoCelular";
+import {
+  detalheItem,
+  insightReposicao,
+  POR_PAGINA_REPOSICAO as POR_PAGINA,
+} from "@/components/reposicao-texto";
+import { Botao } from "@/components/ui/Botao";
+import { Cartao } from "@/components/ui/Cartao";
+import { LinhaLista, Lista } from "@/components/ui/Lista";
+import { Pagina } from "@/components/ui/Pagina";
+import { Selo } from "@/components/ui/Selo";
+import { Titulo } from "@/components/ui/Titulo";
 import { serverApi } from "@/lib/api.server";
 import type { ReposicaoItem } from "@/lib/api";
 import { formatInt } from "@/lib/format";
@@ -14,60 +24,43 @@ import { orgSession } from "@/lib/org";
  * já diz a situação, então cada linha carrega só o que decide — o insight em
  * linguagem corrida ("vendia ~2 por semana", "restam 2 — dá para ~3 dias") e
  * o número a levar. Análise mora na ficha do produto.
+ *
+ * Computador e celular são duas montagens do mesmo dado: no computador as
+ * seções lado a lado, paginadas pela URL; no celular a lista de "já peguei",
+ * que precisa de estado no aparelho (ReposicaoCelular).
  */
-
-function ritmo(porDia: number): string {
-  if (porDia >= 1) {
-    const n = porDia.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
-    return `~${n} por dia`;
-  }
-  return `~${Math.max(1, Math.round(porDia * 7))} por semana`;
-}
-
-function Linha({ item, detalhe }: { item: ReposicaoItem; detalhe: string }) {
-  return (
-    <li className="flex items-center justify-between gap-4 border-t border-[var(--grid)] py-3 first:border-t-0">
-      <div className="min-w-0">
-        <Link
-          href={`/produto/${item.product_id}`}
-          className="text-sm text-[var(--text-primary)] underline decoration-[var(--grid)] underline-offset-4 hover:decoration-[var(--accent)]"
-        >
-          {item.produto}
-        </Link>
-        <span className="mt-0.5 block text-xs text-[var(--text-secondary)]">{detalhe}</span>
-      </div>
-      <span className="shrink-0 text-lg font-semibold tabular-nums text-[var(--text-primary)]">
-        {formatInt(item.sugestao)}{" "}
-        <span className="text-xs font-normal text-[var(--text-secondary)]">un.</span>
-      </span>
-    </li>
-  );
-}
-
-const POR_PAGINA = 20;
 
 function Secao({
   titulo,
   subtitulo,
   tom,
-  children,
+  itens,
+  comLoja,
   rodape,
 }: {
   titulo: string;
   subtitulo: string;
-  tom: "critical" | "warning";
-  children: React.ReactNode;
-  rodape?: React.ReactNode;
+  tom: "vermelho" | "laranja";
+  itens: ReposicaoItem[];
+  comLoja: boolean;
+  rodape: React.ReactNode;
 }) {
-  const cor =
-    tom === "critical" ? "text-[var(--status-critical)]" : "text-[var(--status-warning)]";
+  const cor = tom === "vermelho" ? "text-vermelho-texto" : "text-laranja-texto";
   return (
-    <section className="mb-6 rounded-xl border border-[var(--grid)] bg-[var(--surface-1)] p-4 shadow-[var(--shadow-card)] sm:p-5">
-      <h2 className={`text-sm font-semibold ${cor}`}>{titulo}</h2>
-      <p className="mb-2 mt-0.5 text-xs text-[var(--text-secondary)]">{subtitulo}</p>
-      <ul>{children}</ul>
+    <Cartao titulo={<span className={`font-bold ${cor}`}>{titulo}</span>} subtitulo={subtitulo}>
+      <Lista rotulo={titulo}>
+        {itens.map((i) => (
+          <LinhaLista
+            key={`${i.location_id}-${i.product_id}`}
+            href={`/produto/${i.product_id}`}
+            principal={i.produto}
+            secundario={detalheItem(i, false, comLoja)}
+            direita={<Selo tom={tom}>levar {formatInt(i.sugestao)}</Selo>}
+          />
+        ))}
+      </Lista>
       {rodape}
-    </section>
+    </Cartao>
   );
 }
 
@@ -102,78 +95,120 @@ export default async function ReposicaoPage({
   const acabando = reposicao.ok
     ? reposicao.data.itens.filter((i) => i.status === "acabando")
     : [];
+  const temItens = zerados.length + acabando.length > 0;
+  // O pick list é de admin para cima (a página dele redireciona o viewer).
+  const podePickList = org.role !== "viewer" || me.platform_admin;
+  // "Todas as lojas" com mais de uma: o mesmo produto aparece por loja.
+  const comLoja = !org.loja && org.lojas.length > 1;
 
   return (
-    <div className="viz-root min-h-screen bg-[var(--surface-0)]">
+    <div className="min-h-screen">
       <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} lojas={org.lojas} loja={org.loja} />
-      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
-        <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-              Reposição
-            </h1>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              O que levar na próxima visita. A quantidade cobre uma semana de
-              venda no ritmo atual.
-            </p>
-          </div>
-          {reposicao.ok && reposicao.data.itens.length > 0 ? (
-            <ExportCsvButton
-              path={`/orgs/${org.slug}/stock/reposicao/export.csv`}
-              filename="reposicao.csv"
-            />
-          ) : null}
-        </header>
+      <Pagina>
+        <Titulo
+          sobretitulo={<span className="hidden md:inline">Próxima visita</span>}
+          titulo="Reposição"
+          subtitulo={
+            <span className="hidden md:inline">
+              O que levar. A quantidade cobre uma semana de venda no ritmo atual.
+            </span>
+          }
+          acoes={
+            <>
+              {temItens ? (
+                <ExportCsvButton
+                  path={`/orgs/${org.slug}/stock/reposicao/export.csv`}
+                  filename="reposicao.csv"
+                  tamanho="p"
+                  rotulo={
+                    <>
+                      <span className="md:hidden">CSV</span>
+                      <span className="hidden md:inline">Exportar CSV</span>
+                    </>
+                  }
+                />
+              ) : null}
+              {podePickList ? (
+                <Botao variante="cheio" tamanho="p" href="/picklist" className="hidden md:inline-flex">
+                  Abrir pick list
+                </Botao>
+              ) : null}
+            </>
+          }
+        />
 
         {reposicao.ok ? (
-          reposicao.data.itens.length === 0 ? (
-            <p className="rounded-md border border-dashed border-[var(--grid)] p-8 text-center text-sm text-[var(--text-secondary)]">
-              Nada para repor: nenhum produto com venda recente está zerado ou
-              acabando.
-            </p>
+          !temItens ? (
+            <Cartao>
+              <p className="m-0 py-6 text-center text-[15px] text-sec">
+                Nada para repor: nenhum produto com venda recente está zerado ou acabando.
+              </p>
+            </Cartao>
           ) : (
             <>
-              {zerados.length > 0 ? (
-                <Secao
-                  titulo={`Zerados · ${formatInt(zerados.length)}`}
-                  subtitulo="Vendiam e acabaram — cada dia sem repor é venda perdida."
-                  tom="critical"
-                  rodape={<PaginacaoLinks pagina={pz} total={zerados.length} porPagina={POR_PAGINA} href={(n) => link("pz", n)} />}
-                >
-                  {fatia(zerados, pz).map((i) => (
-                    <Linha
-                      key={`${i.location_id}-${i.product_id}`}
-                      item={i}
-                      detalhe={`vendia ${ritmo(i.por_dia)}`}
-                    />
-                  ))}
-                </Secao>
-              ) : null}
+              {/* Computador */}
+              <Cartao className="hidden md:block">
+                <div className="flex flex-wrap items-center gap-7">
+                  <div>
+                    <div className="text-[13px] text-sec">Zerados</div>
+                    <div className="text-[28px] font-bold tabular-nums text-vermelho-texto">
+                      <span aria-hidden="true">■ </span>
+                      {formatInt(zerados.length)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[13px] text-sec">Acabando</div>
+                    <div className="text-[28px] font-bold tabular-nums text-laranja-texto">
+                      <span aria-hidden="true">▲ </span>
+                      {formatInt(acabando.length)}
+                    </div>
+                  </div>
+                  <p className="m-0 min-w-0 flex-[1_1_320px] text-[15px] text-texto">
+                    {insightReposicao(zerados, acabando)}
+                  </p>
+                </div>
+              </Cartao>
 
-              {acabando.length > 0 ? (
-                <Secao
-                  titulo={`Acabando · ${formatInt(acabando.length)}`}
-                  subtitulo="O saldo atual dura menos de 5 dias."
-                  tom="warning"
-                  rodape={<PaginacaoLinks pagina={pa} total={acabando.length} porPagina={POR_PAGINA} href={(n) => link("pa", n)} />}
-                >
-                  {fatia(acabando, pa).map((i) => (
-                    <Linha
-                      key={`${i.location_id}-${i.product_id}`}
-                      item={i}
-                      detalhe={`restam ${formatInt(i.quantidade)} — dá para ~${formatInt(
-                        i.dias_restantes,
-                      )} ${i.dias_restantes === 1 ? "dia" : "dias"} · vende ${ritmo(i.por_dia)}`}
-                    />
-                  ))}
-                </Secao>
-              ) : null}
+              <div className="hidden gap-4 md:grid md:grid-cols-2">
+                {zerados.length > 0 ? (
+                  <Secao
+                    titulo={`■ Zerados · ${formatInt(zerados.length)}`}
+                    subtitulo="Vendiam e acabaram."
+                    tom="vermelho"
+                    itens={fatia(zerados, pz)}
+                    comLoja={comLoja}
+                    rodape={<PaginacaoLinks pagina={pz} total={zerados.length} porPagina={POR_PAGINA} href={(n) => link("pz", n)} />}
+                  />
+                ) : null}
+                {acabando.length > 0 ? (
+                  <Secao
+                    titulo={`▲ Acabando · ${formatInt(acabando.length)}`}
+                    subtitulo="O saldo atual dura menos de 5 dias."
+                    tom="laranja"
+                    itens={fatia(acabando, pa)}
+                    comLoja={comLoja}
+                    rodape={<PaginacaoLinks pagina={pa} total={acabando.length} porPagina={POR_PAGINA} href={(n) => link("pa", n)} />}
+                  />
+                ) : null}
+              </div>
+
+              {/* Celular */}
+              <div className="md:hidden">
+                <ReposicaoCelular
+                  org={org.slug}
+                  loja={org.loja}
+                  zerados={zerados}
+                  acabando={acabando}
+                  podePickList={podePickList}
+                  comLoja={comLoja}
+                />
+              </div>
             </>
           )
         ) : (
           <Offline error={reposicao.error} />
         )}
-      </main>
+      </Pagina>
     </div>
   );
 }

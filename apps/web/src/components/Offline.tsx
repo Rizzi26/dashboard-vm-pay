@@ -9,17 +9,18 @@
  */
 export function Offline({ error }: { error: string }) {
   return (
-    <div className="rounded-md border border-dashed border-[var(--grid)] p-6 text-center">
-      <p className="text-sm text-[var(--text-primary)]">
+    <div role="status" className="vidro rounded-[20px] border-[1.5px] border-dashed border-tracejado p-6 text-center">
+      <p className="m-0 text-[15px] font-semibold text-texto">
+        <span aria-hidden="true" className="text-laranja-texto">▲ </span>
         Não foi possível carregar os dados
       </p>
-      <p className="mt-1 text-xs text-[var(--text-secondary)]">
+      <p className="m-0 mt-1 text-[13px] text-sec">
         Recarregue a página; se o problema continuar, avise quem administra o
         painel.
       </p>
-      <details className="mt-3 text-xs text-[var(--text-secondary)]">
-        <summary className="cursor-pointer">detalhe técnico</summary>
-        <p className="mt-1 font-mono">{error}</p>
+      <details className="mt-3 text-[13px] text-sec">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center text-azul-texto md:min-h-0">detalhe técnico</summary>
+        <p className="m-0 mt-1 break-words font-mono text-[12px]">{error}</p>
       </details>
     </div>
   );

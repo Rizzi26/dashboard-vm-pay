@@ -3,14 +3,19 @@ import { redirect } from "next/navigation";
 import { Header } from "@/components/Header";
 import { Offline } from "@/components/Offline";
 import { PaginacaoLinks, paginaDaUrl } from "@/components/PaginacaoLinks";
+import { LinhaLista, Lista } from "@/components/ui/Lista";
+import { Pagina } from "@/components/ui/Pagina";
+import { Selo } from "@/components/ui/Selo";
+import type { TomSelo } from "@/components/ui/Selo";
+import { Titulo } from "@/components/ui/Titulo";
 import { serverApi } from "@/lib/api.server";
 import { formatDayTime, formatInt, formatMoney } from "@/lib/format";
 import { orgSession } from "@/lib/org";
 
-const STATUS: Record<string, string> = {
-  approved: "carregado",
-  error: "recusado pela VMpay",
-  pending: "em andamento",
+const STATUS: Record<string, { rotulo: string; tom: TomSelo }> = {
+  approved: { rotulo: "carregado", tom: "verde" },
+  error: { rotulo: "recusado pela VMpay", tom: "vermelho" },
+  pending: { rotulo: "em andamento", tom: "laranja" },
 };
 
 /** Um cupom carregado: o que entrou em cada produto, quem aprovou e o que a VMpay respondeu. */
@@ -28,75 +33,88 @@ export default async function CupomPage({
   const { id } = await params;
   const pagina = paginaDaUrl((await searchParams).pagina);
   const cupom = await serverApi.picklistCupom(org.slug, id);
+  const voltar = { href: "/picklist", rotulo: "Pick list" };
 
   return (
-    <div className="viz-root min-h-screen bg-[var(--surface-0)]">
+    <div className="min-h-screen">
       <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} lojas={org.lojas} loja={org.loja} />
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
-        <Link href="/picklist" className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-          ← Pick list
-        </Link>
+      <Pagina>
         {!cupom.ok ? (
-          <div className="mt-4">
+          <>
+            <Titulo voltar={voltar} titulo="Cupom" />
             <Offline error={cupom.error} />
-          </div>
+          </>
         ) : (
           <>
-            <header className="mb-6 mt-3">
-              <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-                {cupom.data.fornecedor.nome || "Fornecedor"}
-              </h1>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                {cupom.data.numero ? `NFC-e ${cupom.data.numero} · ` : ""}
-                {cupom.data.valor_total !== null ? `${formatMoney(cupom.data.valor_total)} · ` : ""}
-                {cupom.data.loja}
-              </p>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                Carregado em {formatDayTime(cupom.data.carregado_em)} por {cupom.data.aprovado_por}
-                {" · "}
-                <span className={cupom.data.status === "approved" ? "" : "text-[var(--status-warning)]"}>
-                  {STATUS[cupom.data.status] ?? cupom.data.status}
+            <Titulo
+              voltar={voltar}
+              sobretitulo={[
+                cupom.data.numero ? `NFC-e ${cupom.data.numero}` : null,
+                cupom.data.valor_total !== null ? formatMoney(cupom.data.valor_total) : null,
+                cupom.data.loja,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              titulo={cupom.data.fornecedor.nome || "Fornecedor"}
+              subtitulo={`Carregado em ${formatDayTime(cupom.data.carregado_em)} por ${cupom.data.aprovado_por}`}
+              acoes={
+                <Selo tom={STATUS[cupom.data.status]?.tom ?? "cinza"}>
+                  {STATUS[cupom.data.status]?.rotulo ?? cupom.data.status}
+                </Selo>
+              }
+            />
+            {cupom.data.vmpay.erro ? (
+              <div
+                role="alert"
+                className="flex gap-2 rounded-2xl border border-vermelho-borda bg-vermelho-fundo px-4 py-3 text-[14px] text-texto"
+              >
+                <span aria-hidden="true" className="text-vermelho-texto">
+                  ■
                 </span>
-                {cupom.data.vmpay.erro ? (
-                  <span className="text-[var(--status-critical)]"> — {cupom.data.vmpay.erro}</span>
-                ) : null}
-              </p>
-            </header>
+                <span className="min-w-0">A VMpay respondeu: {cupom.data.vmpay.erro}</span>
+              </div>
+            ) : null}
 
-            <ul className="divide-y divide-[var(--grid)] rounded-xl border border-[var(--grid)] bg-[var(--surface-1)]">
+            <Lista rotulo="Itens do cupom">
               {cupom.data.itens.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA).map((i) => (
-                <li key={i.linha} className={`flex flex-wrap items-baseline justify-between gap-2 px-4 py-3 ${i.ignorado ? "opacity-50" : ""}`}>
-                  <div className="min-w-0">
-                    <p className="text-sm text-[var(--text-primary)]">
+                <LinhaLista
+                  key={i.linha}
+                  className={i.ignorado ? "opacity-45" : ""}
+                  principal={
+                    <>
                       {i.descricao}
-                      {i.codigo ? <span className="ml-2 text-xs text-[var(--text-secondary)]">cód. {i.codigo}</span> : null}
-                    </p>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      {i.ignorado ? (
-                        "ignorado — não entrou na prateleira"
-                      ) : i.produto ? (
-                        <>
-                          →{" "}
-                          <Link href={`/produto/${i.produto.id}`} className="hover:underline">
-                            {i.produto.nome}
-                          </Link>
-                        </>
-                      ) : (
-                        "sem produto"
-                      )}
-                    </p>
-                  </div>
-                  <p className="shrink-0 text-right text-sm tabular-nums text-[var(--text-primary)]">
-                    {i.entrou !== null ? `+${formatInt(i.entrou)} un.` : "—"}
-                    <span className="block text-xs text-[var(--text-secondary)]">
-                      {i.quantidade !== null ? `${formatInt(i.quantidade)} ${i.unidade ?? ""}` : ""}
-                      {i.fator && i.fator !== 1 ? ` × ${formatInt(i.fator)}` : ""}
-                      {i.valor_total !== null ? ` · ${formatMoney(i.valor_total)}` : ""}
+                      {i.codigo ? <span className="ml-2 text-xs text-sec">cód. {i.codigo}</span> : null}
+                    </>
+                  }
+                  secundario={
+                    i.ignorado ? (
+                      "ignorado — não entrou na prateleira"
+                    ) : i.produto ? (
+                      <>
+                        →{" "}
+                        <Link href={`/produto/${i.produto.id}`} className="text-azul-texto no-underline hover:underline">
+                          {i.produto.nome}
+                        </Link>
+                      </>
+                    ) : (
+                      "sem produto"
+                    )
+                  }
+                  direita={
+                    <span className="tabular-nums">
+                      <span className="block text-[15px] font-semibold text-texto">
+                        {i.entrou !== null ? `+${formatInt(i.entrou)} un.` : "—"}
+                      </span>
+                      <span className="block text-xs text-sec">
+                        {i.quantidade !== null ? `${formatInt(i.quantidade)} ${i.unidade ?? ""}` : ""}
+                        {i.fator && i.fator !== 1 ? ` × ${formatInt(i.fator)}` : ""}
+                        {i.valor_total !== null ? ` · ${formatMoney(i.valor_total)}` : ""}
+                      </span>
                     </span>
-                  </p>
-                </li>
+                  }
+                />
               ))}
-            </ul>
+            </Lista>
             <PaginacaoLinks
               pagina={pagina}
               total={cupom.data.itens.length}
@@ -104,10 +122,10 @@ export default async function CupomPage({
               href={(n) => `/picklist/cupom/${id}?pagina=${n}`}
               rotulo="linhas"
             />
-            <p className="mt-4 text-xs text-[var(--text-secondary)]">Chave de acesso {cupom.data.chave}</p>
+            <p className="m-0 break-all text-xs text-sec">Chave de acesso {cupom.data.chave}</p>
           </>
         )}
-      </main>
+      </Pagina>
     </div>
   );
 }

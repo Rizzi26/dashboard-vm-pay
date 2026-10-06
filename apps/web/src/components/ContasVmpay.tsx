@@ -6,6 +6,11 @@ import type { ContaVmpay } from "@/lib/api";
 import { Paginacao, usePaginacao } from "@/components/Paginacao";
 import { browserApi } from "@/lib/api";
 import { formatAtraso } from "@/lib/format";
+import { Botao } from "@/components/ui/Botao";
+import { Cartao } from "@/components/ui/Cartao";
+import { Lista } from "@/components/ui/Lista";
+import { Selo } from "@/components/ui/Selo";
+import { IconeMaisSinal } from "@/components/ui/icones";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 async function token(): Promise<string> {
@@ -16,6 +21,82 @@ async function token(): Promise<string> {
 
 function idade(iso: string | null): number | null {
   return iso ? Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000)) : null;
+}
+
+/** Classes dos campos de formulário da proposta (campo de 48px, 16px de fonte: o iOS não dá zoom). */
+const CAMPO =
+  "mt-1.5 block h-12 w-full rounded-xl border border-campo-borda bg-campo px-3.5 text-[16px] text-texto outline-none focus:border-azul";
+const ROTULO = "mt-4 block text-[13px] text-sec";
+
+/**
+ * Modal que sobe de baixo no celular (componentes() da proposta) e fica
+ * centrado de md para cima. O fundo escurecido não é tema: é o véu por cima
+ * de qualquer tema.
+ */
+function Folha({ rotulo, onSubmit, children }: { rotulo: string; onSubmit: (e: React.FormEvent) => void; children: React.ReactNode }) {
+  return (
+    <div role="dialog" aria-modal="true" aria-label={rotulo} className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 md:items-center md:p-4">
+      <form
+        onSubmit={onSubmit}
+        className="vidro-forte w-full rounded-t-[22px] px-5 pb-[max(22px,env(safe-area-inset-bottom))] pt-2.5 md:max-w-md md:rounded-[22px] md:p-6"
+      >
+        <div aria-hidden="true" className="mx-auto mb-3.5 h-[5px] w-9 rounded-full bg-seta md:hidden" />
+        {children}
+      </form>
+    </div>
+  );
+}
+
+function BotoesFolha({ busy, rotulo, ocupado, onClose }: { busy: boolean; rotulo: string; ocupado: string; onClose: () => void }) {
+  return (
+    <div className="mt-5 flex gap-2.5 md:justify-end">
+      <Botao onClick={onClose} className="flex-1 md:flex-none">
+        Cancelar
+      </Botao>
+      <Botao type="submit" variante="cheio" disabled={busy} className="flex-1 md:flex-none">
+        {busy ? ocupado : rotulo}
+      </Botao>
+    </div>
+  );
+}
+
+/**
+ * Cartão tracejado "Adicionar loja" que fecha a grade de lojas no computador.
+ * Abre o mesmo modal do botão das Contas VMpay; o aviso de sucesso (a
+ * importação demora) fica no próprio cartão até a lista atualizar.
+ */
+export function CartaoAdicionarLoja({ org, className = "" }: { org: string; className?: string }) {
+  const router = useRouter();
+  const [abrindo, setAbrindo] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setAbrindo(true)}
+        className={`flex min-h-[210px] w-full flex-col items-center justify-center gap-2.5 rounded-[22px] border-[1.5px] border-dashed border-tracejado bg-vidro-fraco p-[22px] font-[inherit] text-sec hover:bg-[var(--row-hover)] ${className}`}
+      >
+        <span aria-hidden="true" className="flex h-11 w-11 items-center justify-center rounded-full bg-azul-tinta text-azul">
+          <IconeMaisSinal tamanho={22} espessura={2.4} />
+        </span>
+        <span className="text-[16px] font-semibold text-texto">Adicionar loja</span>
+        <span role={aviso ? "status" : undefined} className="max-w-[260px] text-center text-[13px]">
+          {aviso ?? "Loja em outra conta VMpay: cole o token da conta e ela entra aqui."}
+        </span>
+      </button>
+      {abrindo ? (
+        <NovaContaModal
+          org={org}
+          onClose={() => setAbrindo(false)}
+          onCriada={(msg) => {
+            setAbrindo(false);
+            setAviso(msg);
+            router.refresh();
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
 /**
@@ -43,84 +124,72 @@ export function ContasVmpay({ org, contas }: { org: string; contas: ContaVmpay[]
 
   return (
     // id: âncora de "Contas VMpay" na tela Mais (/#contas).
-    <section id="contas" className="mt-8 scroll-mt-28">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Contas VMpay</h2>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Cada loja pode estar numa conta VMpay diferente. Todas aparecem juntas aqui.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setAbrindo(true)}
-          className="rounded-md bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-[var(--accent-contrast)]"
-        >
-          + Adicionar loja
-        </button>
-      </div>
-
+    <Cartao
+      id="contas"
+      className="mt-4 scroll-mt-28"
+      titulo="Contas VMpay"
+      subtitulo="Cada loja pode estar numa conta VMpay diferente. Todas aparecem juntas aqui."
+      // No computador quem adiciona é o cartão tracejado da grade de lojas;
+      // no celular (que chega aqui pelo Mais) o botão é este.
+      acoes={
+        <Botao tamanho="p" icone={<IconeMaisSinal tamanho={16} />} onClick={() => setAbrindo(true)} className="md:hidden">
+          Adicionar loja
+        </Botao>
+      }
+    >
       {aviso ? (
-        <p role="status" className="mb-3 rounded-md border border-[var(--grid)] px-3 py-2 text-sm text-[var(--text-primary)]">
-          {aviso}
-          <button type="button" className="ml-3 text-xs text-[var(--text-secondary)] underline" onClick={() => setAviso(null)}>
+        <p role="status" className="mb-3 flex items-start justify-between gap-3 rounded-xl bg-azul-tinta px-3.5 py-2.5 text-[14px] text-texto">
+          <span>{aviso}</span>
+          <button type="button" className="min-h-11 shrink-0 border-0 bg-transparent text-[13px] text-azul-texto md:min-h-0" onClick={() => setAviso(null)}>
             fechar
           </button>
         </p>
       ) : null}
 
-      <ul className="divide-y divide-[var(--grid)] rounded-xl border border-[var(--grid)] bg-[var(--surface-1)]">
+      <Lista rotulo="Contas VMpay">
         {pagContas.visiveis.map((c) => {
           const lida = idade(c.ultima_leitura);
           return (
-            <li key={c.id} className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${c.ativa ? "" : "opacity-50"}`}>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-[var(--text-primary)]">
-                  {c.nome}
-                  {c.principal ? <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">principal</span> : null}
-                  {!c.ativa ? <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">desativada</span> : null}
+            <li key={c.id} className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-[13px] ${c.ativa ? "" : "opacity-50"}`}>
+              <div className="min-w-0 flex-1">
+                <p className="m-0 flex flex-wrap items-center gap-2 text-[16px] text-texto md:text-[15px]">
+                  <span className="break-words font-medium">{c.nome}</span>
+                  {c.principal ? <Selo tom="azul">principal</Selo> : null}
+                  {!c.ativa ? <Selo tom="cinza">desativada</Selo> : null}
                 </p>
                 {c.ativa && !c.token_no_cofre ? (
-                  <p className="text-xs text-[var(--status-warning)]">
+                  <p className="m-0 mt-0.5 text-[13px] text-laranja-texto">
                     ▲ token fora do cofre (variável de ambiente) — troque o token para movê-lo
                   </p>
                 ) : null}
-                <p className="text-xs text-[var(--text-secondary)]">
+                <p className="m-0 mt-0.5 text-[13px] text-sec">
                   {c.lojas.length ? c.lojas.join(" · ") : "nenhuma loja ainda"}
                   {" · "}
                   {c.erro ? (
-                    <span className="text-[var(--status-critical)]">■ erro na última leitura</span>
+                    <span className="text-vermelho-texto">■ erro na última leitura</span>
                   ) : lida === null ? (
-                    <span className="text-[var(--status-warning)]">▲ importando…</span>
+                    <span className="text-laranja-texto">▲ importando…</span>
                   ) : (
                     <>lida {formatAtraso(lida)}</>
                   )}
                 </p>
               </div>
               {c.ativa ? (
-                <span className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setTrocando(c)}
-                    className="text-xs text-[var(--text-secondary)] underline hover:text-[var(--text-primary)]"
-                  >
-                    trocar token
-                  </button>
+                <span className="flex gap-1">
+                  <Botao variante="texto" tamanho="p" onClick={() => setTrocando(c)}>
+                    Trocar token
+                  </Botao>
                   {!c.principal ? (
-                    <button
-                      type="button"
-                      onClick={() => desativar(c)}
-                      className="text-xs text-[var(--text-secondary)] underline hover:text-[var(--text-primary)]"
-                    >
-                      desativar
-                    </button>
+                    <Botao variante="perigo" tamanho="p" onClick={() => desativar(c)}>
+                      Desativar
+                    </Botao>
                   ) : null}
                 </span>
               ) : null}
             </li>
           );
         })}
-      </ul>
+      </Lista>
       <Paginacao {...pagContas.rodape} rotulo="contas" />
 
       {trocando ? (
@@ -147,7 +216,7 @@ export function ContasVmpay({ org, contas }: { org: string; contas: ContaVmpay[]
           }}
         />
       ) : null}
-    </section>
+    </Cartao>
   );
 }
 
@@ -196,63 +265,44 @@ function NovaContaModal({
     }
   }
 
-  const campo =
-    "mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm";
-
   return (
-    <div role="dialog" aria-modal="true" aria-label="Adicionar loja" className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
-      <form
-        onSubmit={enviar}
-        className="w-full rounded-t-xl border border-[var(--grid)] bg-[var(--surface-1)] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-card)] sm:max-w-md sm:rounded-xl"
-      >
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">Adicionar loja</h2>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Para uma loja que está em outra conta VMpay (outro email de operador). Se a máquina
-          nova está na mesma conta de uma loja que já aparece aqui, não precisa: ela entra
-          sozinha na próxima atualização.
+    <Folha rotulo="Adicionar loja" onSubmit={enviar}>
+      <h2 className="m-0 text-[20px] font-bold text-texto">Adicionar loja</h2>
+      <p className="m-0 mt-1 text-[14px] text-sec">
+        Para uma loja que está em outra conta VMpay (outro email de operador). Se a máquina
+        nova está na mesma conta de uma loja que já aparece aqui, não precisa: ela entra
+        sozinha na próxima atualização.
+      </p>
+
+      <label className={ROTULO}>
+        Nome da loja
+        <input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Jardins III" className={`${CAMPO} placeholder:text-terc`} />
+      </label>
+
+      <label className={ROTULO}>
+        Token de API da conta VMpay
+        <input
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          value={segredo}
+          onChange={(e) => setSegredo(e.target.value)}
+          className={`${CAMPO} font-mono`}
+        />
+      </label>
+      <p className="m-0 mt-1.5 text-[13px] text-sec">
+        O token é testado na VMpay antes de salvar e fica guardado cifrado no servidor — ninguém
+        consegue vê-lo de novo pelo painel. Não envie o token por WhatsApp ou email.
+      </p>
+
+      {erro ? (
+        <p role="alert" className="m-0 mt-3 text-[14px] text-vermelho-texto">
+          ■ {erro}
         </p>
+      ) : null}
 
-        <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-          Nome da loja
-          <input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Jardins III" className={campo} />
-        </label>
-
-        <label className="mt-3 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-          Token de API da conta VMpay
-          <input
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            value={segredo}
-            onChange={(e) => setSegredo(e.target.value)}
-            className={`${campo} font-mono`}
-          />
-        </label>
-        <p className="mt-1.5 text-xs text-[var(--text-secondary)]">
-          O token é testado na VMpay antes de salvar e fica guardado cifrado no servidor — ninguém
-          consegue vê-lo de novo pelo painel. Não envie o token por WhatsApp ou email.
-        </p>
-
-        {erro ? (
-          <p role="alert" className="mt-3 text-sm text-[var(--status-critical)]">
-            {erro}
-          </p>
-        ) : null}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-md border border-[var(--grid)] px-4 py-2.5 text-sm text-[var(--text-secondary)]">
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
-          >
-            {busy ? "Testando na VMpay…" : "Conectar"}
-          </button>
-        </div>
-      </form>
-    </div>
+      <BotoesFolha busy={busy} rotulo="Conectar" ocupado="Testando na VMpay…" onClose={onClose} />
+    </Folha>
   );
 }
 
@@ -304,47 +354,31 @@ function TrocarTokenModal({
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Trocar token" className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
-      <form
-        onSubmit={enviar}
-        className="w-full rounded-t-xl border border-[var(--grid)] bg-[var(--surface-1)] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-card)] sm:max-w-md sm:rounded-xl"
-      >
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">Trocar token — {conta.nome}</h2>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Gere um token novo na VMpay desta conta e cole aqui. Ele é testado antes de salvar e
-          precisa enxergar as mesmas máquinas desta conta. Depois, revogue o token antigo na VMpay.
-          {!conta.token_no_cofre ? " O token passa a ficar guardado cifrado no cofre do servidor." : ""}
+    <Folha rotulo="Trocar token" onSubmit={enviar}>
+      <h2 className="m-0 text-[20px] font-bold text-texto">Trocar token — {conta.nome}</h2>
+      <p className="m-0 mt-1 text-[14px] text-sec">
+        Gere um token novo na VMpay desta conta e cole aqui. Ele é testado antes de salvar e
+        precisa enxergar as mesmas máquinas desta conta. Depois, revogue o token antigo na VMpay.
+        {!conta.token_no_cofre ? " O token passa a ficar guardado cifrado no cofre do servidor." : ""}
+      </p>
+      <label className={ROTULO}>
+        Token novo
+        <input
+          autoFocus
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          value={segredo}
+          onChange={(e) => setSegredo(e.target.value)}
+          className={`${CAMPO} font-mono`}
+        />
+      </label>
+      {erro ? (
+        <p role="alert" className="m-0 mt-3 text-[14px] text-vermelho-texto">
+          ■ {erro}
         </p>
-        <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-          Token novo
-          <input
-            autoFocus
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            value={segredo}
-            onChange={(e) => setSegredo(e.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 font-mono text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
-          />
-        </label>
-        {erro ? (
-          <p role="alert" className="mt-3 text-sm text-[var(--status-critical)]">
-            {erro}
-          </p>
-        ) : null}
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-md border border-[var(--grid)] px-4 py-2.5 text-sm text-[var(--text-secondary)]">
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
-          >
-            {busy ? "Testando na VMpay…" : "Trocar token"}
-          </button>
-        </div>
-      </form>
-    </div>
+      ) : null}
+      <BotoesFolha busy={busy} rotulo="Trocar token" ocupado="Testando na VMpay…" onClose={onClose} />
+    </Folha>
   );
 }

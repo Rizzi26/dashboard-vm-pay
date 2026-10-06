@@ -14,6 +14,9 @@ import { Paginacao, usePaginacao } from "@/components/Paginacao";
  *
  * O viewBox usa a largura MEDIDA do contêiner: com viewBox fixo de 800, o
  * fontSize 11 dos rótulos virava ~5px num celular de 375px.
+ *
+ * Quem usa põe dentro de SuperficieGrafico: --series-1 e o anel em
+ * --surface-1 contam com fundo sólido, não com o vidro.
  */
 export function RevenueChart({
   points,
@@ -70,7 +73,7 @@ export function RevenueChart({
 
   if (!geo) {
     return (
-      <p className="py-12 text-center text-sm text-[var(--text-secondary)]">
+      <p className="py-12 text-center text-sm text-sec">
         Sem vendas no período.
       </p>
     );
@@ -213,17 +216,17 @@ export function RevenueChart({
       <div className="mt-2 flex min-h-[2.5rem] items-start justify-between gap-4">
         <div className="text-sm">
           {ativo ? (
-            <span className="text-[var(--text-primary)]">
+            <span className="text-texto">
               <span className="font-medium">{formatDay(ativo.dia)}</span>
               {" · "}
               <span className="tabular-nums">{formatMoney(ativo.faturamento)}</span>
               {" · "}
-              <span className="tabular-nums text-[var(--text-secondary)]">
+              <span className="tabular-nums text-sec">
                 {formatInt(ativo.transacoes)} {countLabel}
               </span>
             </span>
           ) : (
-            <span className="text-[var(--text-secondary)]">
+            <span className="text-sec">
               Toque ou passe o cursor sobre o gráfico para ver o dia.
             </span>
           )}
@@ -231,7 +234,7 @@ export function RevenueChart({
         <button
           type="button"
           onClick={() => setShowTable((v) => !v)}
-          className="shrink-0 text-xs text-[var(--text-secondary)] underline underline-offset-2"
+          className="min-h-11 shrink-0 text-[13px] text-azul-texto md:min-h-0"
         >
           {showTable ? "ocultar tabela" : "ver como tabela"}
         </button>
@@ -241,17 +244,17 @@ export function RevenueChart({
         <div className="overflow-x-auto">
           <table className="mt-3 w-full text-sm">
             <thead>
-              <tr className="border-b border-[var(--grid)] text-left text-[11px] uppercase tracking-[0.08em] text-[var(--text-secondary)]">
+              <tr className="border-b border-sep text-left text-[12px] font-semibold uppercase tracking-[0.03em] text-sec">
                 <th className="py-2 font-medium">Dia</th>
                 <th className="py-2 text-right font-medium">Faturamento</th>
                 <th className="py-2 text-right font-medium">{countLabel}</th>
               </tr>
             </thead>
-            <tbody className="text-[var(--text-primary)]">
+            <tbody className="text-texto">
               {pagTabela.visiveis.map((p) => (
                 <tr
                   key={p.dia}
-                  className="border-t border-[var(--grid)] hover:bg-[var(--row-hover)]"
+                  className="border-t border-sep hover:bg-[var(--row-hover)]"
                 >
                   <td className="py-2">{formatDay(p.dia)}</td>
                   <td className="py-2 text-right tabular-nums">{formatMoney(p.faturamento)}</td>
