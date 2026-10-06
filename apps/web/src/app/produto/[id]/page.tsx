@@ -35,10 +35,10 @@ export default async function ProdutoPage({
       <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} lojas={org.lojas} loja={org.loja} periodo={periodo} />
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
         <Link
-          href="/estoque"
+          href="/prateleira"
           className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         >
-          ← Estoque
+          ← Prateleira
         </Link>
 
         {detail.ok ? (
@@ -95,12 +95,12 @@ export default async function ProdutoPage({
 
             <div className="mb-6">
               <Link
-                href={`/estoque?q=${encodeURIComponent(
+                href={`/prateleira?q=${encodeURIComponent(
                   detail.data.produto.barcode ?? detail.data.produto.nome,
                 )}`}
                 className="text-sm text-[var(--accent)] underline underline-offset-4"
               >
-                Ver no estoque →
+                Ver na prateleira →
               </Link>
             </div>
 

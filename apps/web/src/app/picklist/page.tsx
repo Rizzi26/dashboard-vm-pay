@@ -22,7 +22,7 @@ export default async function PickListPage() {
         <header className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Pick list</h1>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Entrada de estoque pelo cupom fiscal da compra: leia o QR Code, confira e aprove.
+            Reposição da prateleira pelo cupom fiscal da compra: leia o QR Code, confira e aprove.
           </p>
         </header>
         {opcoes.ok ? (

@@ -33,7 +33,7 @@ function descrever(e: EventoAuditoria, nomes: Map<string, string>): string {
         ? `Consultou cupom só pela chave (lançamento manual) — ${texto(a.chave)}`
         : `Consultou cupom fiscal de ${texto(a.fornecedor) || "fornecedor"} — ${texto(a.itens)} itens`;
     case "picklist.approve":
-      return `Aprovou carga de cupom no estoque — ${(a.items as unknown[] | undefined)?.length ?? 0} produtos`;
+      return `Aprovou carga de cupom — ${(a.items as unknown[] | undefined)?.length ?? 0} produtos`;
     case "stock.restock":
       return `Lançou reabastecimento — ${(a.items as unknown[] | undefined)?.length ?? 0} produtos`;
     case "stock.price":
@@ -41,7 +41,7 @@ function descrever(e: EventoAuditoria, nomes: Map<string, string>): string {
     case "product.create":
       return `Cadastrou o produto "${texto(a.name)}"`;
     case "estoque.exportar":
-      return `Exportou o estoque (${texto(a.linhas)} linhas)`;
+      return `Exportou a prateleira (${texto(a.linhas)} linhas)`;
     case "reposicao.exportar":
       return `Exportou a lista de reposição (${texto(a.linhas)} itens)`;
     case "dados.atualizar":
@@ -65,7 +65,7 @@ function aparelho(ua: string | null): string | null {
   return so ? `${nav} · ${so}` : nav;
 }
 
-/** Fora do componente: o "agora" é estável dentro do request (ver estoque/page). */
+/** Fora do componente: o "agora" é estável dentro do request (ver prateleira/page). */
 function inicioDoPeriodo(dias: string): string {
   return new Date(Date.now() - (Number(dias) - 1) * 86_400_000).toISOString().slice(0, 10);
 }

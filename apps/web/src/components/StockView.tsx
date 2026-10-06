@@ -132,7 +132,7 @@ export function StockView({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "estoque.csv";
+      a.download = "prateleira.csv";
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -157,7 +157,7 @@ export function StockView({
   if (rows.length === 0) {
     return (
       <p className="rounded-md border border-dashed border-[var(--grid)] p-8 text-center text-sm text-[var(--text-secondary)]">
-        O estoque ainda não foi sincronizado com a VMpay. Os dados aparecem após
+        A prateleira ainda não foi sincronizada com a VMpay. Os dados aparecem após
         a primeira sincronização.
       </p>
     );
@@ -235,7 +235,7 @@ export function StockView({
           {(
             [
               ["todos", "Todos"],
-              ["com", "Com estoque"],
+              ["com", "Com saldo"],
               ["sem", "Em ruptura"],
             ] as const
           ).map(([valor, rotulo]) => (
@@ -436,7 +436,7 @@ export function StockView({
             await executar(
               "/products",
               { ...body, loja },
-              `Produto "${body.nome}" criado no cadastro da VMpay. Para ele aparecer na máquina e no estoque, inclua-o no planograma da instalação.`,
+              `Produto "${body.nome}" criado no cadastro da VMpay. Para ele aparecer na máquina e na prateleira, inclua-o no planograma da instalação.`,
             );
           }}
         />

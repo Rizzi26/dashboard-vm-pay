@@ -214,7 +214,7 @@ export function PickListView({
         throw new Error(detalhe ?? `backend respondeu ${resp.status}`);
       }
       recomecar();
-      setFeedback(`Cupom carregado: ${totalUnidades} unidades entraram no estoque.`);
+      setFeedback(`Cupom carregado: ${totalUnidades} unidades entraram na prateleira.`);
       router.refresh();
     } catch (err) {
       setErro(err instanceof Error ? err.message : "falha na aprovação");
@@ -302,7 +302,7 @@ export function PickListView({
           {consulta.ja_carregado ? (
             <p role="alert" className="mt-4 rounded-md border border-[var(--status-warning)] px-3 py-2 text-sm text-[var(--text-primary)]">
               Este cupom já foi carregado em {formatDayTime(consulta.ja_carregado.em)} — aprovar de
-              novo dobraria o estoque.
+              novo dobraria o saldo.
             </p>
           ) : null}
 

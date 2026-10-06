@@ -130,7 +130,7 @@ async def export_csv(ctx: ViewerCtx, session: Session) -> Response:
     return Response(
         content=buffer.getvalue(),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="estoque.csv"'},
+        headers={"Content-Disposition": 'attachment; filename="prateleira.csv"'},
     )
 
 
@@ -397,6 +397,82 @@ select q.location_id,
  group by q.location_id, l.name, q.product_id, p.name, p.barcode
  order by quebra desc, ultima desc
 """
+
+
+# ------------------------------------------------------------------ encalhe
+
+#: Item com saldo na prateleira e sem venda nesta janela é encalhe: ocupa
+#: canaleta e prende dinheiro. "Nunca vendeu" entra também (ultima_venda nula).
+ENCALHE_SQL = """
+select b.location_id,
+       l.name                          as location_name,
+       p.id                            as product_id,
+       p.name                          as product_name,
+       p.barcode,
+       b.quantity,
+       coalesce(b.price, p.unit_price) as preco,
+       uv.ultima_venda
+  from core.stock_balance b
+  join core.location l on l.id = b.location_id
+  join core.product  p on p.id = b.product_id
+  left join lateral (
+        -- Venda deste produto NESTA loja: máquina da loja + good do produto.
+        select max(v.occurred_at) as ultima_venda
+          from core.location_link ll
+          join core.product_link pl on pl.integration_id = ll.integration_id
+                                   and pl.product_id = p.id
+          join vmpay.vend v on v.machine_id = ll.machine_id
+                           and v.good_id = cast(pl.external_id as bigint)
+         where ll.location_id = b.location_id
+  ) uv on true
+ where l.org_id = :org_id
+   and b.quantity > 0
+   and (cast(:loja as uuid) is null or l.id = cast(:loja as uuid))
+   and (uv.ultima_venda is null or uv.ultima_venda < now() - make_interval(days => :dias))
+ order by b.quantity * coalesce(b.price, p.unit_price, 0) desc, p.name
+"""
+
+
+@router.get("/encalhe")
+async def encalhe(
+    ctx: ViewerCtx, session: Session, dias: int = 30, loja: uuid.UUID | None = None
+) -> dict:
+    """Itens parados na prateleira: têm saldo e não vendem há `dias` dias."""
+    dias = max(7, min(dias, 365))
+    rows = (
+        await session.execute(
+            text(ENCALHE_SQL),
+            {"org_id": str(ctx.org_id), "dias": dias, "loja": str(loja) if loja else None},
+        )
+    ).mappings().all()
+    itens = []
+    for r in rows:
+        quantidade = float(r["quantity"])
+        preco = float(r["preco"]) if r["preco"] is not None else None
+        itens.append(
+            {
+                "location_id": str(r["location_id"]),
+                "local": r["location_name"],
+                "product_id": str(r["product_id"]),
+                "produto": r["product_name"],
+                "barcode": r["barcode"],
+                "quantidade": quantidade,
+                "preco": preco,
+                # A preço de venda: é o que a canaleta deixa de faturar, não o custo.
+                "valor_parado": round(quantidade * preco, 2) if preco is not None else None,
+                "ultima_venda": r["ultima_venda"].isoformat() if r["ultima_venda"] else None,
+            }
+        )
+    return {
+        "dias": dias,
+        "resumo": {
+            "itens": len(itens),
+            "unidades": sum(i["quantidade"] for i in itens),
+            "valor_parado": round(sum(i["valor_parado"] or 0 for i in itens), 2),
+            "nunca_venderam": sum(1 for i in itens if i["ultima_venda"] is None),
+        },
+        "itens": itens,
+    }
 
 
 @router.get("/quebras")

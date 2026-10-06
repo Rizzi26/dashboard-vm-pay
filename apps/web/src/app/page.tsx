@@ -10,7 +10,7 @@ import { orgSession } from "@/lib/org";
 /**
  * Central das lojas: a primeira tela. O lojista é a organização; cada
  * mercadinho dele é uma loja. Daqui se vê qual loja pede atenção e se entra
- * nela — a loja escolhida passa a valer em Vendas, Estoque e Reposição.
+ * nela — a loja escolhida passa a valer em Vendas, Prateleira e Reposição.
  */
 export default async function CentralPage() {
   const { me, org } = await orgSession();

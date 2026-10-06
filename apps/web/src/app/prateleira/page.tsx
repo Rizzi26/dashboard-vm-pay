@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { EncalheView } from "@/components/EncalheView";
 import { Header } from "@/components/Header";
 import { Offline } from "@/components/Offline";
 import { StockView } from "@/components/StockView";
@@ -18,15 +20,19 @@ function atrasoDoEstoque(rows: { atualizado_em: string }[]): number | null {
   return Math.max(0, Math.floor((Date.now() - maisRecente) / 1000));
 }
 
-export default async function EstoquePage({
+export default async function PrateleiraPage({
   searchParams,
 }: {
-  searchParams: Promise<{ disp?: string; q?: string }>;
+  searchParams: Promise<{ disp?: string; q?: string; ver?: string }>;
 }) {
   const { me, org } = await orgSession();
-  const { disp, q } = await searchParams;
+  const { disp, q, ver } = await searchParams;
+  const aba = ver === "encalhe" ? "encalhe" : "saldo";
   const initialDisp = disp === "com" || disp === "sem" ? disp : undefined;
-  const todos = await serverApi.stock(org.slug);
+  const [todos, encalhe] = await Promise.all([
+    serverApi.stock(org.slug),
+    serverApi.encalhe(org.slug, org.loja ? `?loja=${org.loja}` : ""),
+  ]);
   // Loja escolhida na barra: só os saldos dela.
   const stock = todos.ok && org.loja
     ? { ...todos, data: todos.data.filter((r) => r.location_id === org.loja) }
@@ -39,9 +45,9 @@ export default async function EstoquePage({
       <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} lojas={org.lojas} loja={org.loja} />
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Estoque</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Prateleira</h1>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Saldo atual por local e produto
+            O que está exposto em cada loja agora
             {atrasoSeg !== null ? (
               atrasoSeg > 9 * 3600 ? (
                 <>
@@ -56,8 +62,36 @@ export default async function EstoquePage({
             ) : null}
             .
           </p>
+          <nav aria-label="Visão" className="mt-3 inline-flex rounded-lg border border-[var(--grid)] bg-[var(--surface-0)] p-0.5">
+            {[
+              { key: "saldo", label: "Saldo", href: "/prateleira" },
+              {
+                key: "encalhe",
+                label: `Encalhados${encalhe.ok ? ` (${encalhe.data.resumo.itens})` : ""}`,
+                href: "/prateleira?ver=encalhe",
+              },
+            ].map((t) => (
+              <Link
+                key={t.key}
+                href={t.href}
+                className={
+                  t.key === aba
+                    ? "flex min-h-11 items-center rounded-md bg-[var(--surface-1)] px-3 text-sm font-medium text-[var(--text-primary)] shadow-[var(--shadow-card)]"
+                    : "flex min-h-11 items-center rounded-md px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                }
+              >
+                {t.label}
+              </Link>
+            ))}
+          </nav>
         </header>
-        {stock.ok ? (
+        {aba === "encalhe" ? (
+          encalhe.ok ? (
+            <EncalheView dados={encalhe.data} />
+          ) : (
+            <Offline error={encalhe.error} />
+          )
+        ) : stock.ok ? (
           <StockView
             rows={stock.data}
             org={org.slug}

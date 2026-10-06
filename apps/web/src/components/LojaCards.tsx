@@ -68,11 +68,11 @@ export function LojaCards({ lojas }: { lojas: LojaCard[] }) {
                   {formatInt(l.estoque.acabando)} acabando
                 </span>
               ) : (
-                <span>● estoque sem rupturas</span>
+                <span>● prateleira sem rupturas</span>
               )}
               <span>
                 {" · "}
-                {formatInt(l.estoque.itens)} itens, estoque {formatAtraso(idadeSeg(l.estoque.atualizado_em))}
+                {formatInt(l.estoque.itens)} itens, lida {formatAtraso(idadeSeg(l.estoque.atualizado_em))}
               </span>
             </p>
 
@@ -86,10 +86,10 @@ export function LojaCards({ lojas }: { lojas: LojaCard[] }) {
               </button>
               <button
                 type="button"
-                onClick={() => entrar(l.id, "/estoque")}
+                onClick={() => entrar(l.id, "/prateleira")}
                 className="rounded-md border border-[var(--grid)] px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--row-hover)]"
               >
-                Estoque
+                Prateleira
               </button>
               <button
                 type="button"

@@ -16,7 +16,11 @@ const nextConfig: NextConfig = {
   // Telas tiradas do menu: o link salvo cai numa tela viva, não num 404.
   // Os endpoints delas seguem na API (/sales/lost, /stock/quebras).
   async redirects() {
-    return [{ source: "/perdidas", destination: "/vendas", permanent: false }];
+    return [
+      { source: "/perdidas", destination: "/vendas", permanent: false },
+      // Estoque virou Prateleira: "estoque" fica para o CD (centro de distribuição).
+      { source: "/estoque", destination: "/prateleira", permanent: true },
+    ];
   },
 };
 
