@@ -55,7 +55,9 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-20 border-b border-[var(--grid)] bg-[var(--surface-0)]">
-      <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-3">
+      {/* Duas linhas: identidade + ações em cima, navegação embaixo. Numa linha
+          só, o botão de atualizar empurrava os links por cima do nome. */}
+      <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-2 sm:gap-2 sm:px-6 sm:py-3">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0">
             <span className="block truncate text-sm font-semibold text-[var(--text-primary)]">
@@ -82,7 +84,7 @@ export function Header({
             </button>
           </div>
         </div>
-        <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:gap-2 sm:overflow-visible sm:px-0">
+        <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:-mx-3 sm:gap-2 sm:overflow-visible sm:px-0">
           {LINKS.filter((l) => l.roles.includes(role)).map((l) => {
             const ativo =
               pathname === l.href ||
