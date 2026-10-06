@@ -10,7 +10,7 @@ from vmpay_api.routers import sync as sync_router
 def _sem_rodada_real(monkeypatch):
     chamadas = []
 
-    async def falso():
+    async def falso(**kwargs):
         chamadas.append(1)
         return []
 
