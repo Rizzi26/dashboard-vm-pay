@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ProductRefs } from "@/lib/api";
 
-/** Cadastro de produto na VMpay — usado pelo estoque e pelo pick list. */
+/** Cadastro de produto na VMpay — usado pela Prateleira e pelo pick list. */
 export type NewProductBody = {
   nome: string;
   fabricante_id: number;
@@ -96,7 +96,7 @@ export function NewProductModal({
         <h2 className="text-base font-semibold text-[var(--text-primary)]">Adicionar produto</h2>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
           {aviso ??
-            "O produto entra no cadastro da VMpay. Para aparecer na máquina e no estoque, inclua-o depois no planograma da instalação."}
+            "O produto entra no cadastro da VMpay. Para aparecer na máquina e na prateleira, inclua-o depois no planograma da instalação."}
         </p>
 
         <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">

@@ -10,7 +10,7 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 const LINKS = [
   { href: "/", label: "Central", roles: ["viewer", "admin", "master"] },
   { href: "/vendas", label: "Vendas", roles: ["viewer", "admin", "master"] },
-  { href: "/estoque", label: "Estoque", roles: ["viewer", "admin", "master"] },
+  { href: "/prateleira", label: "Prateleira", roles: ["viewer", "admin", "master"] },
   { href: "/reposicao", label: "Reposição", roles: ["viewer", "admin", "master"] },
   { href: "/picklist", label: "Pick list", roles: ["admin", "master"] },
   { href: "/usuarios", label: "Usuários", roles: ["master"] },
@@ -97,7 +97,7 @@ export function Header({
           {LINKS.filter((l) => l.roles.includes(role)).map((l) => {
             const ativo =
               pathname === l.href ||
-              (l.href === "/estoque" && pathname.startsWith("/produto"));
+              (l.href === "/prateleira" && pathname.startsWith("/produto"));
             return (
               <Link
                 key={l.href}
