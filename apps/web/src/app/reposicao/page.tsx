@@ -78,7 +78,7 @@ export default async function ReposicaoPage() {
 
   return (
     <div className="viz-root min-h-screen bg-[var(--surface-0)]">
-      <Header orgName={org.name} role={org.role} email={me.email} local={org.local} />
+      <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} local={org.local} />
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
