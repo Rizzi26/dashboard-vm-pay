@@ -245,3 +245,32 @@ async def test_filtro_por_loja_chega_na_consulta():
     await get(f"/orgs/mercadinho/sales/daily?loja={loja}")
     assert sessao.params[0]["loja"] == loja
     assert "core.location_link" in sessao.sqls[0]
+
+
+async def test_resumo_traz_o_periodo_anterior_do_mesmo_tamanho():
+    sessao = com_sessao([{"revenue": 120, "transactions": 10, "items": 10, "discounts": 0, "machines": 1,
+                          "prev_revenue": 100, "prev_transactions": 8}])
+    body = (await get("/orgs/mercadinho/sales/summary?start=2026-09-01&end=2026-09-30")).json()
+    assert body["anterior"]["inicio"] == "2026-08-02"  # 30 dias antes de 01/09
+    assert body["anterior"]["fim"] == "2026-08-31"
+    assert body["anterior"]["faturamento"] == 100.0
+    assert sessao.params[0]["prev_start"] == date(2026, 8, 2)
+
+
+async def test_curva_abc_classifica_pelo_acumulado():
+    com_sessao([
+        {"product_id": None, "nome": f"P{i}", "good_id": i, "revenue": v, "units": 1}
+        for i, v in enumerate([50, 30, 10, 6, 4])
+    ])
+    body = (await get("/orgs/mercadinho/sales/abc")).json()
+    # 50 (0%→A), 30 (50%→A), 10 (80%→B), 6 (90%→B), 4 (96%→C)
+    assert [i["classe"] for i in body["itens"]] == ["A", "A", "B", "B", "C"]
+    assert body["resumo"]["A"] == {"produtos": 2, "faturamento": 80.0}
+    assert body["itens"][-1]["acumulado"] == 1.0
+
+
+async def test_heatmap_no_relogio_da_loja():
+    sessao = com_sessao([{"dia": 5, "hora": 19, "revenue": 42.5, "transactions": 4}])
+    body = (await get("/orgs/mercadinho/sales/heatmap")).json()
+    assert body["celulas"] == [{"dia": 5, "hora": 19, "faturamento": 42.5, "transacoes": 4}]
+    assert "America/Sao_Paulo" in sessao.sqls[0]
