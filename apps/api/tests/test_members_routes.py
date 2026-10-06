@@ -156,9 +156,12 @@ async def test_master_convida_e_grava_membership():
     sent = json.loads(invite.calls.last.request.content)
     assert sent["redirect_to"].endswith("/definir-senha")
     assert sessao.committed
-    sql, params = sessao.executed[-1]
+    sql, params = next((q, p) for q, p in sessao.executed if "core.membership" in q.lower())
     assert "on conflict" in sql.lower()
     assert params["role"] == "admin"
+    # O convite fica na auditoria, na mesma transação da membership.
+    _, evento = next((q, p) for q, p in sessao.executed if "core.audit_event" in q)
+    assert evento["action"] == "usuarios.convidar"
     assert resp.json()["email_enviado"] == "convite"
 
 

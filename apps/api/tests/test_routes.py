@@ -44,9 +44,11 @@ class FakeSession:
     def __init__(self, rows):
         self.rows = rows
         self.params: list[dict] = []
+        self.sqls: list[str] = []
 
-    async def execute(self, _stmt, params=None):
+    async def execute(self, stmt, params=None):
         self.params.append(params or {})
+        self.sqls.append(str(stmt))
         return FakeResult(self.rows)
 
 
@@ -222,3 +224,24 @@ async def test_produto_sem_vinculo_devolve_zeros_e_nao_explode():
 async def test_produto_de_outra_org_da_404():
     com_sessao_sequencial([[]])
     assert (await get(f"/orgs/mercadinho/products/{PROD_ID}")).status_code == 404
+
+
+ZERO = [{"revenue": 0, "transactions": 0, "items": 0, "discounts": 0, "machines": 0}]
+
+
+async def test_vendas_so_das_maquinas_da_organizacao():
+    """O staging de vendas não tem organização: o filtro é pelas máquinas que
+    os locais da organização vinculam. Sem isso, um lojista via o outro."""
+    sessao = com_sessao(ZERO)
+    await get("/orgs/mercadinho/sales/summary")
+    assert "core.location_link" in sessao.sqls[0]
+    assert sessao.params[0]["org_id"] == str(ORG)
+    assert sessao.params[0]["loja"] is None
+
+
+async def test_filtro_por_loja_chega_na_consulta():
+    loja = "00000000-0000-0000-0000-0000000000aa"
+    sessao = com_sessao([])
+    await get(f"/orgs/mercadinho/sales/daily?loja={loja}")
+    assert sessao.params[0]["loja"] == loja
+    assert "core.location_link" in sessao.sqls[0]

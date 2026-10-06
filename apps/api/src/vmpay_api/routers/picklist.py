@@ -25,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .. import nfce
+from ..audit import registrar
 from ..auth import OrgContext, require_role
 from ..db import get_session
 from .stock import RestockBody, RestockItem, RestockRecusado, executar_restock, preparar_restock
@@ -184,6 +185,7 @@ async def consulta(body: ConsultaBody, ctx: AdminCtx, session: Session) -> dict:
         "cupom": None,
     }
     if entrada.qr_param is None:
+        await registrar(session, ctx, "picklist.consultar", {"chave": entrada.chave, "origem": "manual"})
         return resposta
 
     try:
@@ -223,6 +225,12 @@ async def consulta(body: ConsultaBody, ctx: AdminCtx, session: Session) -> dict:
         "valor_total": cupom.valor_total,
         "itens": itens,
     }
+    await registrar(
+        session,
+        ctx,
+        "picklist.consultar",
+        {"chave": entrada.chave, "origem": "qrcode", "itens": len(cupom.itens), "fornecedor": cupom.emitente_nome},
+    )
     return resposta
 
 

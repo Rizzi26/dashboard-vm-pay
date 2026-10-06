@@ -202,6 +202,18 @@ O kiosk é 100% cashless, um item por transação.
    com o cupom no mesmo commit do action_log; de-para por (CNPJ emitente,
    código do item) com fator de conversão. Migration 0005. Custo fora do
    escopo por decisão. A fixture de teste é anonimizada — repo público.
+11. **Lojista = organização; loja = core.location** (2026-10-06). Home `/` é a
+   Central das lojas (`GET /orgs/{org}/lojas`); a loja escolhida na barra vai
+   num cookie e filtra Vendas/Perdas/Estoque/Reposição. Vendas são amarradas à
+   organização pelas MÁQUINAS dos locais (`MAQUINAS_DA_ORG` em sales.py) — o
+   staging vmpay.* não tem coluna de organização; é esse filtro que separa um
+   lojista de outro. Ingestão ainda é de token único: o 2º lojista com conta
+   VMpay própria exige ingestão por integração.
+12. **Auditoria** (2026-10-06, master): `core.audit_event` (migration 0006) +
+   `core.action_log`, numa linha do tempo em `/auditoria`. O login é
+   registrado pela API na 1ª requisição de cada `session_id` do JWT (o
+   Supabase do projeto não grava histórico de auth no banco). Ação nova que
+   importe para auditoria: `audit.registrar(...)` na rota.
 8. Migrations são **automáticas** (migrate.yml): push na `homolog` aplica no
    banco de homologação, push na `main` no de produção — só os arquivos que
    faltam em `core.schema_migration`, cada um numa transação com o próprio

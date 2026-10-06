@@ -21,6 +21,7 @@ from vmpay.redact import redact
 
 from ..auth import OrgContext, require_role
 from ..db import get_session
+from .sales import MAQUINAS_DA_ORG
 from .stock import _close_action, _open_action, get_connector, require_writes_enabled
 
 router = APIRouter(
@@ -223,6 +224,8 @@ async def product_detail(
 
     params = {
         "good_id": int(good[0]) if good else -1,
+        "org_id": str(ctx.org_id),
+        "loja": None,
         "start": start,
         "end": end + timedelta(days=1),
     }
@@ -236,6 +239,7 @@ async def product_detail(
                   from vmpay.vend
                  where good_id = :good_id
                    and occurred_at >= :start and occurred_at < :end
+                   and """ + MAQUINAS_DA_ORG + """
                 """
             ),
             params,
@@ -251,6 +255,7 @@ async def product_detail(
                   from vmpay.vend
                  where good_id = :good_id
                    and occurred_at >= :start and occurred_at < :end
+                   and """ + MAQUINAS_DA_ORG + """
                  group by 1
                  order by 1
                 """

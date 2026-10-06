@@ -26,6 +26,7 @@ from vmpay import VMpayClient, VMpayError
 from vmpay.client import PRODUCTION
 from vmpay.redact import redact
 
+from ..audit import registrar
 from ..auth import OrgContext, require_role
 from ..config import settings
 from ..connector import VMpayConnector
@@ -121,6 +122,7 @@ async def export_csv(ctx: ViewerCtx, session: Session) -> Response:
                 r["updated_at"].isoformat(),
             ]
         )
+    await registrar(session, ctx, "estoque.exportar", {"linhas": len(rows)})
     return Response(
         content=buffer.getvalue(),
         media_type="text/csv; charset=utf-8",
@@ -260,6 +262,7 @@ async def restock_csv(ctx: ViewerCtx, session: Session, days: int = 30) -> Respo
                 i["sugestao"],
             ]
         )
+    await registrar(session, ctx, "reposicao.exportar", {"linhas": len(itens), "dias": days})
     return Response(
         content=buffer.getvalue(),
         media_type="text/csv; charset=utf-8",
@@ -542,14 +545,17 @@ async def _open_action(
         await session.execute(
             text(
                 """
-                insert into core.action_log (org_id, actor_user_id, action, target, params)
-                values (:org_id, :actor, :action, cast(:target as jsonb), cast(:params as jsonb))
+                insert into core.action_log
+                    (org_id, actor_user_id, session_id, action, target, params)
+                values (:org_id, :actor, :session_id, :action,
+                        cast(:target as jsonb), cast(:params as jsonb))
                 returning id
                 """
             ),
             {
                 "org_id": str(ctx.org_id),
                 "actor": str(ctx.principal.user_id),
+                "session_id": str(ctx.principal.session_id) if ctx.principal.session_id else None,
                 "action": action,
                 "target": json.dumps(target),
                 "params": json.dumps(params),

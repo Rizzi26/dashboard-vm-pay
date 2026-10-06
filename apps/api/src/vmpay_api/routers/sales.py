@@ -6,18 +6,21 @@ cancelada. Não consulte `cashless_fact` direto aqui.
 
 from __future__ import annotations
 
+import uuid
 from datetime import date, timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import require_role
+from ..auth import OrgContext, require_role
 from ..db import get_session
 
-# Escopo por organização + papel mínimo viewer. Limitação registrada: o staging
-# de vendas (vmpay.sale) ainda é de tenant único — o guard garante QUEM lê, e a
-# canonicalização por organização fica para quando houver o segundo tenant.
+# Escopo por organização + papel mínimo viewer. O staging de vendas (vmpay.*)
+# não tem coluna de organização; o que amarra a venda ao lojista é a MÁQUINA:
+# toda consulta lê só as máquinas que os locais da organização vinculam
+# (core.location_link). É isso que impede um lojista de ver venda de outro.
 router = APIRouter(
     prefix="/orgs/{org}/sales",
     tags=["vendas"],
@@ -25,6 +28,25 @@ router = APIRouter(
 )
 
 DEFAULT_WINDOW_DAYS = 30
+
+ViewerCtx = Annotated[OrgContext, Depends(require_role("viewer"))]
+
+#: Máquinas da organização — ou só as de uma loja (core.location). Vai como
+#: filtro em toda leitura de vmpay.sale / cashless_fact / vend.
+MAQUINAS_DA_ORG = """
+    machine_id in (
+        select ll.machine_id
+          from core.location_link ll
+          join core.location l on l.id = ll.location_id
+         where l.org_id = :org_id
+           and ll.machine_id is not null
+           and (cast(:loja as uuid) is null or l.id = cast(:loja as uuid))
+    )
+"""
+
+
+def _escopo(ctx: OrgContext, loja: uuid.UUID | None) -> dict:
+    return {"org_id": str(ctx.org_id), "loja": str(loja) if loja else None}
 
 
 def _window(start: date | None, end: date | None) -> tuple[date, date]:
@@ -35,8 +57,10 @@ def _window(start: date | None, end: date | None) -> tuple[date, date]:
 
 @router.get("/summary")
 async def summary(
+    ctx: ViewerCtx,
     start: date | None = None,
     end: date | None = None,
+    loja: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Totais do período: faturamento, transações, ticket médio."""
@@ -52,9 +76,10 @@ async def summary(
                        count(distinct machine_id)             as machines
                   from vmpay.sale
                  where occurred_at >= :start and occurred_at < :end
+                   and """ + MAQUINAS_DA_ORG + """
                 """
             ),
-            {"start": start, "end": end + timedelta(days=1)},
+            {"start": start, "end": end + timedelta(days=1), **_escopo(ctx, loja)},
         )
     ).mappings().one()
     revenue, transactions = float(row["revenue"]), row["transactions"]
@@ -71,9 +96,11 @@ async def summary(
 
 @router.get("/daily")
 async def daily(
+    ctx: ViewerCtx,
     start: date | None = None,
     end: date | None = None,
     machine_id: int | None = None,
+    loja: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
     """Série diária de faturamento — o gráfico principal do dashboard."""
@@ -91,11 +118,17 @@ async def daily(
                    -- lê ":machine_id::bigint" errado e deixa o primeiro
                    -- placeholder sem substituir (500 em runtime).
                    and (cast(:machine_id as bigint) is null or machine_id = :machine_id)
+                   and """ + MAQUINAS_DA_ORG + """
                  group by 1
                  order by 1
                 """
             ),
-            {"start": start, "end": end + timedelta(days=1), "machine_id": machine_id},
+            {
+                "start": start,
+                "end": end + timedelta(days=1),
+                "machine_id": machine_id,
+                **_escopo(ctx, loja),
+            },
         )
     ).mappings().all()
     return [
@@ -106,9 +139,11 @@ async def daily(
 
 @router.get("/by-machine")
 async def by_machine(
+    ctx: ViewerCtx,
     start: date | None = None,
     end: date | None = None,
     limit: int = Query(default=20, le=200),
+    loja: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
     """Ranking de máquinas no período."""
@@ -125,12 +160,13 @@ async def by_machine(
                   from vmpay.sale s
                   left join vmpay.machine m on m.id = s.machine_id
                  where s.occurred_at >= :start and s.occurred_at < :end
+                   and s.""" + MAQUINAS_DA_ORG.strip() + """
                  group by 1, 2, 3
                  order by revenue desc nulls last
                  limit :limit
                 """
             ),
-            {"start": start, "end": end + timedelta(days=1), "limit": limit},
+            {"start": start, "end": end + timedelta(days=1), "limit": limit, **_escopo(ctx, loja)},
         )
     ).mappings().all()
     return [
@@ -147,8 +183,10 @@ async def by_machine(
 
 @router.get("/lost")
 async def lost_sales(
+    ctx: ViewerCtx,
     start: date | None = None,
     end: date | None = None,
+    loja: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Vendas perdidas: interações do totem que não viraram dinheiro.
@@ -158,7 +196,7 @@ async def lost_sales(
     UI diz isso em vez de fingir precisão.
     """
     start, end = _window(start, end)
-    params = {"start": start, "end": end + timedelta(days=1)}
+    params = {"start": start, "end": end + timedelta(days=1), **_escopo(ctx, loja)}
     resumo = (
         await session.execute(
             text(
@@ -168,6 +206,7 @@ async def lost_sales(
                        count(*) as interacoes
                   from vmpay.cashless_fact
                  where occurred_at >= :start and occurred_at < :end
+                   and """ + MAQUINAS_DA_ORG + """
                 """
             ),
             params,
@@ -183,6 +222,7 @@ async def lost_sales(
                   from vmpay.cashless_fact
                  where status is distinct from 'OK'
                    and occurred_at >= :start and occurred_at < :end
+                   and """ + MAQUINAS_DA_ORG + """
                  group by 1
                  order by 2 desc
                  limit 12

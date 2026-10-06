@@ -5,7 +5,7 @@ import { PeriodoNav } from "@/components/PeriodoNav";
 import { StatTile } from "@/components/StatTile";
 import { serverApi } from "@/lib/api.server";
 import { formatInt, formatMoney } from "@/lib/format";
-import { orgSession } from "@/lib/org";
+import { lojaQs, orgSession } from "@/lib/org";
 import { startFor } from "@/lib/periodos";
 
 export default async function PerdidasPage({
@@ -15,11 +15,11 @@ export default async function PerdidasPage({
 }) {
   const { me, org } = await orgSession();
   const { periodo = "30" } = await searchParams;
-  const lost = await serverApi.lost(org.slug, `?start=${startFor(periodo)}`);
+  const lost = await serverApi.lost(org.slug, `?start=${startFor(periodo)}${lojaQs(org.loja)}`);
 
   return (
     <div className="viz-root min-h-screen bg-[var(--surface-0)]">
-      <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} local={org.local} periodo={periodo} />
+      <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} lojas={org.lojas} loja={org.loja} periodo={periodo} />
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">

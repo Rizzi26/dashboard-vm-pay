@@ -82,7 +82,13 @@ export type Me = {
   user_id: string;
   email: string | null;
   platform_admin: boolean;
-  organizations: { slug: string; name: string; role: string; locais?: string[] }[];
+  organizations: {
+    slug: string;
+    name: string;
+    role: string;
+    locais?: string[];
+    lojas?: { id: string; nome: string }[];
+  }[];
 };
 
 export type ProductRefs = {
@@ -182,6 +188,53 @@ export type PicklistCarga = {
   created_at: string;
   location_name: string;
   itens: number;
+};
+
+export type LojaCard = {
+  id: string;
+  nome: string;
+  vendas: {
+    hoje: number;
+    d7: number;
+    d30: number;
+    transacoes_30d: number;
+    ticket_30d: number;
+    ultima_venda: string | null;
+  };
+  estoque: {
+    itens: number;
+    zerados: number;
+    acabando: number;
+    unidades: number;
+    atualizado_em: string | null;
+  };
+};
+
+export type Central = {
+  lojas: LojaCard[];
+  totais: { hoje: number; d7: number; d30: number; zerados: number; acabando: number };
+};
+
+export type EventoAuditoria = {
+  fonte: "evento" | "vmpay";
+  id: number;
+  em: string;
+  usuario_id: string;
+  usuario: string;
+  sessao: string | null;
+  acao: string;
+  alvo: Record<string, unknown>;
+  status: string | null;
+  erro: string | null;
+  ip: string | null;
+  navegador: string | null;
+};
+
+export type Auditoria = {
+  periodo: { inicio: string; fim: string };
+  eventos: EventoAuditoria[];
+  proxima: string | null;
+  membros: { id: string; email: string; papel: string }[];
 };
 
 export type Fetched<T> = { ok: true; data: T } | { ok: false; error: string };
