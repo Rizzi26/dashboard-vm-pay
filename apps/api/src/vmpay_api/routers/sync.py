@@ -97,7 +97,12 @@ async def atualizar(ctx: ViewerCtx, session: Session, background: BackgroundTask
     if _rodando.locked():
         return {"status": "em_andamento"}
 
-    ultima = await session.scalar(text("select max(last_run_at) from vmpay.sync_cursor"))
+    # A rodada mais recente é a mais nova entre o cursor de vendas e a última
+    # que este processo concluiu: conta sem vendas (homologação) nunca grava
+    # o cursor, e só ele deixava o intervalo mínimo sem efeito.
+    no_banco = await session.scalar(text("select max(last_run_at) from vmpay.sync_cursor"))
+    candidatas = [d for d in (no_banco, _ultima_conclusao) if d is not None]
+    ultima = max(candidatas) if candidatas else None
     if ultima is not None:
         idade = (datetime.now(timezone.utc) - ultima).total_seconds()
         if idade < INTERVALO_MINIMO_S:
