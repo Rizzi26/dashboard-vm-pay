@@ -55,7 +55,9 @@ with eventos as (
       from core.action_log a
      where a.org_id = :org_id
 )
-select ev.*, u.email
+select ev.*, u.email,
+       -- Total do filtro na mesma ida ao banco: a tela mostra "51–100 de 340".
+       count(*) over () as total_filtro
   from eventos ev
   left join auth.users u on u.id = ev.user_id
  where ev.em >= :desde and ev.em < :ate
@@ -63,7 +65,7 @@ select ev.*, u.email
    and (cast(:sessao as uuid) is null or ev.session_id = cast(:sessao as uuid))
    and (cast(:antes as timestamptz) is null or ev.em < cast(:antes as timestamptz))
  order by ev.em desc
- limit :limite
+ limit :limite offset :offset
 """
 
 
@@ -76,9 +78,10 @@ async def linha_do_tempo(
     desde: date | None = None,
     ate: date | None = None,
     antes: datetime | None = None,
-    limite: int = Query(default=100, ge=1, le=500),
+    limite: int = Query(default=50, ge=1, le=500),
+    pagina: int = Query(default=1, ge=1),
 ) -> dict:
-    """Eventos do mais recente para o mais antigo; `antes` pagina."""
+    """Eventos do mais recente para o mais antigo, `limite` por `pagina`."""
     ate = ate or date.today()
     desde = desde or ate - timedelta(days=30)
     rows = (
@@ -92,6 +95,7 @@ async def linha_do_tempo(
                 "sessao": str(sessao) if sessao else None,
                 "antes": antes,
                 "limite": limite,
+                "offset": (pagina - 1) * limite,
             },
         )
     ).mappings().all()
@@ -130,7 +134,10 @@ async def linha_do_tempo(
             }
             for r in rows
         ],
-        # Cursor da próxima página: o "em" do último evento desta.
+        "pagina": pagina,
+        "por_pagina": limite,
+        "total": int(rows[0]["total_filtro"]) if rows else 0,
+        # Cursor (compatibilidade): o "em" do último evento desta página.
         "proxima": rows[-1]["em"].isoformat() if len(rows) == limite else None,
         "membros": [
             {"id": str(m["user_id"]), "email": m["email"], "papel": m["role"]} for m in membros

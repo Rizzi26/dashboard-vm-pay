@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ProductRefs, StockRow } from "@/lib/api";
 import { browserApi } from "@/lib/api";
 import { NewProductModal } from "@/components/NewProductModal";
+import { Paginacao } from "@/components/Paginacao";
 import { StatTile } from "@/components/StatTile";
 import { formatInt, formatMoney } from "@/lib/format";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -394,39 +395,17 @@ export function StockView({
         </tbody>
       </table>
 
-      <div className="mt-4 flex flex-col gap-2 text-sm text-[var(--text-secondary)] sm:flex-row sm:items-center sm:justify-between">
-        <span>
-          {filtrados.length === 0
-            ? "Nenhum item encontrado"
-            : `${paginaAtual * POR_PAGINA + 1}–${Math.min(
-                (paginaAtual + 1) * POR_PAGINA,
-                filtrados.length,
-              )} de ${filtrados.length} itens`}
-        </span>
-        {totalPaginas > 1 ? (
-          <span className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={paginaAtual === 0}
-              onClick={() => setPagina(paginaAtual - 1)}
-              className="rounded-md border border-[var(--grid)] px-4 py-2 disabled:opacity-40"
-            >
-              ← Anterior
-            </button>
-            <span className="tabular-nums">
-              {paginaAtual + 1}/{totalPaginas}
-            </span>
-            <button
-              type="button"
-              disabled={paginaAtual >= totalPaginas - 1}
-              onClick={() => setPagina(paginaAtual + 1)}
-              className="rounded-md border border-[var(--grid)] px-4 py-2 disabled:opacity-40"
-            >
-              Próxima →
-            </button>
-          </span>
-        ) : null}
-      </div>
+      {filtrados.length === 0 ? (
+        <p className="mt-4 text-sm text-[var(--text-secondary)]">Nenhum item encontrado</p>
+      ) : (
+        <Paginacao
+          pagina={paginaAtual}
+          totalPaginas={totalPaginas}
+          total={filtrados.length}
+          porPagina={POR_PAGINA}
+          onMudar={setPagina}
+        />
+      )}
 
       {modal?.kind === "new" ? (
         <NewProductModal

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/Header";
 import { Offline } from "@/components/Offline";
+import { PaginacaoLinks, paginaDaUrl } from "@/components/PaginacaoLinks";
 import type { EventoAuditoria } from "@/lib/api";
 import { serverApi } from "@/lib/api.server";
 import { orgSession } from "@/lib/org";
@@ -13,7 +14,9 @@ const PERIODOS = [
   { key: "90", label: "90 dias" },
 ];
 
-type Params = { usuario?: string; sessao?: string; dias?: string; antes?: string };
+type Params = { usuario?: string; sessao?: string; dias?: string; pagina?: string };
+
+const POR_PAGINA = 50;
 
 function texto(v: unknown): string {
   return v === null || v === undefined ? "" : String(v);
@@ -85,10 +88,10 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
   const p = await searchParams;
   const dias = PERIODOS.some((x) => x.key === p.dias) ? p.dias! : "7";
   const desde = inicioDoPeriodo(dias);
-  const api = new URLSearchParams({ desde, limite: "150" });
+  const pagina = paginaDaUrl(p.pagina);
+  const api = new URLSearchParams({ desde, limite: String(POR_PAGINA), pagina: String(pagina) });
   if (p.usuario) api.set("usuario", p.usuario);
   if (p.sessao) api.set("sessao", p.sessao);
-  if (p.antes) api.set("antes", p.antes);
   const dados = await serverApi.auditoria(org.slug, `?${api}`);
 
   const nomes = new Map(dados.ok ? dados.data.membros.map((m) => [m.id, m.email]) : []);
@@ -153,7 +156,7 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
             Filtrar
           </button>
           {p.sessao ? (
-            <Link href={qs(p, { sessao: undefined, antes: undefined })} className="text-sm text-[var(--text-secondary)] underline">
+            <Link href={qs(p, { sessao: undefined, pagina: undefined })} className="text-sm text-[var(--text-secondary)] underline">
               mostrando uma sessão — ver todas
             </Link>
           ) : null}
@@ -188,7 +191,7 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
                             ) : null}
                           </p>
                           <p className="text-xs text-[var(--text-secondary)]">
-                            <Link href={qs(p, { usuario: e.usuario_id, antes: undefined })} className="hover:underline">
+                            <Link href={qs(p, { usuario: e.usuario_id, pagina: undefined })} className="hover:underline">
                               {e.usuario}
                             </Link>
                             {e.acao === "login" ? (
@@ -213,11 +216,13 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
                 </ol>
               </section>
             ))}
-            {dados.data.proxima ? (
-              <Link href={qs(p, { antes: dados.data.proxima })} className="inline-block text-sm text-[var(--text-secondary)] underline">
-                Ver mais antigos
-              </Link>
-            ) : null}
+            <PaginacaoLinks
+              pagina={pagina}
+              total={dados.data.total}
+              porPagina={POR_PAGINA}
+              href={(n) => qs(p, { pagina: String(n) })}
+              rotulo="eventos"
+            />
           </div>
         )}
         <p className="mt-6 text-xs text-[var(--text-secondary)]">

@@ -248,26 +248,11 @@ export type EventoAuditoria = {
 export type Auditoria = {
   periodo: { inicio: string; fim: string };
   eventos: EventoAuditoria[];
+  pagina: number;
+  por_pagina: number;
+  total: number;
   proxima: string | null;
   membros: { id: string; email: string; papel: string }[];
-};
-
-export type EncalheItem = {
-  location_id: string;
-  local: string;
-  product_id: string;
-  produto: string;
-  barcode: string | null;
-  quantidade: number;
-  preco: number | null;
-  valor_parado: number | null;
-  ultima_venda: string | null;
-};
-
-export type Encalhe = {
-  dias: number;
-  resumo: { itens: number; unidades: number; valor_parado: number; nunca_venderam: number };
-  itens: EncalheItem[];
 };
 
 export type PicklistCupom = {

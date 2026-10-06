@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { DailyPoint } from "@/lib/api";
 import { formatDay, formatInt, formatMoney, formatMoneyCompact } from "@/lib/format";
+import { Paginacao, usePaginacao } from "@/components/Paginacao";
 
 /**
  * Faturamento diário — uma série só, então sem legenda: o título nomeia a série.
@@ -27,6 +28,8 @@ export function RevenueChart({
   const [width, setWidth] = useState(800);
   const [hover, setHover] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
+  // "Tudo" passa de 300 dias: a tabela pagina, do mais recente para o mais antigo.
+  const pagTabela = usePaginacao([...points].reverse(), 20);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -245,7 +248,7 @@ export function RevenueChart({
               </tr>
             </thead>
             <tbody className="text-[var(--text-primary)]">
-              {points.map((p) => (
+              {pagTabela.visiveis.map((p) => (
                 <tr
                   key={p.dia}
                   className="border-t border-[var(--grid)] hover:bg-[var(--row-hover)]"
@@ -257,6 +260,7 @@ export function RevenueChart({
               ))}
             </tbody>
           </table>
+          <Paginacao {...pagTabela.rodape} rotulo="dias" />
         </div>
       ) : null}
     </div>

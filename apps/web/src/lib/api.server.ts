@@ -9,7 +9,6 @@ import type {
   Central,
   CurvaAbc,
   Heatmap,
-  Encalhe,
   ContaVmpay,
   DailyPoint,
   Fetched,
@@ -60,7 +59,6 @@ export const serverApi = {
   product: (org: string, id: string, qs = "") =>
     serverGet<ProductDetail>(`/orgs/${org}/products/${id}${qs}`),
   stock: (org: string) => serverGet<StockRow[]>(`/orgs/${org}/stock`),
-  encalhe: (org: string, qs = "") => serverGet<Encalhe>(`/orgs/${org}/stock/encalhe${qs}`),
   reposicao: (org: string, dias = 30) =>
     serverGet<Reposicao>(`/orgs/${org}/stock/reposicao?days=${dias}`),
   stockHistory: (org: string, productId: string, dias = 30) =>

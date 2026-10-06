@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { Header } from "@/components/Header";
+import { PaginacaoLinks, paginaDaUrl } from "@/components/PaginacaoLinks";
 import { Offline } from "@/components/Offline";
 import { serverApi } from "@/lib/api.server";
 import type { ReposicaoItem } from "@/lib/api";
@@ -43,16 +44,20 @@ function Linha({ item, detalhe }: { item: ReposicaoItem; detalhe: string }) {
   );
 }
 
+const POR_PAGINA = 20;
+
 function Secao({
   titulo,
   subtitulo,
   tom,
   children,
+  rodape,
 }: {
   titulo: string;
   subtitulo: string;
   tom: "critical" | "warning";
   children: React.ReactNode;
+  rodape?: React.ReactNode;
 }) {
   const cor =
     tom === "critical" ? "text-[var(--status-critical)]" : "text-[var(--status-warning)]";
@@ -61,12 +66,30 @@ function Secao({
       <h2 className={`text-sm font-semibold ${cor}`}>{titulo}</h2>
       <p className="mb-2 mt-0.5 text-xs text-[var(--text-secondary)]">{subtitulo}</p>
       <ul>{children}</ul>
+      {rodape}
     </section>
   );
 }
 
-export default async function ReposicaoPage() {
+export default async function ReposicaoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pz?: string; pa?: string }>;
+}) {
   const { me, org } = await orgSession();
+  // Uma página por seção, na URL: pz = zerados, pa = acabando.
+  const sp = await searchParams;
+  const pz = paginaDaUrl(sp.pz);
+  const pa = paginaDaUrl(sp.pa);
+  const link = (chave: "pz" | "pa", n: number) => {
+    const q = new URLSearchParams({ ...(sp.pz ? { pz: sp.pz } : {}), ...(sp.pa ? { pa: sp.pa } : {}), [chave]: String(n) });
+    return `/reposicao?${q}`;
+  };
+  const fatia = <T,>(itens: T[], pagina: number) => {
+    const ultima = Math.max(1, Math.ceil(itens.length / POR_PAGINA));
+    const p = Math.min(pagina, ultima);
+    return itens.slice((p - 1) * POR_PAGINA, p * POR_PAGINA);
+  };
   const bruto = await serverApi.reposicao(org.slug);
   // Loja escolhida na barra: a lista vale só para ela.
   const reposicao = bruto.ok && org.loja
@@ -115,8 +138,9 @@ export default async function ReposicaoPage() {
                   titulo={`Zerados · ${formatInt(zerados.length)}`}
                   subtitulo="Vendiam e acabaram — cada dia sem repor é venda perdida."
                   tom="critical"
+                  rodape={<PaginacaoLinks pagina={pz} total={zerados.length} porPagina={POR_PAGINA} href={(n) => link("pz", n)} />}
                 >
-                  {zerados.map((i) => (
+                  {fatia(zerados, pz).map((i) => (
                     <Linha
                       key={`${i.location_id}-${i.product_id}`}
                       item={i}
@@ -131,8 +155,9 @@ export default async function ReposicaoPage() {
                   titulo={`Acabando · ${formatInt(acabando.length)}`}
                   subtitulo="O saldo atual dura menos de 5 dias."
                   tom="warning"
+                  rodape={<PaginacaoLinks pagina={pa} total={acabando.length} porPagina={POR_PAGINA} href={(n) => link("pa", n)} />}
                 >
-                  {acabando.map((i) => (
+                  {fatia(acabando, pa).map((i) => (
                     <Linha
                       key={`${i.location_id}-${i.product_id}`}
                       item={i}
