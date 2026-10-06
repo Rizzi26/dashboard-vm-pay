@@ -73,15 +73,16 @@ jobs:
           HML_VMPAY_INGEST_TOKEN: ${{ secrets.HML_VMPAY_INGEST_TOKEN }}
           HML_VMPAY_BASE: ${{ secrets.HML_VMPAY_BASE }}
         run: |
+          # O token de cada conta vem do Supabase Vault pelo próprio banco. O
+          # secret *_VMPAY_INGEST_TOKEN só existe enquanto a conta principal
+          # não migrou para o cofre — por isso é opcional aqui.
           if [ "$AMBIENTE" = "homolog" ]; then
             : "${HML_DATABASE_URL:?defina o secret HML_DATABASE_URL}"
-            : "${HML_VMPAY_INGEST_TOKEN:?defina o secret HML_VMPAY_INGEST_TOKEN}"
             # Base vazia = produção da VMpay; em homologação isso nunca é certo.
             : "${HML_VMPAY_BASE:?defina o secret HML_VMPAY_BASE}"
             pre=HML
           else
             : "${PRD_DATABASE_URL:?defina o secret DATABASE_URL}"
-            : "${PRD_VMPAY_INGEST_TOKEN:?defina o secret VMPAY_INGEST_TOKEN}"
             pre=PRD
           fi
           for v in DATABASE_URL VMPAY_INGEST_TOKEN VMPAY_BASE; do

@@ -25,6 +25,7 @@ function idade(iso: string | null): number | null {
 export function ContasVmpay({ org, contas }: { org: string; contas: ContaVmpay[] }) {
   const router = useRouter();
   const [abrindo, setAbrindo] = useState(false);
+  const [trocando, setTrocando] = useState<ContaVmpay | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
   async function desativar(c: ContaVmpay) {
@@ -76,6 +77,11 @@ export function ContasVmpay({ org, contas }: { org: string; contas: ContaVmpay[]
                   {c.principal ? <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">principal</span> : null}
                   {!c.ativa ? <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">desativada</span> : null}
                 </p>
+                {c.ativa && !c.token_no_cofre ? (
+                  <p className="text-xs text-[var(--status-warning)]">
+                    ▲ token fora do cofre (variável de ambiente) — troque o token para movê-lo
+                  </p>
+                ) : null}
                 <p className="text-xs text-[var(--text-secondary)]">
                   {c.lojas.length ? c.lojas.join(" · ") : "nenhuma loja ainda"}
                   {" · "}
@@ -88,19 +94,43 @@ export function ContasVmpay({ org, contas }: { org: string; contas: ContaVmpay[]
                   )}
                 </p>
               </div>
-              {c.ativa && !c.principal ? (
-                <button
-                  type="button"
-                  onClick={() => desativar(c)}
-                  className="text-xs text-[var(--text-secondary)] underline hover:text-[var(--text-primary)]"
-                >
-                  desativar
-                </button>
+              {c.ativa ? (
+                <span className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setTrocando(c)}
+                    className="text-xs text-[var(--text-secondary)] underline hover:text-[var(--text-primary)]"
+                  >
+                    trocar token
+                  </button>
+                  {!c.principal ? (
+                    <button
+                      type="button"
+                      onClick={() => desativar(c)}
+                      className="text-xs text-[var(--text-secondary)] underline hover:text-[var(--text-primary)]"
+                    >
+                      desativar
+                    </button>
+                  ) : null}
+                </span>
               ) : null}
             </li>
           );
         })}
       </ul>
+
+      {trocando ? (
+        <TrocarTokenModal
+          org={org}
+          conta={trocando}
+          onClose={() => setTrocando(null)}
+          onTrocado={(msg) => {
+            setTrocando(null);
+            setAviso(msg);
+            router.refresh();
+          }}
+        />
+      ) : null}
 
       {abrindo ? (
         <NovaContaModal
@@ -215,6 +245,99 @@ function NovaContaModal({
             className="rounded-md bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
           >
             {busy ? "Testando na VMpay…" : "Conectar"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function TrocarTokenModal({
+  org,
+  conta,
+  onClose,
+  onTrocado,
+}: {
+  org: string;
+  conta: ContaVmpay;
+  onClose: () => void;
+  onTrocado: (mensagem: string) => void;
+}) {
+  const [segredo, setSegredo] = useState("");
+  const [erro, setErro] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    if (segredo.trim().length < 10) {
+      setErro("Cole o token inteiro.");
+      return;
+    }
+    setBusy(true);
+    setErro(null);
+    try {
+      const resp = await browserApi.request(`/orgs/${org}/contas/${conta.id}`, await token(), {
+        method: "PATCH",
+        body: JSON.stringify({ token: segredo }),
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const detalhe = Array.isArray(payload.detail)
+          ? payload.detail.map((d: { msg: string }) => d.msg).join("; ")
+          : payload.detail;
+        throw new Error(detalhe ?? `backend respondeu ${resp.status}`);
+      }
+      setSegredo("");
+      onTrocado(
+        payload.cofre
+          ? `Token da conta "${conta.nome}" trocado e guardado no cofre. Pode revogar o token antigo na VMpay.`
+          : `Token da conta "${conta.nome}" trocado. Pode revogar o token antigo na VMpay.`,
+      );
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "falha ao trocar o token");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Trocar token" className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
+      <form
+        onSubmit={enviar}
+        className="w-full rounded-t-xl border border-[var(--grid)] bg-[var(--surface-1)] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-card)] sm:max-w-md sm:rounded-xl"
+      >
+        <h2 className="text-base font-semibold text-[var(--text-primary)]">Trocar token — {conta.nome}</h2>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+          Gere um token novo na VMpay desta conta e cole aqui. Ele é testado antes de salvar e
+          precisa enxergar as mesmas máquinas desta conta. Depois, revogue o token antigo na VMpay.
+          {!conta.token_no_cofre ? " O token passa a ficar guardado cifrado no cofre do servidor." : ""}
+        </p>
+        <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+          Token novo
+          <input
+            autoFocus
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            value={segredo}
+            onChange={(e) => setSegredo(e.target.value)}
+            className="mt-1 w-full rounded-md border border-[var(--grid)] bg-transparent px-3 py-2 font-mono text-base text-[var(--text-primary)] focus:border-[var(--accent)] sm:text-sm"
+          />
+        </label>
+        {erro ? (
+          <p role="alert" className="mt-3 text-sm text-[var(--status-critical)]">
+            {erro}
+          </p>
+        ) : null}
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-md border border-[var(--grid)] px-4 py-2.5 text-sm text-[var(--text-secondary)]">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-md bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-[var(--accent-contrast)] disabled:opacity-60"
+          >
+            {busy ? "Testando na VMpay…" : "Trocar token"}
           </button>
         </div>
       </form>

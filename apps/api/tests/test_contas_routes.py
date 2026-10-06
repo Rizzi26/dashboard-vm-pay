@@ -91,7 +91,7 @@ async def test_lista_mostra_leitura_pelo_estoque_e_erro_pelo_cursor_da_conta():
     use_session([
         ("from core.integration i", [
             {"id": conta, "nome": "Jardins III", "active": True, "created_at": datetime(2026, 10, 6, tzinfo=timezone.utc),
-             "no_cofre": True, "lojas": ["JARDINS III — 003"], "lida": datetime(2026, 10, 6, 15, tzinfo=timezone.utc)},
+             "no_cofre": True, "legado": False, "lojas": ["JARDINS III — 003"], "lida": datetime(2026, 10, 6, 15, tzinfo=timezone.utc)},
         ]),
         ("from vmpay.sync_cursor", [
             {"resource": f"vends@{conta}", "last_error": "401 da VMpay"},
@@ -101,3 +101,57 @@ async def test_lista_mostra_leitura_pelo_estoque_e_erro_pelo_cursor_da_conta():
     body = (await call("GET", "/orgs/mercadinho/contas")).json()
     assert body[0]["ultima_leitura"].startswith("2026-10-06T15")
     assert body[0]["erro"] == "401 da VMpay"  # só o erro da própria conta
+
+
+PRINCIPAL = uuid.UUID("00000000-0000-0000-0000-0000000000a1")
+
+
+def _principal_em_env():
+    return ("from core.integration", [{"id": PRINCIPAL, "nome": "Conta principal", "active": True,
+                                       "config": {"token_env": "VMPAY_INGEST_TOKEN"}}])
+
+
+@respx.mock
+async def test_trocar_token_da_principal_move_para_o_cofre_sem_perder_o_cursor(monkeypatch):
+    _ambiente(monkeypatch)
+    respx.get(f"{BASE}/installations").mock(
+        return_value=httpx.Response(200, json=[{"id": 857, "machine_id": 49}])
+    )
+    use_role("master")
+    sessao = use_session([
+        _principal_em_env(),
+        ("select distinct machine_id from core.location_link", [{"machine_id": 49}]),
+        ("vault.create_secret", [SECRET_ID]),
+    ])
+    resp = await call("PATCH", f"/orgs/mercadinho/contas/{PRINCIPAL}", json={"token": TOKEN})
+    assert resp.status_code == 200, resp.text
+    assert "cofre" in resp.json()
+    novo = next(p for q, p in sessao.executed if "set config" in q)
+    # cursor "legado": a principal continua no cursor de sempre (nada reprocessado)
+    assert novo["config"] == f'{{"secret_id": "{SECRET_ID}", "cursor": "legado"}}'
+    assert TOKEN not in resp.text
+
+
+@respx.mock
+async def test_token_de_outra_conta_nao_substitui_o_desta(monkeypatch):
+    _ambiente(monkeypatch)
+    respx.get(f"{BASE}/installations").mock(
+        return_value=httpx.Response(200, json=[{"id": 1, "machine_id": 3049}])  # outra loja
+    )
+    use_role("master")
+    sessao = use_session([
+        _principal_em_env(),
+        ("select distinct machine_id from core.location_link", [{"machine_id": 49}]),
+    ])
+    resp = await call("PATCH", f"/orgs/mercadinho/contas/{PRINCIPAL}", json={"token": TOKEN})
+    assert resp.status_code == 409
+    assert "outra conta" in resp.json()["detail"]
+    assert not any("vault" in q for q, _ in sessao.executed)
+
+
+def test_principal_migrada_continua_principal():
+    from vmpay_api.sync_core import eh_conta_original
+
+    assert eh_conta_original({"token_env": "VMPAY_INGEST_TOKEN"})
+    assert eh_conta_original({"secret_id": "x", "cursor": "legado"})
+    assert not eh_conta_original({"secret_id": "x"})
