@@ -51,7 +51,9 @@ async def _rodada() -> None:
     global _ultima_conclusao
     async with _rodando:
         try:
-            await sync_all()
+            # Catálogo só se aparecer produto novo: o completo leva minutos e
+            # quem clicou está olhando a tela (o cron faz o completo).
+            await sync_all(catalogo_completo=False)
         except Exception:
             # Tarefa de fundo: ninguém espera a resposta. O erro fica no log e
             # no sync_cursor.last_error, que o rodapé do dashboard mostra.
