@@ -64,3 +64,17 @@ async def test_situacao_mostra_o_dado_mais_antigo(monkeypatch):
     body = (await call("GET", "/orgs/mercadinho/sync")).json()
     assert body["dados_de"] == estoque.isoformat()  # estoque parado aparece
     assert body["rodando"] is False
+
+
+async def test_intervalo_vale_mesmo_sem_cursor_de_vendas(monkeypatch):
+    """Homologação não tem vendas: o cursor nunca é gravado. O intervalo usa a
+    última rodada concluída pelo próprio botão (bug pego na validação)."""
+    chamadas = _sem_rodada_real(monkeypatch)
+    monkeypatch.setattr(
+        sync_router, "_ultima_conclusao", datetime.now(timezone.utc) - timedelta(seconds=20)
+    )
+    use_role("viewer")
+    use_session([])
+    resp = await call("POST", "/orgs/mercadinho/sync")
+    assert resp.status_code == 429
+    assert chamadas == []
