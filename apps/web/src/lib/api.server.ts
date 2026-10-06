@@ -16,6 +16,7 @@ import type {
   Me,
   MemberRow,
   PicklistCarga,
+  PicklistCupom,
   PicklistOpcoes,
   ProductDetail,
   Reposicao,
@@ -67,4 +68,5 @@ export const serverApi = {
   auditoria: (org: string, qs = "") => serverGet<Auditoria>(`/orgs/${org}/auditoria${qs}`),
   picklistOpcoes: (org: string) => serverGet<PicklistOpcoes>(`/orgs/${org}/picklist/opcoes`),
   picklistHistorico: (org: string) => serverGet<PicklistCarga[]>(`/orgs/${org}/picklist`),
+  picklistCupom: (org: string, id: string) => serverGet<PicklistCupom>(`/orgs/${org}/picklist/${id}`),
 };

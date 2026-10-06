@@ -1,8 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { PicklistCarga, PicklistConsulta, PicklistItem, PicklistOpcoes, ProductRefs } from "@/lib/api";
+import type {
+  PicklistCarga,
+  PicklistConsulta,
+  PicklistItem,
+  PicklistOpcoes,
+  ProductRefs,
+  ReposicaoItem,
+} from "@/lib/api";
 import { browserApi } from "@/lib/api";
 import { NewProductModal } from "@/components/NewProductModal";
 import { ProductPicker } from "@/components/ProductPicker";
@@ -81,11 +89,11 @@ export function PickListView({
   const [lendoQR, setLendoQR] = useState(false);
   const [produtos, setProdutos] = useState(opcoes.produtos);
   const [cadastrando, setCadastrando] = useState<number | null>(null);
-  // BarcodeDetector existe no Chrome/Android; no iPhone a câmera nativa lê o
-  // QR e abre o link — o operador copia e cola no campo. No servidor: false.
+  // Qualquer navegador com câmera: o leitor nativo (Chrome/Android) ou o jsQR
+  // (Safari/iPhone, que não tem BarcodeDetector). No servidor: false.
   const temCamera = useSyncExternalStore(
     nadaMuda,
-    () => "BarcodeDetector" in window,
+    () => !!navigator.mediaDevices?.getUserMedia,
     () => false,
   );
 
@@ -155,6 +163,33 @@ export function PickListView({
     setEntrada("");
     setErro(null);
   }
+
+  // Lista de Reposição da loja escolhida: o que ela pedia antes desta compra.
+  const [reposicao, setReposicao] = useState<ReposicaoItem[] | null>(null);
+  useEffect(() => {
+    if (!consulta || !localId) return;
+    let vivo = true;
+    (async () => {
+      const resp = await browserApi.request(`/orgs/${org}/stock/reposicao`, await token());
+      if (!resp.ok) return;
+      const dados = (await resp.json()) as { itens: ReposicaoItem[] };
+      if (vivo) setReposicao(dados.itens.filter((i) => i.location_id === localId));
+    })().catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [org, consulta, localId]);
+
+  // Compra × reposição: o que a lista pedia e não veio, e o que veio fora dela.
+  const confronto = useMemo(() => {
+    if (!reposicao) return null;
+    const noCupom = new Set(linhas.filter((l) => !l.ignorar && l.product_id).map((l) => l.product_id));
+    const naLista = new Set(reposicao.map((i) => i.product_id));
+    return {
+      faltou: reposicao.filter((i) => !noCupom.has(i.product_id)),
+      fora: linhas.filter((l) => !l.ignorar && l.product_id && !naLista.has(l.product_id)),
+    };
+  }, [reposicao, linhas]);
 
   const pendencias = useMemo(
     () =>
@@ -452,6 +487,48 @@ export function PickListView({
             </p>
           ) : null}
 
+          {confronto && (confronto.faltou.length > 0 || confronto.fora.length > 0) ? (
+            <div className="mt-5 grid gap-3 border-t border-[var(--grid)] pt-4 sm:grid-cols-2">
+              <div>
+                <h3 className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+                  Faltou trazer ({confronto.faltou.length})
+                </h3>
+                {confronto.faltou.length === 0 ? (
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">Tudo da lista de reposição veio.</p>
+                ) : (
+                  <ul className="mt-1 space-y-0.5 text-sm text-[var(--text-primary)]">
+                    {confronto.faltou.slice(0, 12).map((i) => (
+                      <li key={i.product_id}>
+                        <span className={i.status === "ruptura" ? "text-[var(--status-warning)]" : ""}>
+                          {i.status === "ruptura" ? "▲ " : ""}
+                          {i.produto}
+                        </span>
+                        <span className="text-xs text-[var(--text-secondary)]"> · levar {i.sugestao}</span>
+                      </li>
+                    ))}
+                    {confronto.faltou.length > 12 ? (
+                      <li className="text-xs text-[var(--text-secondary)]">e mais {confronto.faltou.length - 12} na Reposição</li>
+                    ) : null}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <h3 className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+                  Veio fora da lista ({confronto.fora.length})
+                </h3>
+                {confronto.fora.length === 0 ? (
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">Nada além do que a lista pedia.</p>
+                ) : (
+                  <ul className="mt-1 space-y-0.5 text-sm text-[var(--text-primary)]">
+                    {confronto.fora.map((l) => (
+                      <li key={l.linha}>{nomeProduto.get(l.product_id) ?? l.descricao}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--grid)] pt-4">
             <p className="text-sm text-[var(--text-secondary)]">
               <span className="tabular-nums text-[var(--text-primary)]">{totalUnidades}</span> unidades entram
@@ -479,13 +556,13 @@ export function PickListView({
           <ul className="divide-y divide-[var(--grid)] rounded-xl border border-[var(--grid)] bg-[var(--surface-1)]">
             {historico.map((h) => (
               <li key={h.id} className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3 text-sm">
-                <span className="min-w-0 text-[var(--text-primary)]">
+                <Link href={`/picklist/cupom/${h.id}`} className="min-w-0 text-[var(--text-primary)] hover:underline">
                   {h.supplier_name || "Fornecedor"}
                   {h.number ? ` · NFC-e ${h.number}` : ""}
                   <span className="block text-xs text-[var(--text-secondary)]">
                     {formatDayTime(h.created_at)} · {h.location_name} · {h.itens} itens
                   </span>
-                </span>
+                </Link>
                 <span className="text-xs text-[var(--text-secondary)]">
                   {h.total !== null ? `${formatMoney(h.total)} · ` : ""}
                   <span className={h.status === "approved" ? "" : "text-[var(--status-warning)]"}>
@@ -526,6 +603,33 @@ export function PickListView({
 
 type Detector = { detect: (src: HTMLVideoElement) => Promise<{ rawValue: string }[]> };
 
+/**
+ * Lê um quadro do vídeo e devolve o texto do QR (ou null). Usa o leitor nativo
+ * do navegador quando existe; senão o jsQR — carregado só aqui, para não pesar
+ * a página de quem nunca abre a câmera.
+ */
+async function leitorDeQr(): Promise<(video: HTMLVideoElement) => Promise<string | null>> {
+  if ("BarcodeDetector" in window) {
+    const Ctor = (window as unknown as { BarcodeDetector: new (o: object) => Detector }).BarcodeDetector;
+    const detector = new Ctor({ formats: ["qr_code"] });
+    return async (video) => (await detector.detect(video))[0]?.rawValue ?? null;
+  }
+  const { default: jsQR } = await import("jsqr");
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  return async (video) => {
+    if (!ctx || !video.videoWidth) return null;
+    // Quadro reduzido: o QR do cupom é grande no enquadramento, e 640px de
+    // largura leem bem sem travar celular mais simples.
+    const escala = Math.min(1, 640 / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * escala);
+    canvas.height = Math.round(video.videoHeight * escala);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return jsQR(img.data, img.width, img.height)?.data ?? null;
+  };
+}
+
 function LeitorQR({ onLido, onClose }: { onLido: (texto: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -542,15 +646,14 @@ function LeitorQR({ onLido, onClose }: { onLido: (texto: string) => void; onClos
         if (!video || !ativo) return;
         video.srcObject = stream;
         await video.play();
-        const Ctor = (window as unknown as { BarcodeDetector: new (o: object) => Detector }).BarcodeDetector;
-        const detector = new Ctor({ formats: ["qr_code"] });
+        const decodificar = await leitorDeQr();
         // 4 leituras por segundo bastam e poupam bateria frente a um quadro por frame.
         const ler = async () => {
           if (!ativo) return;
           try {
-            const [achado] = await detector.detect(video);
-            if (achado?.rawValue) {
-              onLido(achado.rawValue);
+            const texto = await decodificar(video);
+            if (texto) {
+              onLido(texto);
               return;
             }
           } catch {

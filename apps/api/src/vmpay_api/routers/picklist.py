@@ -481,3 +481,83 @@ async def historico(ctx: AdminCtx, session: Session, limit: int = 30) -> list[di
     return [
         {**dict(r), "id": str(r["id"]), "created_at": r["created_at"].isoformat()} for r in rows
     ]
+
+
+@router.get("/{receipt_id}")
+async def detalhe(receipt_id: uuid.UUID, ctx: AdminCtx, session: Session) -> dict:
+    """Um cupom carregado: o que entrou, em qual produto, quem aprovou e o
+    que a VMpay respondeu — para conferir depois, sem abrir o banco."""
+    cab = (
+        await session.execute(
+            text(
+                """
+                select r.id, r.access_key, r.number, r.series, r.issued_at,
+                       r.supplier_tax_id, r.supplier_name, r.total, r.source,
+                       r.status, r.created_at, l.name as location_name,
+                       u.email as aprovado_por, a.status as vmpay_status, a.error as vmpay_erro
+                  from core.purchase_receipt r
+                  join core.location l on l.id = r.location_id
+                  left join auth.users u on u.id = r.approved_by
+                  left join core.action_log a on a.id = r.action_id
+                 where r.id = :id and r.org_id = :org_id
+                """
+            ),
+            {"id": str(receipt_id), "org_id": str(ctx.org_id)},
+        )
+    ).mappings().first()
+    if cab is None:
+        raise HTTPException(404, "cupom não encontrado nesta organização")
+    itens = (
+        await session.execute(
+            text(
+                """
+                select i.line, i.supplier_code, i.description, i.quantity, i.unit,
+                       i.unit_price, i.total, i.factor, i.ignored,
+                       p.id as product_id, p.name as product_name
+                  from core.purchase_receipt_item i
+                  left join core.product p on p.id = i.product_id
+                 where i.receipt_id = :id
+                 order by i.line
+                """
+            ),
+            {"id": str(receipt_id)},
+        )
+    ).mappings().all()
+
+    def num(v):
+        return float(v) if v is not None else None
+
+    return {
+        "id": str(cab["id"]),
+        "chave": cab["access_key"],
+        "numero": cab["number"],
+        "serie": cab["series"],
+        "emitido_em": cab["issued_at"].isoformat() if cab["issued_at"] else None,
+        "fornecedor": {"cnpj": cab["supplier_tax_id"], "nome": cab["supplier_name"]},
+        "valor_total": num(cab["total"]),
+        "origem": cab["source"],
+        "status": cab["status"],
+        "carregado_em": cab["created_at"].isoformat(),
+        "loja": cab["location_name"],
+        "aprovado_por": cab["aprovado_por"] or "(conta removida)",
+        "vmpay": {"status": cab["vmpay_status"], "erro": cab["vmpay_erro"]},
+        "itens": [
+            {
+                "linha": i["line"],
+                "codigo": i["supplier_code"],
+                "descricao": i["description"],
+                "quantidade": num(i["quantity"]),
+                "unidade": i["unit"],
+                "valor_unitario": num(i["unit_price"]),
+                "valor_total": num(i["total"]),
+                "fator": num(i["factor"]),
+                "ignorado": i["ignored"],
+                "produto": (
+                    {"id": str(i["product_id"]), "nome": i["product_name"]} if i["product_id"] else None
+                ),
+                # O que de fato entrou na prateleira: quantidade × fator.
+                "entrou": None if i["ignored"] else num(i["quantity"]) * num(i["factor"]),
+            }
+            for i in itens
+        ],
+    }

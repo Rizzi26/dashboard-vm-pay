@@ -8,6 +8,7 @@ import httpx
 import respx
 from test_stock_routes import (
     LOC_ID,
+    ORG_ID,
     PROD_ID,
     TARGET_ROW,
     _clean,  # noqa: F401 — fixture autouse que limpa os overrides
@@ -234,3 +235,37 @@ def test_sugestao_entende_abreviacao_de_cupom():
     assert picklist._sugerir("CHOC ARCOR TORTUGUIT", catalogo)[0] == "p9"
     # número sozinho não sugere nada
     assert picklist._sugerir("500", catalogo) == []
+
+
+async def test_detalhe_do_cupom_traz_o_que_entrou_e_a_resposta_da_vmpay():
+    from datetime import datetime, timezone
+
+    use_role("admin")
+    sessao = use_session([
+        ("from core.purchase_receipt r", [{
+            "id": RECEIPT_ID, "access_key": CHAVE, "number": "14192", "series": "1", "issued_at": None,
+            "supplier_tax_id": CNPJ, "supplier_name": "DISTRIBUIDORA", "total": 616.92, "source": "qrcode",
+            "status": "approved", "created_at": datetime(2026, 10, 6, tzinfo=timezone.utc),
+            "location_name": "Loja", "aprovado_por": "op@teste.dev", "vmpay_status": "success", "vmpay_erro": None,
+        }]),
+        ("from core.purchase_receipt_item i", [
+            {"line": 1, "supplier_code": "6315", "description": "BISC. LOOK", "quantity": 2, "unit": "UN",
+             "unit_price": 3.99, "total": 7.98, "factor": 6, "ignored": False,
+             "product_id": PROD_ID, "product_name": "Biscoito Look"},
+            {"line": 2, "supplier_code": "999", "description": "P.H NEVE", "quantity": 1, "unit": "UN",
+             "unit_price": 9.45, "total": 9.45, "factor": 1, "ignored": True, "product_id": None, "product_name": None},
+        ]),
+    ])
+    resp = await call("GET", f"/orgs/mercadinho/picklist/{RECEIPT_ID}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["vmpay"]["status"] == "success"
+    assert [i["entrou"] for i in body["itens"]] == [12.0, None]  # 2 × fator 6; ignorado não entra
+    _, params = next((q, p) for q, p in sessao.executed if "from core.purchase_receipt r" in q)
+    assert params["org_id"] == str(ORG_ID)
+
+
+async def test_cupom_de_outra_organizacao_e_404():
+    use_role("admin")
+    use_session([])
+    assert (await call("GET", f"/orgs/mercadinho/picklist/{RECEIPT_ID}")).status_code == 404

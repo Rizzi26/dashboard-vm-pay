@@ -268,6 +268,35 @@ export type Encalhe = {
   itens: EncalheItem[];
 };
 
+export type PicklistCupom = {
+  id: string;
+  chave: string;
+  numero: string | null;
+  serie: string | null;
+  emitido_em: string | null;
+  fornecedor: { cnpj: string; nome: string | null };
+  valor_total: number | null;
+  origem: "qrcode" | "manual";
+  status: "pending" | "approved" | "error";
+  carregado_em: string;
+  loja: string;
+  aprovado_por: string;
+  vmpay: { status: string | null; erro: string | null };
+  itens: {
+    linha: number;
+    codigo: string | null;
+    descricao: string;
+    quantidade: number | null;
+    unidade: string | null;
+    valor_unitario: number | null;
+    valor_total: number | null;
+    fator: number | null;
+    ignorado: boolean;
+    produto: { id: string; nome: string } | null;
+    entrou: number | null;
+  }[];
+};
+
 export type Fetched<T> = { ok: true; data: T } | { ok: false; error: string };
 
 /** Chamadas disparadas no browser (ações, export). Recebem o token da sessão. */
