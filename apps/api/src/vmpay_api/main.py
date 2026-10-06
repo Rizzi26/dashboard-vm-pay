@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import health, me, members, picklist, products, sales, stock
+from .routers import health, me, members, picklist, products, sales, stock, sync
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
@@ -37,6 +37,7 @@ def create_app() -> FastAPI:
     app.include_router(stock.router)
     app.include_router(products.router)
     app.include_router(picklist.router)
+    app.include_router(sync.router)
     return app
 
 

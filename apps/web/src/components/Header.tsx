@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { AtualizarDados } from "@/components/AtualizarDados";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 const LINKS = [
@@ -20,12 +21,14 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export function Header({
+  org,
   orgName,
   role,
   email,
   periodo,
   local,
 }: {
+  org: string;
   orgName: string;
   role: string;
   email: string | null;
@@ -65,6 +68,7 @@ export function Header({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
+            <AtualizarDados org={org} />
             <span>
               <span className="hidden md:inline">{email} · </span>
               {ROLE_LABEL[role] ?? role}

@@ -16,9 +16,10 @@ const ESTADOS = {
 
 function estado(row: SyncRow): keyof typeof ESTADOS {
   if (row.ultimo_erro) return "falha";
-  // A ingestão roda 3× ao dia (23h/7h/15h BRT); 9h sem sucesso — uma rodada
-  // inteira perdida, com folga para o atraso do Actions — é sinal de parada.
-  if (row.atraso_segundos === null || row.atraso_segundos > 9 * 3600) return "atrasado";
+  // O cron é de hora em hora, mas o agendador do Actions atrasa e pula: na
+  // prática roda a cada 3–6h. Mais de 6h sem sucesso já é parada, não atraso
+  // — o mesmo limite do botão "Atualizar dados" na barra.
+  if (row.atraso_segundos === null || row.atraso_segundos > 6 * 3600) return "atrasado";
   return "ok";
 }
 
