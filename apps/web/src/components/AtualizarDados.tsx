@@ -113,7 +113,14 @@ export function AtualizarDados({ org }: { org: string }) {
           <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" />
           <path d="M13.5 2.5v3h-3" />
         </svg>
-        {ocupado ? "Atualizando…" : "Atualizar dados do sistema"}
+        {ocupado ? (
+          "Atualizando…"
+        ) : (
+          <>
+            <span className="sm:hidden">Atualizar</span>
+            <span className="hidden sm:inline">Atualizar dados do sistema</span>
+          </>
+        )}
       </button>
       <span
         role="status"
