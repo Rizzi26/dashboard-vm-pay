@@ -183,6 +183,7 @@ export type ContaVmpay = {
   nome: string;
   ativa: boolean;
   principal: boolean;
+  token_no_cofre: boolean;
   lojas: string[];
   criada_em: string;
   ultima_leitura: string | null;

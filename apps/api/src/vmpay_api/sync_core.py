@@ -98,8 +98,11 @@ async def token_da_conta(session: AsyncSession, config: dict[str, Any]) -> str:
 
 
 def eh_conta_original(config: dict[str, Any]) -> bool:
-    """A conta de antes das contas múltiplas: token em env var."""
-    return not (config or {}).get("secret_id")
+    """A conta de antes das contas múltiplas — com o token na env var ou já
+    migrado para o cofre (config.cursor == "legado"). Ela mantém o cursor de
+    vendas de sempre e não pode ser desativada pelo painel."""
+    config = config or {}
+    return not config.get("secret_id") or config.get("cursor") == "legado"
 
 
 #: Linhas por statement. O asyncpg limita a 32.767 parâmetros por query; com
