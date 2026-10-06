@@ -26,6 +26,7 @@ from ..audit import registrar
 from ..auth import OrgContext, require_role
 from ..db import get_session
 from ..ingest import sincronizar_conta
+from ..sync_core import eh_conta_original
 from ..transform import installations_map
 
 log = logging.getLogger(__name__)
@@ -79,6 +80,21 @@ async def maquinas_da_conta(token: str) -> set[int]:
     return set(installations_map(instalacoes).keys())
 
 
+async def _maquinas_da_integracao(session: AsyncSession, conta_id: uuid.UUID) -> set[int]:
+    rows = (
+        await session.execute(
+            text(
+                """
+                select distinct machine_id from core.location_link
+                 where integration_id = :id and machine_id is not null
+                """
+            ),
+            {"id": str(conta_id)},
+        )
+    ).mappings().all()
+    return {int(r["machine_id"]) for r in rows}
+
+
 async def _maquinas_conectadas(session: AsyncSession, org_id: uuid.UUID) -> dict[int, str]:
     rows = (
         await session.execute(
@@ -105,6 +121,7 @@ async def listar(ctx: MasterCtx, session: Session) -> list[dict]:
                 """
                 select i.id, i.nome, i.active, i.created_at,
                        (i.config ? 'secret_id') as no_cofre,
+                       coalesce(i.config->>'cursor', '') = 'legado' as legado,
                        coalesce(array_agg(distinct l.name) filter (where l.name is not null), '{}') as lojas,
                        -- Toda leitura grava o saldo; o cursor de vendas, não
                        -- (loja sem venda nunca o grava e ficaria "importando").
@@ -125,12 +142,12 @@ async def listar(ctx: MasterCtx, session: Session) -> list[dict]:
         await session.execute(text("select resource, last_error from vmpay.sync_cursor"))
     ).mappings().all()
 
-    def erro_de(conta_id: str, no_cofre: bool) -> str | None:
-        # Conta original usa a chave de sempre ("vends"); as outras, "vends@<id>".
+    def erro_de(conta_id: str, principal: bool) -> str | None:
+        # Conta principal usa a chave de sempre ("vends"); as outras, "vends@<id>".
         erros = [
             c["last_error"] for c in cursores
             if c["last_error"]
-            and (c["resource"].endswith(f"@{conta_id}") if no_cofre else "@" not in c["resource"])
+            and ("@" not in c["resource"] if principal else c["resource"].endswith(f"@{conta_id}"))
         ]
         return erros[0] if erros else None
 
@@ -139,11 +156,14 @@ async def listar(ctx: MasterCtx, session: Session) -> list[dict]:
             "id": str(r["id"]),
             "nome": r["nome"] or "Conta VMpay",
             "ativa": r["active"],
-            "principal": not r["no_cofre"],
+            "principal": (not r["no_cofre"]) or r["legado"],
+            # A conta principal começa com o token em variável de ambiente; a
+            # tela oferece movê-lo para o cofre (trocar token).
+            "token_no_cofre": r["no_cofre"],
             "lojas": list(r["lojas"]),
             "criada_em": r["created_at"].isoformat(),
             "ultima_leitura": r["lida"].isoformat() if r["lida"] else None,
-            "erro": erro_de(str(r["id"]), r["no_cofre"]),
+            "erro": erro_de(str(r["id"]), (not r["no_cofre"]) or r["legado"]),
         }
         for r in rows
     ]
@@ -211,20 +231,48 @@ async def mudar(conta_id: uuid.UUID, body: MudarConta, ctx: MasterCtx, session: 
     ).mappings().first()
     if conta is None:
         raise HTTPException(404, "conta não encontrada nesta organização")
-    secret_id = (conta["config"] or {}).get("secret_id")
-    if not secret_id and (body.ativo is False or body.token):
-        # Desligar a original pararia a ingestão de produção; o token dela vive
-        # na env do Render/Actions, não no cofre.
-        raise HTTPException(409, "a conta principal não pode ser desativada nem ter o token trocado pelo painel")
+    config = conta["config"] or {}
+    secret_id = config.get("secret_id")
+    if eh_conta_original(config) and body.ativo is False:
+        # Desligar a principal pararia a ingestão que já está em produção.
+        raise HTTPException(409, "a conta principal não pode ser desativada pelo painel")
 
     mudancas: dict = {}
     if body.token:
         token = _limpar(body.token)
-        await maquinas_da_conta(token)  # token novo também passa pelo teste
-        await session.execute(
-            text("select vault.update_secret(cast(:id as uuid), :token)"),
-            {"id": str(secret_id), "token": token},
-        )
+        novas = await maquinas_da_conta(token)  # token novo também passa pelo teste
+        # Trocar token é da MESMA conta: o token novo tem de enxergar as
+        # máquinas que esta conta já tem. Senão é token de outra loja colado
+        # no lugar errado — e a conta passaria a ler outra loja em silêncio.
+        atuais = await _maquinas_da_integracao(session, conta_id)
+        if atuais and not (atuais & novas):
+            raise HTTPException(
+                409, "esse token é de outra conta VMpay — ele não enxerga as máquinas desta loja"
+            )
+        if secret_id:
+            await session.execute(
+                text("select vault.update_secret(cast(:id as uuid), :token)"),
+                {"id": str(secret_id), "token": token},
+            )
+        else:
+            # Conta principal saindo da env var para o cofre. "cursor: legado"
+            # mantém a chave de cursor de sempre: nada de vendas é reprocessado.
+            secret_id = await session.scalar(
+                text("select vault.create_secret(:token, :nome, :descricao)"),
+                {
+                    "token": token,
+                    "nome": f"vmpay:{ctx.org_slug}:{conta_id}",
+                    "descricao": f"Token da conta VMpay principal ({ctx.org_slug})",
+                },
+            )
+            await session.execute(
+                text("update core.integration set config = cast(:config as jsonb) where id = :id"),
+                {
+                    "config": json.dumps({"secret_id": str(secret_id), "cursor": "legado"}),
+                    "id": str(conta_id),
+                },
+            )
+            mudancas["cofre"] = "token movido da variável de ambiente para o cofre"
         mudancas["token"] = "trocado"
     if body.nome is not None:
         mudancas["nome"] = body.nome

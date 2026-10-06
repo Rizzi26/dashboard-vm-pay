@@ -93,9 +93,15 @@ async def situacao(ctx: ViewerCtx, session: Session) -> dict:
 
 @router.post("", status_code=202)
 async def atualizar(ctx: ViewerCtx, session: Session, background: BackgroundTasks) -> dict:
-    if not settings().vmpay_token:
+    # Token: o de cada conta vem do cofre (ou da env da conta principal ainda
+    # não migrada). Sem nenhuma das duas, não há o que ler.
+    contas = await session.scalar(
+        text("select count(*) from core.integration where org_id = :org_id and active"),
+        {"org_id": str(ctx.org_id)},
+    )
+    if not settings().vmpay_token and not contas:
         raise HTTPException(
-            503, "atualização indisponível: VMPAY_INGEST_TOKEN não está configurado na API"
+            503, "atualização indisponível: nenhuma conta VMpay configurada para esta organização"
         )
     if _rodando.locked():
         return {"status": "em_andamento"}

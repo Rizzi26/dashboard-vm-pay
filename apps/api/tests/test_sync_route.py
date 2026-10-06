@@ -53,7 +53,7 @@ async def test_sem_token_na_api_explica_com_503(monkeypatch):
     use_session([])
     resp = await call("POST", "/orgs/mercadinho/sync")
     assert resp.status_code == 503
-    assert "VMPAY_INGEST_TOKEN" in resp.json()["detail"]
+    assert "nenhuma conta VMpay" in resp.json()["detail"]
 
 
 async def test_situacao_mostra_o_dado_mais_antigo(monkeypatch):
