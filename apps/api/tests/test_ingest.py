@@ -309,3 +309,59 @@ async def test_cursor_existente_segue_incremental(cliente):
     await ingest.sync_resource("cashless_facts", cliente, sessao)
     url = str(rota.calls.last.request.url)
     assert "transaction_id_greater_than=5000" in url
+
+
+# ------------------------------------------------------- contas múltiplas
+
+
+class _Integ:
+    def __init__(self, id_, config, active=True):
+        self.id, self.config, self.active = id_, config, active
+
+
+class _SessaoContas:
+    """select(Integration) devolve as contas; o cofre devolve o token pelo id."""
+
+    def __init__(self, integracoes, cofre):
+        self.integracoes, self.cofre, self.commits = integracoes, cofre, 0
+
+    async def execute(self, stmt, params=None):
+        integracoes = self.integracoes
+
+        class R:
+            def scalars(self_inner):
+                class S:
+                    def all(self_s):
+                        return integracoes
+                return S()
+
+        return R()
+
+    async def scalar(self, stmt, params=None):
+        return self.cofre.get(params["id"])
+
+    async def commit(self):
+        self.commits += 1
+
+
+async def test_cada_conta_le_vendas_com_o_proprio_token(monkeypatch):
+    from vmpay_api import ingest
+
+    monkeypatch.setenv("VMPAY_INGEST_TOKEN", "token-original")
+    nova = "00000000-0000-0000-0000-0000000000c2"
+    quebrada = "00000000-0000-0000-0000-0000000000c3"
+    sessao = _SessaoContas(
+        [
+            _Integ("orig", {"token_env": "VMPAY_INGEST_TOKEN"}),
+            _Integ(nova, {"secret_id": "s-nova"}),
+            _Integ(quebrada, {"secret_id": "s-sumiu"}),
+        ],
+        {"s-nova": "token-da-loja-2"},
+    )
+    contas, falhas = await ingest._contas_de_vendas(sessao, "token-original")
+    # A original mantém o cursor de sempre (id None); a nova tem o dela.
+    assert contas == [(None, "token-original"), (nova, "token-da-loja-2")]
+    assert len(falhas) == 1 and "cofre" in falhas[0]["erro"]  # as outras seguem
+    assert sessao.commits == 1  # cofre lido, transação fechada antes da rede
+    assert ingest.cursor_key("vends", nova) == f"vends@{nova}"
+    assert ingest.cursor_key("vends", None) == "vends"

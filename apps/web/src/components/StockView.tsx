@@ -31,12 +31,15 @@ export function StockView({
   role,
   initialDisp,
   initialBusca,
+  loja = null,
 }: {
   rows: StockRow[];
   org: string;
   role: string;
   initialDisp?: "com" | "sem";
   initialBusca?: string;
+  /** Loja escolhida na barra: decide em qual conta VMpay o produto é cadastrado. */
+  loja?: string | null;
 }) {
   const router = useRouter();
   const [filtro, setFiltro] = useState(initialBusca ?? "");
@@ -110,13 +113,16 @@ export function StockView({
   }
 
   const carregarRefs = useCallback(async (): Promise<ProductRefs> => {
-    const resp = await browserApi.request(`/orgs/${org}/products/refs`, await token());
+    const resp = await browserApi.request(
+      `/orgs/${org}/products/refs${loja ? `?loja=${loja}` : ""}`,
+      await token(),
+    );
     const payload = await resp.json().catch(() => ({}));
     if (!resp.ok) {
       throw new Error(payload.detail ?? `backend respondeu ${resp.status}`);
     }
     return payload as ProductRefs;
-  }, [org]);
+  }, [org, loja]);
 
   async function exportar() {
     try {
@@ -429,7 +435,7 @@ export function StockView({
           onSubmit={async (body) => {
             await executar(
               "/products",
-              body,
+              { ...body, loja },
               `Produto "${body.nome}" criado no cadastro da VMpay. Para ele aparecer na máquina e no estoque, inclua-o no planograma da instalação.`,
             );
           }}

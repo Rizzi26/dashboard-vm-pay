@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import auditoria, health, lojas, me, members, picklist, products, sales, stock, sync
+from .routers import auditoria, contas, health, lojas, me, members, picklist, products, sales, stock, sync
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
@@ -40,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(sync.router)
     app.include_router(auditoria.router)
     app.include_router(lojas.router)
+    app.include_router(contas.router)
     return app
 
 

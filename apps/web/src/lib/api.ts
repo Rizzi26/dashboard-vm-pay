@@ -173,8 +173,20 @@ export type PicklistConsulta = {
 };
 
 export type PicklistOpcoes = {
-  locais: { id: string; name: string }[];
-  produtos: { id: string; name: string; barcode: string | null }[];
+  /** conta = integração VMpay do local; com várias contas, filtra os produtos. */
+  locais: { id: string; name: string; conta: string | null }[];
+  produtos: { id: string; name: string; barcode: string | null; conta?: string }[];
+};
+
+export type ContaVmpay = {
+  id: string;
+  nome: string;
+  ativa: boolean;
+  principal: boolean;
+  lojas: string[];
+  criada_em: string;
+  ultima_leitura: string | null;
+  erro: string | null;
 };
 
 export type PicklistCarga = {

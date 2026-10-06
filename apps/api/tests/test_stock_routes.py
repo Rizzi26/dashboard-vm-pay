@@ -131,7 +131,7 @@ class FakeConnector:
 
 def use_connector(monkeypatch, fail=None) -> FakeConnector:
     fake = FakeConnector(fail)
-    monkeypatch.setattr(stock_router, "get_connector", lambda config: fake)
+    monkeypatch.setattr(stock_router, "get_connector", lambda config, token=None: fake)
     return fake
 
 
@@ -438,7 +438,7 @@ async def test_log_pendente_e_commitado_antes_do_write_back(monkeypatch):
             return await super().restock(*a)
 
     fake = Espiao()
-    monkeypatch.setattr(stock_router, "get_connector", lambda config: fake)
+    monkeypatch.setattr(stock_router, "get_connector", lambda config, token=None: fake)
 
     await call("POST", "/orgs/mercadinho/stock/restock", json=RESTOCK_BODY)
     assert commits_antes_do_connector == [1]  # o log pendente já estava salvo

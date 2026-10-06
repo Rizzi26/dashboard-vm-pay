@@ -68,11 +68,31 @@ class IngestReport:
         }
 
 
+def cursor_key(resource: str, integration_id: Any | None) -> str:
+    """Chave do cursor no sync_cursor: uma por recurso E por conta VMpay.
+
+    A conta original (token em env var) mantém a chave de sempre — o cursor
+    dela não volta a zero, nada é reprocessado. Contas novas ganham
+    "<recurso>@<id da integração>".
+    """
+    return resource if integration_id is None else f"{resource}@{integration_id}"
+
+
 async def read_cursor(session: AsyncSession, resource: str) -> int:
     value = await session.scalar(
         select(models.SyncCursor.cursor_value).where(models.SyncCursor.resource == resource)
     )
     return value or 0
+
+
+async def _garantir_cursor(session: AsyncSession, key: str) -> None:
+    """Conta nova não tem linha no sync_cursor; o UPDATE do avanço precisa dela."""
+    await session.execute(
+        insert(models.SyncCursor).values(resource=key).on_conflict_do_nothing(
+            index_elements=["resource"]
+        )
+    )
+    await session.commit()
 
 
 #: Linhas por statement — o asyncpg limita 32.767 parâmetros por query, e o
@@ -171,8 +191,12 @@ async def sync_resource(
     *,
     batch_size: int | None = None,
     max_rows: int | None = None,
+    key: str | None = None,
 ) -> IngestReport:
-    """Traz o que é novo de um recurso e devolve o relatório da rodada."""
+    """Traz o que é novo de um recurso e devolve o relatório da rodada.
+
+    `key` é a linha do sync_cursor (ver cursor_key); por padrão, o recurso.
+    """
     if resource not in RESOURCES:
         raise ValueError(f"recurso '{resource}' não é ingerível; conheço {list(RESOURCES)}")
 
@@ -182,8 +206,11 @@ async def sync_resource(
     spec = RESOURCES[resource]
     table = TABLES[resource]
 
-    cursor = await read_cursor(session, resource)
-    report = IngestReport(resource=resource, cursor_before=cursor, cursor_after=cursor)
+    key = key or resource
+    if key != resource:
+        await _garantir_cursor(session, key)
+    cursor = await read_cursor(session, key)
+    report = IngestReport(resource=key, cursor_before=cursor, cursor_after=cursor)
 
     buffer: list[dict] = []
     dims: dict[str, dict[int, dict]] = {name: {} for name in DIMENSION_TABLES}
@@ -223,7 +250,7 @@ async def sync_resource(
             if len(buffer) >= batch_size:
                 # No backfill o cursor fica onde está (0) até a varredura fechar.
                 await _flush(
-                    session, resource, table, buffer, dims,
+                    session, key, table, buffer, dims,
                     cursor if backfill else highest, report,
                 )
                 buffer, dims = [], {name: {} for name in DIMENSION_TABLES}
@@ -233,13 +260,13 @@ async def sync_resource(
                 break
 
         if buffer or (backfill and highest > cursor):
-            await _flush(session, resource, table, buffer, dims, highest, report)
+            await _flush(session, key, table, buffer, dims, highest, report)
     except VMpayError as exc:
         # O que já foi confirmado fica; o cursor aponta para o último lote bom.
         await session.rollback()
         report.error = redact(str(exc))
-        await _record_failure(session, resource, report.error)
-        log.error("ingestão de %s falhou: %s", resource, report.error)
+        await _record_failure(session, key, report.error)
+        log.error("ingestão de %s falhou: %s", key, report.error)
 
     return report
 
@@ -253,30 +280,117 @@ async def _record_failure(session: AsyncSession, resource: str, message: str) ->
     await session.commit()
 
 
+async def _contas_de_vendas(
+    session: AsyncSession, token_global: str
+) -> tuple[list[tuple[Any | None, str]], list[dict[str, Any]]]:
+    """(id da conta, token) de cada conta VMpay ativa — e as que falharam.
+
+    A conta original vem com id None: o cursor dela é o de sempre. Sem
+    nenhuma integração cadastrada, a ingestão roda só com o token global,
+    como antes das contas múltiplas. Token de uma conta que não resolve
+    (revogado, cofre sem o segredo) vira relatório de erro — as outras seguem.
+    """
+    from .models_core import Integration
+    from .sync_core import eh_conta_original, token_da_conta
+
+    integracoes = (
+        await session.execute(
+            select(Integration)
+            .where(Integration.active, Integration.kind == "vmpay")
+            .order_by(Integration.created_at)
+        )
+    ).scalars().all()
+    if not integracoes:
+        return [(None, token_global)], []
+
+    contas: list[tuple[Any | None, str]] = []
+    falhas: list[dict[str, Any]] = []
+    original_usada = False
+    for integ in integracoes:
+        # Só UMA conta usa a chave de cursor de sempre; outra de env var
+        # (não deveria existir) ganha chave própria em vez de dividir cursor.
+        original = eh_conta_original(integ.config) and not original_usada
+        original_usada = original_usada or original
+        try:
+            token = await token_da_conta(session, integ.config or {})
+        except VMpayError as exc:
+            falhas.append({"recurso": f"conta {integ.id}", "erro": redact(str(exc))})
+            log.error("conta %s sem token utilizável: %s", integ.id, redact(str(exc)))
+            continue
+        contas.append((None if original else integ.id, token))
+    # Fecha a leitura do cofre antes de ir à rede.
+    await session.commit()
+    return contas, falhas
+
+
 async def sync_all(
     resources: list[str] | None = None, *, catalogo_completo: bool = True
 ) -> list[dict[str, Any]]:
     """Uma rodada completa: staging de vendas + snapshot de catálogo/estoque.
 
-    É isto que o cron (GitHub Actions) chama. O staging de vendas roda com o
-    token global (tenant único, registrado); o snapshot itera as integrações
-    ativas de core.integration — sem integração cadastrada, só o staging roda.
+    É isto que o cron (GitHub Actions) e o "Atualizar dados" chamam. Vendas:
+    uma passada por conta VMpay ativa, cada uma com o próprio token e cursor
+    (ver _contas_de_vendas). Snapshot: idem, por integração.
     """
     from .sync_core import sync_all_integrations
 
     cfg = settings()
     alvos = resources or list(RESOURCES)
     relatorios: list[dict[str, Any]] = []
-    async with VMpayClient(cfg.vmpay_token, base_url=cfg.vmpay_base or PRODUCTION) as client:
-        async with session_factory()() as session:
-            for resource in alvos:
-                relatorio = await sync_resource(resource, client, session)
-                log.info("ingestão %s: %s", resource, relatorio.as_dict())
-                relatorios.append(relatorio.as_dict())
+    base = cfg.vmpay_base or PRODUCTION
+    async with session_factory()() as session:
+        contas, falhas = await _contas_de_vendas(session, cfg.vmpay_token)
+    relatorios.extend(falhas)
+    for conta_id, token in contas:
+        async with VMpayClient(token, base_url=base) as client:
+            async with session_factory()() as session:
+                for resource in alvos:
+                    relatorio = await sync_resource(
+                        resource, client, session, key=cursor_key(resource, conta_id)
+                    )
+                    log.info("ingestão %s: %s", relatorio.resource, relatorio.as_dict())
+                    relatorios.append(relatorio.as_dict())
     async with session_factory()() as session:
         relatorios.extend(
             await sync_all_integrations(session, catalogo_completo=catalogo_completo)
         )
+    return relatorios
+
+
+async def sincronizar_conta(conta_id: Any) -> list[dict[str, Any]]:
+    """Primeira importação de uma conta recém-adicionada pelo painel.
+
+    Mesma rodada do cron, só para esta conta: vendas com o cursor dela (do
+    zero = histórico completo, limitado por INGEST_MAX_ROWS) e retrato
+    completo de catálogo/locais/saldos. Roda em segundo plano.
+    """
+    from .models_core import Integration
+    from .sync_core import sync_integration, token_da_conta
+
+    cfg = settings()
+    relatorios: list[dict[str, Any]] = []
+    try:
+        async with session_factory()() as session:
+            integ = await session.get(Integration, conta_id)
+            if integ is None or not integ.active:
+                return []
+            token = await token_da_conta(session, integ.config or {})
+            await session.commit()
+        async with VMpayClient(token, base_url=cfg.vmpay_base or PRODUCTION) as client:
+            async with session_factory()() as session:
+                for resource in RESOURCES:
+                    relatorio = await sync_resource(
+                        resource, client, session, key=cursor_key(resource, conta_id)
+                    )
+                    relatorios.append(relatorio.as_dict())
+        async with session_factory()() as session:
+            integ = await session.get(Integration, conta_id)
+            relatorios.append((await sync_integration(session, integ)).as_dict())
+    except Exception:
+        # Tarefa de fundo: o erro fica no log e no sync_cursor da conta, que a
+        # lista de contas mostra.
+        log.exception("primeira importação da conta %s falhou", conta_id)
+    log.info("primeira importação da conta %s: %s", conta_id, relatorios)
     return relatorios
 
 
