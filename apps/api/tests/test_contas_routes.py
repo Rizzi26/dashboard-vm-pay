@@ -81,3 +81,23 @@ async def test_conta_principal_nao_e_desativada_pelo_painel():
                                               "config": {"token_env": "VMPAY_INGEST_TOKEN"}}])])
     resp = await call("PATCH", f"/orgs/mercadinho/contas/{uuid.uuid4()}", json={"ativo": False})
     assert resp.status_code == 409
+
+
+async def test_lista_mostra_leitura_pelo_estoque_e_erro_pelo_cursor_da_conta():
+    from datetime import datetime, timezone
+
+    conta = uuid.UUID("00000000-0000-0000-0000-0000000000c2")
+    use_role("master")
+    use_session([
+        ("from core.integration i", [
+            {"id": conta, "nome": "Jardins III", "active": True, "created_at": datetime(2026, 10, 6, tzinfo=timezone.utc),
+             "no_cofre": True, "lojas": ["JARDINS III — 003"], "lida": datetime(2026, 10, 6, 15, tzinfo=timezone.utc)},
+        ]),
+        ("from vmpay.sync_cursor", [
+            {"resource": f"vends@{conta}", "last_error": "401 da VMpay"},
+            {"resource": "vends", "last_error": "erro de OUTRA conta"},
+        ]),
+    ])
+    body = (await call("GET", "/orgs/mercadinho/contas")).json()
+    assert body[0]["ultima_leitura"].startswith("2026-10-06T15")
+    assert body[0]["erro"] == "401 da VMpay"  # só o erro da própria conta

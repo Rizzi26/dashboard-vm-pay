@@ -105,10 +105,14 @@ async def listar(ctx: MasterCtx, session: Session) -> list[dict]:
                 """
                 select i.id, i.nome, i.active, i.created_at,
                        (i.config ? 'secret_id') as no_cofre,
-                       coalesce(array_agg(distinct l.name) filter (where l.name is not null), '{}') as lojas
+                       coalesce(array_agg(distinct l.name) filter (where l.name is not null), '{}') as lojas,
+                       -- Toda leitura grava o saldo; o cursor de vendas, não
+                       -- (loja sem venda nunca o grava e ficaria "importando").
+                       max(b.updated_at) as lida
                   from core.integration i
                   left join core.location_link ll on ll.integration_id = i.id
                   left join core.location l on l.id = ll.location_id
+                  left join core.stock_balance b on b.location_id = l.id
                  where i.org_id = :org_id and i.kind = 'vmpay'
                  group by i.id
                  order by i.created_at
@@ -118,23 +122,17 @@ async def listar(ctx: MasterCtx, session: Session) -> list[dict]:
         )
     ).mappings().all()
     cursores = (
-        await session.execute(
-            text("select resource, last_success, last_error from vmpay.sync_cursor")
-        )
+        await session.execute(text("select resource, last_error from vmpay.sync_cursor"))
     ).mappings().all()
 
-    def situacao(conta_id: str, no_cofre: bool) -> dict:
+    def erro_de(conta_id: str, no_cofre: bool) -> str | None:
         # Conta original usa a chave de sempre ("vends"); as outras, "vends@<id>".
-        meus = [
-            c for c in cursores
-            if (c["resource"].endswith(f"@{conta_id}") if no_cofre else "@" not in c["resource"])
+        erros = [
+            c["last_error"] for c in cursores
+            if c["last_error"]
+            and (c["resource"].endswith(f"@{conta_id}") if no_cofre else "@" not in c["resource"])
         ]
-        sucessos = [c["last_success"] for c in meus if c["last_success"]]
-        erros = [c["last_error"] for c in meus if c["last_error"]]
-        return {
-            "ultima_leitura": min(sucessos).isoformat() if len(sucessos) == len(meus) and meus else None,
-            "erro": erros[0] if erros else None,
-        }
+        return erros[0] if erros else None
 
     return [
         {
@@ -144,7 +142,8 @@ async def listar(ctx: MasterCtx, session: Session) -> list[dict]:
             "principal": not r["no_cofre"],
             "lojas": list(r["lojas"]),
             "criada_em": r["created_at"].isoformat(),
-            **situacao(str(r["id"]), r["no_cofre"]),
+            "ultima_leitura": r["lida"].isoformat() if r["lida"] else None,
+            "erro": erro_de(str(r["id"]), r["no_cofre"]),
         }
         for r in rows
     ]
