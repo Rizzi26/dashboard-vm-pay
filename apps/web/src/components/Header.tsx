@@ -10,7 +10,6 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 const LINKS = [
   { href: "/", label: "Central", roles: ["viewer", "admin", "master"] },
   { href: "/vendas", label: "Vendas", roles: ["viewer", "admin", "master"] },
-  { href: "/perdidas", label: "Perdas", roles: ["viewer", "admin", "master"] },
   { href: "/estoque", label: "Estoque", roles: ["viewer", "admin", "master"] },
   { href: "/reposicao", label: "Reposição", roles: ["viewer", "admin", "master"] },
   { href: "/picklist", label: "Pick list", roles: ["admin", "master"] },
@@ -61,7 +60,7 @@ export function Header({
   // O período selecionado sobrevive à troca de aba — sem useSearchParams,
   // que exigiria boundary de Suspense: as páginas que o conhecem passam a prop.
   function hrefFor(href: string): string {
-    if (periodo && periodo !== "30" && (href === "/vendas" || href === "/perdidas")) {
+    if (periodo && periodo !== "30" && href === "/vendas") {
       return `${href}?periodo=${periodo}`;
     }
     return href;
