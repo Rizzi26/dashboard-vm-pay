@@ -185,3 +185,17 @@ async def test_balde_repoe_continuamente():
     for _ in range(60):
         await bucket.acquire()
     assert bucket.available == 0
+
+
+@respx.mock
+async def test_log_do_httpx_nao_carrega_o_token(caplog):
+    """O httpx loga a URL em INFO; a URL da VMpay leva o token. Vazou no Render."""
+    import logging
+
+    respx.get(f"{BASE}/machines").mock(return_value=httpx.Response(200, json=[]))
+    with caplog.at_level(logging.INFO, logger="httpx"):
+        async with VMpayClient("token-de-teste-super-secreto", base_url=BASE, max_retries=0) as c:
+            await c.get("machines")
+    assert "HTTP Request" in caplog.text  # o log continua existindo…
+    assert "token-de-teste-super-secreto" not in caplog.text  # …sem o segredo
+    assert "access_token=[REDACTED]" in caplog.text

@@ -253,7 +253,9 @@ async def _record_failure(session: AsyncSession, resource: str, message: str) ->
     await session.commit()
 
 
-async def sync_all(resources: list[str] | None = None) -> list[dict[str, Any]]:
+async def sync_all(
+    resources: list[str] | None = None, *, catalogo_completo: bool = True
+) -> list[dict[str, Any]]:
     """Uma rodada completa: staging de vendas + snapshot de catálogo/estoque.
 
     É isto que o cron (GitHub Actions) chama. O staging de vendas roda com o
@@ -272,7 +274,9 @@ async def sync_all(resources: list[str] | None = None) -> list[dict[str, Any]]:
                 log.info("ingestão %s: %s", resource, relatorio.as_dict())
                 relatorios.append(relatorio.as_dict())
     async with session_factory()() as session:
-        relatorios.extend(await sync_all_integrations(session))
+        relatorios.extend(
+            await sync_all_integrations(session, catalogo_completo=catalogo_completo)
+        )
     return relatorios
 
 
