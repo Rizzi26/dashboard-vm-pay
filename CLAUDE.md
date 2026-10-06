@@ -202,9 +202,16 @@ O kiosk é 100% cashless, um item por transação.
    com o cupom no mesmo commit do action_log; de-para por (CNPJ emitente,
    código do item) com fator de conversão. Migration 0005. Custo fora do
    escopo por decisão. A fixture de teste é anonimizada — repo público.
-8. Migrations em produção agora vão pelo workflow **migrate.yml** (dispatch
-   manual, valida com pglast, aplica com o secret DATABASE_URL em transação
-   única). Nenhuma máquina local guarda credencial do banco.
+8. Migrations são **automáticas** (migrate.yml): push na `homolog` aplica no
+   banco de homologação, push na `main` no de produção — só os arquivos que
+   faltam em `core.schema_migration`, cada um numa transação com o próprio
+   registro; sem pendência, não faz nada. Migration tem de ser ADITIVA (o
+   deploy do código corre em paralelo). Nenhuma máquina local guarda
+   credencial do banco.
+10. **Atualizar dados** (2026-10-06): botão na barra (`POST /orgs/{org}/sync`,
+   qualquer papel, intervalo mínimo 120s, uma rodada por vez) roda a mesma
+   ingestão do cron. O cron é horário no papel, mas o Actions roda a cada
+   3–6h na prática — o botão existe por isso.
 
 O catálogo do MCP cobre bem os recursos que a doc documenta bem. `audits`,
 `storables` e as tabelas de domínio têm pouca descrição na origem — o extrator

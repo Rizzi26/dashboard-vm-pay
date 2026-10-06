@@ -73,8 +73,11 @@ declará-lo no Blueprint criaria um segundo serviço com o mesmo nome. Ele tem
 destravar produção. Sem `VMPAY_BASE` o cliente cai na VMpay de **produção** —
 por isso a escrita só foi ligada depois da base.
 
-Ingestão e migration de homologação: os mesmos workflows, com o input
-`ambiente: homolog` (o cron roda só produção). Os secrets de homologação têm
+Ingestão de homologação: o mesmo workflow, com o input `ambiente: homolog`
+(o cron roda só produção). Migration é automática nos dois ambientes: push na
+`homolog` aplica no banco de homologação, push na `main` no de produção — só o
+que falta em `core.schema_migration`. Migration precisa ser aditiva, porque o
+deploy do código corre em paralelo. Os secrets de homologação têm
 nome próprio — `HML_DATABASE_URL`, `HML_VMPAY_INGEST_TOKEN`, `HML_VMPAY_BASE` —
 e o workflow falha se faltar um. Não são *environments* do GitHub de propósito:
 num environment, o secret ausente cai no de mesmo nome do repositório, o de

@@ -1,26 +1,35 @@
 name: Migração de banco
 
-# Aplicação manual de migration no Supabase, usando o mesmo secret
-# DATABASE_URL da ingestão. Existe porque nenhuma máquina de desenvolvimento
-# guarda credencial do banco (repositório público, política da casa) — o
-# caminho para DDL em produção é este workflow ou o SQL Editor do painel.
+# Aplica as migrations PENDENTES no Supabase do ambiente — sozinho, quando um
+# push na `main` (produção) ou na `homolog` (homologação) mexe em
+# supabase/migrations/. Sem nada pendente, termina dizendo isso e não toca em
+# nada. Existe porque nenhuma máquina de desenvolvimento guarda credencial do
+# banco (repositório público, política da casa).
+#
+# Controle: core.schema_migration guarda o nome de cada arquivo já aplicado.
+# Cada migration entra numa transação JUNTO com o próprio registro — ou as
+# duas coisas acontecem, ou nenhuma.
+#
+# Ordem com o deploy: Render e Vercel publicam o código em paralelo a este
+# workflow, e ele pode esperar na fila atrás de uma rodada de ingestão. Por
+# isso migration aqui é ADITIVA (tabela, coluna nullable, índice): o código
+# antigo convive com o schema novo. Remoção/renomeação vai em dois passos.
 on:
+  push:
+    branches: [main, homolog]
+    paths: ["supabase/migrations/**"]
   workflow_dispatch:
     inputs:
-      arquivo:
-        description: "Nome do arquivo em supabase/migrations (ex.: 0004_stock_history.sql)"
-        type: string
-        required: true
       ambiente:
-        description: "Banco de destino"
+        description: "Banco de destino (aplica só o que estiver pendente)"
         type: choice
         options: [producao, homolog]
-        default: producao
+        default: homolog
 
 concurrency:
-  # Mesmo grupo da ingestão: DDL não roda por cima de uma rodada de ingest —
-  # espera a vez em vez de disputar lock com upsert no meio.
-  group: ingest-${{ inputs.ambiente }}
+  # Mesmo grupo da ingestão do ambiente: DDL não roda por cima de uma rodada
+  # de ingest — espera a vez em vez de disputar lock com upsert no meio.
+  group: ingest-${{ inputs.ambiente || (github.ref_name == 'main' && 'producao') || 'homolog' }}
   cancel-in-progress: false
 
 permissions:
@@ -29,37 +38,82 @@ permissions:
 jobs:
   migrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      AMBIENTE: ${{ inputs.ambiente || (github.ref_name == 'main' && 'producao') || 'homolog' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: validar caminho e sintaxe
-        env:
-          ARQUIVO: ${{ inputs.arquivo }}
+      - name: conferir origem
+        # Produção só recebe o que está na main: um dispatch a partir de outra
+        # branch levaria para produção migration que ainda não foi aprovada.
         run: |
-          # basename barra path traversal: o input vira só um nome de arquivo.
-          nome="$(basename "$ARQUIVO")"
-          caminho="supabase/migrations/$nome"
-          [ -f "$caminho" ] || { echo "não existe: $caminho"; exit 1; }
-          echo "caminho=$caminho" >> "$GITHUB_ENV"
-          pip install --quiet pglast
-          python -c "import pglast, sys; pglast.parse_sql(open(sys.argv[1]).read()); print('sintaxe OK')" "$caminho"
+          echo "ambiente: $AMBIENTE · branch: $GITHUB_REF_NAME"
+          if [ "$AMBIENTE" = "producao" ] && [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "produção só aplica migrations da main"; exit 1
+          fi
 
-      - name: aplicar
+      - name: validar sintaxe
+        run: |
+          pip install --quiet pglast
+          for f in supabase/migrations/*.sql; do
+            python -c "import pglast, sys; pglast.parse_sql(open(sys.argv[1]).read())" "$f" \
+              || { echo "sintaxe inválida: $f"; exit 1; }
+          done
+          echo "sintaxe OK"
+
+      - name: aplicar pendentes
         env:
-          AMBIENTE: ${{ inputs.ambiente }}
           PRD_DATABASE_URL: ${{ secrets.DATABASE_URL }}
           HML_DATABASE_URL: ${{ secrets.HML_DATABASE_URL }}
-        # -1 = transação única: ou a migration inteira entra, ou nada entra.
-        # O log é público (repo público); psql só imprime os comandos do
-        # arquivo, nunca a URL de conexão.
         # Secret de homologação com nome próprio: se faltar, falha — nunca cai
-        # no banco de produção (ver ingest.yml).
+        # no banco de produção (ver ingest.yml). O log é público: psql só
+        # imprime os comandos, nunca a URL de conexão.
         run: |
+          # Explícito, não herdado do runner: migration que falha PARA a fila.
+          set -euo pipefail
           if [ "$AMBIENTE" = "homolog" ]; then
             DATABASE_URL="${HML_DATABASE_URL:?defina o secret HML_DATABASE_URL}"
           else
             DATABASE_URL="${PRD_DATABASE_URL:?defina o secret DATABASE_URL}"
           fi
-          echo "ambiente: $AMBIENTE"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f "$caminho"
+          sql() { psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q -t -A "$@"; }
+
+          # Linha de base: os dois bancos já tinham 0001–0005 aplicadas à mão
+          # quando o controle nasceu. Só vale na primeira execução (tabela
+          # vazia) e só se o schema já existir — banco novo aplica tudo.
+          sql <<'SQL'
+          create table if not exists core.schema_migration (
+              filename    text primary key,
+              applied_at  timestamptz not null default now()
+          );
+          insert into core.schema_migration (filename)
+          select f from unnest(array[
+              '0001_init.sql', '0002_core.sql', '0003_stock_price.sql',
+              '0004_stock_history.sql', '0005_picklist.sql'
+          ]) as f
+           where to_regclass('core.purchase_receipt') is not null
+             and not exists (select 1 from core.schema_migration);
+          SQL
+
+          aplicadas=0
+          for caminho in $(ls supabase/migrations/*.sql | sort); do
+            nome="$(basename "$caminho")"
+            # O nome entra no SQL de controle: só o formato NNNN_nome.sql passa.
+            [[ "$nome" =~ ^[0-9]{4}_[a-z0-9_]+\.sql$ ]] || { echo "nome fora do padrão: $nome"; exit 1; }
+            ja=$(sql -c "select 1 from core.schema_migration where filename = '$nome'")
+            if [ -n "$ja" ]; then
+              echo "já aplicada: $nome"
+              continue
+            fi
+            echo "aplicando: $nome"
+            # -1 = uma transação para o arquivo E o registro dele.
+            sql -1 -f "$caminho" -c "insert into core.schema_migration (filename) values ('$nome')"
+            aplicadas=$((aplicadas + 1))
+          done
+
+          if [ "$aplicadas" -eq 0 ]; then
+            echo "nada a aplicar — banco de $AMBIENTE em dia"
+          else
+            echo "$aplicadas migration(s) aplicada(s) em $AMBIENTE"
+          fi
