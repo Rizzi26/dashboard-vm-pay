@@ -1,7 +1,8 @@
 """Rotinas agendadas no Supabase (pg_cron) — a API se agenda ao subir.
 
-O pg_cron chama POST /interno/ingestao de hora em hora (e /health a cada 10
-min em produção, para o Render gratuito não dormir no horário de uso). A
+Em PRODUÇÃO o pg_cron chama POST /interno/ingestao de hora em hora e /health
+a cada 10 min no horário de uso (o Render gratuito não dorme). Homologação
+não agenda nada: lá se atualiza pelo botão. A
 chamada se autentica com um token aleatório guardado no Vault: a API o cria
 na primeira subida e compara o cabeçalho com ele. Nenhuma variável de
 ambiente nova, nenhum passo manual por ambiente.
@@ -51,7 +52,7 @@ async def agendar() -> None:
     url = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
     if not url:
         return
-    manter_acordado = os.environ.get("RENDER_SERVICE_NAME") == SERVICO_DE_PRODUCAO
+    producao = os.environ.get("RENDER_SERVICE_NAME") == SERVICO_DE_PRODUCAO
     try:
         async with session_factory()() as session:
             if await token_interno(session) is None:
@@ -65,9 +66,19 @@ async def agendar() -> None:
                 )
             await session.execute(
                 text("select core.agendar_rotinas(:url, :acordado)"),
-                {"url": url, "acordado": manter_acordado},
+                {"url": url, "acordado": producao},
             )
+            if not producao:
+                # Homologação não tem venda real: atualizar de hora em hora só
+                # acordaria o serviço ~6 h/dia à toa, gastando as 750 h/mês da
+                # conta Render. Lá se atualiza pelo botão, quando for testar.
+                await session.execute(
+                    text("select cron.unschedule(jobid) from cron.job where jobname = 'vmpay-ingestao'")
+                )
             await session.commit()
-        log.info("rotinas agendadas: ingestão horária%s", " + manter acordado" if manter_acordado else "")
+        log.info(
+            "rotinas: %s",
+            "ingestão horária + manter acordado" if producao else "sem agendamento (homologação)",
+        )
     except Exception:
         log.exception("não foi possível agendar as rotinas no pg_cron")
