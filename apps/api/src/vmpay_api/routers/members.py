@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import OrgContext, require_role
 from ..db import get_session
 from ..models_core import ROLE_ORDER
+from ..audit import registrar
 from ..supabase_admin import invite_or_find
 
 router = APIRouter(prefix="/orgs/{org}/members", tags=["usuários"])
@@ -78,6 +79,13 @@ async def invite_member(body: InviteBody, ctx: MasterCtx, session: Session) -> d
         ),
         {"user_id": str(user_id), "org_id": str(ctx.org_id), "role": body.role},
     )
+    await registrar(
+        session,
+        ctx,
+        "usuarios.convidar",
+        {"user_id": str(user_id), "email": body.email, "papel": body.role, "email_enviado": email_enviado},
+        commit=False,
+    )
     await session.commit()
     return {
         "user_id": str(user_id),
@@ -107,6 +115,9 @@ async def change_role(
     )
     if result.rowcount == 0:
         raise HTTPException(404, "membro não encontrado nesta organização")
+    await registrar(
+        session, ctx, "usuarios.papel", {"user_id": str(user_id), "papel": body.role}, commit=False
+    )
     await session.commit()
     return {"user_id": str(user_id), "role": body.role}
 
@@ -123,4 +134,5 @@ async def remove_member(user_id: uuid.UUID, ctx: MasterCtx, session: Session) ->
     )
     if result.rowcount == 0:
         raise HTTPException(404, "membro não encontrado nesta organização")
+    await registrar(session, ctx, "usuarios.remover", {"user_id": str(user_id)}, commit=False)
     await session.commit()

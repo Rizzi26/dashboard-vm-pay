@@ -19,10 +19,11 @@ from functools import lru_cache
 from typing import Annotated, Any
 
 import jwt
-from fastapi import Depends, Header, HTTPException, Path
+from fastapi import Depends, Header, HTTPException, Path, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .audit import registrar_login
 from .config import settings
 from .db import get_session
 from .models_core import ROLE_ORDER, Membership, Organization, PlatformAdmin
@@ -32,6 +33,8 @@ from .models_core import ROLE_ORDER, Membership, Organization, PlatformAdmin
 class Principal:
     user_id: uuid.UUID
     email: str | None
+    # Claim session_id do Supabase: liga cada ação ao login que a originou.
+    session_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -82,7 +85,11 @@ async def current_user(
         user_id = uuid.UUID(claims["sub"])
     except (KeyError, ValueError) as exc:
         raise HTTPException(401, "token sem sub válido") from exc
-    return Principal(user_id=user_id, email=claims.get("email"))
+    try:
+        session_id = uuid.UUID(claims["session_id"]) if claims.get("session_id") else None
+    except ValueError:
+        session_id = None
+    return Principal(user_id=user_id, email=claims.get("email"), session_id=session_id)
 
 
 async def _load_org(session: AsyncSession, slug: str) -> Organization:
@@ -105,20 +112,37 @@ async def org_context(
     org: Annotated[str, Path(description="slug da organização")],
     principal: Annotated[Principal, Depends(current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    request: Request,
 ) -> OrgContext:
-    """Resolve organização + papel efetivo do usuário nela."""
+    """Resolve organização + papel efetivo do usuário nela.
+
+    Também registra o login: a primeira requisição autorizada de uma sessão
+    nesta organização vira o evento 'login' da auditoria.
+    """
     organization = await _load_org(session, org)
     if await _is_platform_admin(session, principal.user_id):
-        return OrgContext(principal, organization.id, organization.slug, "master", True)
-    membership = await session.scalar(
-        select(Membership).where(
-            Membership.user_id == principal.user_id,
-            Membership.org_id == organization.id,
+        ctx = OrgContext(principal, organization.id, organization.slug, "master", True)
+    else:
+        membership = await session.scalar(
+            select(Membership).where(
+                Membership.user_id == principal.user_id,
+                Membership.org_id == organization.id,
+            )
         )
+        if membership is None:
+            raise HTTPException(403, "sem acesso a esta organização")
+        ctx = OrgContext(principal, organization.id, organization.slug, membership.role, False)
+    await registrar_login(
+        session,
+        org_id=organization.id,
+        user_id=principal.user_id,
+        session_id=principal.session_id,
+        # Atrás do proxy do Render o IP do cliente vem no X-Forwarded-For.
+        ip=(request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+        or (request.client.host if request.client else None),
+        user_agent=request.headers.get("user-agent"),
     )
-    if membership is None:
-        raise HTTPException(403, "sem acesso a esta organização")
-    return OrgContext(principal, organization.id, organization.slug, membership.role, False)
+    return ctx
 
 
 def require_role(minimum: str):

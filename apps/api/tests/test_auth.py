@@ -75,6 +75,26 @@ class ScriptedSession:
     async def scalar(self, _stmt):
         return self._results.pop(0)
 
+    # Registro de login (auditoria): grava e confirma.
+    executed: list
+
+    async def execute(self, stmt, params=None):
+        self.__dict__.setdefault("executed", []).append((str(stmt), params or {}))
+
+    async def commit(self):
+        pass
+
+
+class FakeRequest:
+    """O mínimo de Request que org_context lê: cabeçalhos e cliente."""
+
+    def __init__(self, headers=None, host="10.0.0.1"):
+        self.headers = headers or {}
+        self.client = type("C", (), {"host": host})()
+
+
+REQ = FakeRequest()
+
 
 def org(slug="mercadinho"):
     class Org:
@@ -96,27 +116,27 @@ PRINCIPAL = Principal(user_id=USER_ID, email=None)
 
 
 async def test_membro_recebe_o_papel_do_banco():
-    ctx = await auth.org_context("mercadinho", PRINCIPAL, ScriptedSession(org(), None, membership("admin")))
+    ctx = await auth.org_context("mercadinho", PRINCIPAL, ScriptedSession(org(), None, membership("admin")), REQ)
     assert ctx.role == "admin"
     assert not ctx.is_platform_admin
 
 
 async def test_superadmin_vira_master_em_qualquer_org():
-    ctx = await auth.org_context("mercadinho", PRINCIPAL, ScriptedSession(org(), USER_ID))
+    ctx = await auth.org_context("mercadinho", PRINCIPAL, ScriptedSession(org(), USER_ID), REQ)
     assert ctx.role == "master"
     assert ctx.is_platform_admin
 
 
 async def test_nao_membro_toma_403():
     with pytest.raises(HTTPException) as exc:
-        await auth.org_context("mercadinho", PRINCIPAL, ScriptedSession(org(), None, None))
+        await auth.org_context("mercadinho", PRINCIPAL, ScriptedSession(org(), None, None), REQ)
     assert exc.value.status_code == 403
 
 
 async def test_org_inexistente_da_404_e_nao_403():
     """O slug é público; o que não se revela é se o usuário teria acesso."""
     with pytest.raises(HTTPException) as exc:
-        await auth.org_context("fantasma", PRINCIPAL, ScriptedSession(None))
+        await auth.org_context("fantasma", PRINCIPAL, ScriptedSession(None), REQ)
     assert exc.value.status_code == 404
 
 
@@ -150,3 +170,21 @@ def test_guard_de_papel_desconhecido_quebra_na_definicao():
     """Erro de programação aparece no import, não como 403 misterioso em runtime."""
     with pytest.raises(ValueError):
         require_role("gerente")
+
+
+async def test_primeira_requisicao_da_sessao_registra_login_uma_vez():
+    """O session_id do JWT liga as ações ao login; o login entra uma vez só."""
+    sid = uuid.uuid4()
+    principal = Principal(user_id=USER_ID, email=None, session_id=sid)
+    req = FakeRequest({"x-forwarded-for": "200.1.2.3, 10.0.0.1", "user-agent": "Mozilla/5.0"})
+
+    sessao = ScriptedSession(org(), None, membership("viewer"))
+    await auth.org_context("mercadinho", principal, sessao, req)
+    logins = [p for sql, p in sessao.executed if "'login'" in sql]
+    assert len(logins) == 1
+    assert logins[0]["ip"] == "200.1.2.3"  # cliente, não o proxy do Render
+    assert logins[0]["session_id"] == str(sid)
+
+    outra = ScriptedSession(org(), None, membership("viewer"))
+    await auth.org_context("mercadinho", principal, outra, req)
+    assert not getattr(outra, "executed", [])  # mesma sessão: não registra de novo

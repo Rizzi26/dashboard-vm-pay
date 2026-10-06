@@ -28,7 +28,12 @@ async def me(
                            array_agg(l.name order by l.name)
                                filter (where l.name is not null),
                            '{}'
-                       ) as locations
+                       ) as locations,
+                       coalesce(
+                           jsonb_agg(jsonb_build_object('id', l.id, 'nome', l.name) order by l.name)
+                               filter (where l.id is not null),
+                           '[]'::jsonb
+                       ) as lojas
                   from core.membership m
                   join core.organization o on o.id = m.org_id
                   left join core.location l on l.org_id = o.id
@@ -56,6 +61,10 @@ async def me(
                 "name": r["name"],
                 "role": r["role"],
                 "locais": list(r.get("locations") or []),
+                # Para o seletor de loja da barra: id + nome de cada local.
+                "lojas": [
+                    {"id": str(x["id"]), "nome": x["nome"]} for x in (r.get("lojas") or [])
+                ],
             }
             for r in rows
         ],

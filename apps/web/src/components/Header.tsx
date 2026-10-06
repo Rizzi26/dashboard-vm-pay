@@ -3,15 +3,19 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AtualizarDados } from "@/components/AtualizarDados";
+import { LojaSelector } from "@/components/LojaSelector";
+import { browserApi } from "@/lib/api";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 const LINKS = [
-  { href: "/", label: "Vendas", roles: ["viewer", "admin", "master"] },
+  { href: "/", label: "Central", roles: ["viewer", "admin", "master"] },
+  { href: "/vendas", label: "Vendas", roles: ["viewer", "admin", "master"] },
   { href: "/perdidas", label: "Perdas", roles: ["viewer", "admin", "master"] },
   { href: "/estoque", label: "Estoque", roles: ["viewer", "admin", "master"] },
   { href: "/reposicao", label: "Reposição", roles: ["viewer", "admin", "master"] },
   { href: "/picklist", label: "Pick list", roles: ["admin", "master"] },
   { href: "/usuarios", label: "Usuários", roles: ["master"] },
+  { href: "/auditoria", label: "Auditoria", roles: ["master"] },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -26,20 +30,30 @@ export function Header({
   role,
   email,
   periodo,
-  local,
+  lojas = [],
+  loja = null,
 }: {
   org: string;
   orgName: string;
   role: string;
   email: string | null;
   periodo?: string;
-  local?: string | null;
+  lojas?: { id: string; nome: string }[];
+  loja?: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
 
   async function sair() {
-    await supabaseBrowser().auth.signOut();
+    const supabase = supabaseBrowser();
+    // Logout na auditoria ANTES de encerrar: depois não há token para mandar.
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      await browserApi
+        .request(`/orgs/${org}/sessao/sair`, data.session.access_token, { method: "POST" })
+        .catch(() => undefined);
+    }
+    await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
   }
@@ -47,8 +61,8 @@ export function Header({
   // O período selecionado sobrevive à troca de aba — sem useSearchParams,
   // que exigiria boundary de Suspense: as páginas que o conhecem passam a prop.
   function hrefFor(href: string): string {
-    if (periodo && periodo !== "30" && (href === "/" || href === "/perdidas")) {
-      return href === "/" ? `/?periodo=${periodo}` : `${href}?periodo=${periodo}`;
+    if (periodo && periodo !== "30" && (href === "/vendas" || href === "/perdidas")) {
+      return `${href}?periodo=${periodo}`;
     }
     return href;
   }
@@ -63,11 +77,7 @@ export function Header({
             <span className="block truncate text-sm font-semibold text-[var(--text-primary)]">
               {orgName}
             </span>
-            {local ? (
-              <span className="block truncate text-[11px] leading-tight text-[var(--text-secondary)]">
-                {local}
-              </span>
-            ) : null}
+            <LojaSelector lojas={lojas} loja={loja} />
           </div>
           <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-secondary)]">
             <AtualizarDados org={org} />
