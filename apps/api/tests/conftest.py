@@ -41,3 +41,12 @@ def make_token(
         secret,
         algorithm="HS256",
     )
+
+
+@pytest.fixture(autouse=True)
+def _sem_rodada_anterior(monkeypatch):
+    """O "Atualizar dados" guarda a hora da última rodada no processo; entre
+    testes isso vazaria como intervalo mínimo (429) para o teste seguinte."""
+    from vmpay_api.routers import sync
+
+    monkeypatch.setattr(sync, "_ultima_conclusao", None)

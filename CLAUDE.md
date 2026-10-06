@@ -155,8 +155,12 @@ no centavo:
 - Frontend: https://dashboard-vm-pay.vercel.app (Vercel, root `apps/web`)
 - API: https://vmpay-api.onrender.com (Render, Docker via `render.yaml`, Ohio)
 - Banco: Supabase `bjmcakvubmggwqkigfle` (schemas `core`+`vmpay`, Data API OFF)
-- Ingestão: GitHub Actions de hora em hora (desde 2026-08-29; antes 3× ao
-  dia); histórico completo desde o go-live do mercadinho (06/11/2025)
+- Ingestão: **pg_cron do Supabase** chama `POST /interno/ingestao` de hora
+  em hora (minuto 7), rodada rápida; o cron do GitHub Actions fica de reserva
+  e faz o catálogo completo (na prática roda a cada 3–6h). A API se agenda
+  sozinha ao subir (`rotinas.py`, token interno no Vault); em produção também
+  agenda o "manter acordado" (8h–23h BRT). Histórico completo desde o go-live
+  do mercadinho (06/11/2025)
 - **Escrita na VMpay TRAVADA** em produção (`VMPAY_ALLOW_WRITES=0` no Render)
   até ser provada em homologação
 - **Homologação** (desde 2026-10-05): Supabase `vmpay-hml`, Render
