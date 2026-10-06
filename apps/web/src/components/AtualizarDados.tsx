@@ -107,7 +107,12 @@ export function AtualizarDados({ org }: { org: string }) {
             ? `vidro-forte absolute right-0 top-full z-30 mt-2 w-64 rounded-2xl px-3.5 py-2.5 text-[13px] lg:static lg:mt-0 lg:w-auto lg:max-w-48 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:text-right lg:text-xs lg:shadow-none lg:backdrop-blur-none ${
                 aviso.alerta ? "text-laranja-texto" : "text-texto"
               }`
-            : `hidden text-right text-xs leading-tight lg:block ${velho ? "text-laranja-texto" : "text-sec"}`
+            : // A proposta não tem o "há X min" na barra, e com ele a barra
+              // quebra em duas linhas mesmo a 1440px. Fica no title do botão
+              // (e para leitor de tela); só aparece quando o dado está velho.
+              velho
+              ? "hidden text-right text-xs leading-tight text-laranja-texto lg:block"
+              : "sr-only"
         }
       >
         {aviso?.texto ??
@@ -123,7 +128,7 @@ export function AtualizarDados({ org }: { org: string }) {
         type="button"
         onClick={atualizar}
         disabled={ocupado}
-        title={`Busca agora as vendas e o estoque na VMpay. Atualização ${situacao?.automatica ?? "automática a cada hora"}.`}
+        title={`${idadeSeg !== null ? `Dados atualizados ${formatAtraso(idadeSeg)}. ` : ""}Busca agora as vendas e o estoque na VMpay. Atualização ${situacao?.automatica ?? "automática a cada hora"}.`}
         className="inline-flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border-0 bg-azul-tinta text-[14px] font-medium text-azul-texto hover:brightness-95 disabled:opacity-60 md:h-9 md:w-auto md:px-3.5"
       >
         <IconeAtualizar tamanho={16} className={ocupado ? "motion-safe:animate-spin" : ""} />

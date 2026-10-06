@@ -83,7 +83,7 @@ export default async function CupomPage({
                   principal={
                     <>
                       {i.descricao}
-                      {i.codigo ? <span className="ml-2 text-xs text-sec">cód. {i.codigo}</span> : null}
+                      {i.codigo ? <span className="ml-2 whitespace-nowrap text-xs text-sec">cód. {i.codigo}</span> : null}
                     </>
                   }
                   secundario={

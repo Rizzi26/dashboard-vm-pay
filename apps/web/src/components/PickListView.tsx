@@ -18,6 +18,7 @@ import { Paginacao, usePaginacao } from "@/components/Paginacao";
 import { ProductPicker } from "@/components/ProductPicker";
 import { Botao } from "@/components/ui/Botao";
 import { Cartao } from "@/components/ui/Cartao";
+import { Folha, RodapeFolha } from "@/components/ui/Folha";
 import { CabecalhoLista, LinhaLista, Lista } from "@/components/ui/Lista";
 import { Selo } from "@/components/ui/Selo";
 import type { TomSelo } from "@/components/ui/Selo";
@@ -971,25 +972,17 @@ function LeitorQR({ onLido, onClose }: { onLido: (texto: string) => void; onClos
   }, [onLido]);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Ler QR Code"
-      className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
-    >
-      <div className="w-full rounded-t-[22px] border border-solido-borda bg-solido p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-vidro-forte sm:max-w-md sm:rounded-[22px] sm:p-5">
-        <h2 className="m-0 text-[17px] font-semibold text-texto">Aponte para o QR Code do cupom</h2>
-        {erro ? (
-          <p role="alert" className="mt-3 text-[14px] text-vermelho-texto">
-            {erro}
-          </p>
-        ) : (
-          <video ref={videoRef} muted playsInline className="mt-3 aspect-square w-full rounded-2xl bg-black object-cover" />
-        )}
-        <div className="mt-4 flex justify-end">
-          <Botao onClick={onClose}>Cancelar</Botao>
-        </div>
-      </div>
-    </div>
+    <Folha titulo="Aponte para o QR Code do cupom" onFechar={onClose} largura="md:max-w-md">
+      {erro ? (
+        <p role="alert" className="m-0 text-[14px] text-vermelho-texto">
+          ■ {erro}
+        </p>
+      ) : (
+        <video ref={videoRef} muted playsInline className="aspect-square w-full rounded-2xl bg-black object-cover" />
+      )}
+      <RodapeFolha>
+        <Botao onClick={onClose}>Cancelar</Botao>
+      </RodapeFolha>
+    </Folha>
   );
 }

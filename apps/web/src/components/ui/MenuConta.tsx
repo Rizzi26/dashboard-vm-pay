@@ -1,13 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ROLE_LABEL } from "./navegacao";
+import { inicialDe, ROLE_LABEL } from "./navegacao";
 import { useSair } from "./useSair";
-
-/** Inicial do email no avatar; "?" quando a sessão não trouxe email. */
-export function inicialDe(email: string | null): string {
-  return (email?.trim()[0] ?? "?").toUpperCase();
-}
 
 /**
  * Avatar da barra com o menu da conta (email, papel, Sair). Disclosure

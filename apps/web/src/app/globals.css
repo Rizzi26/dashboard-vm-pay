@@ -279,8 +279,13 @@ body {
   }
 }
 
-a {
-  color: var(--azul-texto);
+/* Em @layer base: regra fora de camada vence QUALQUER utilitário do
+   Tailwind (que mora em @layer utilities), e o text-sec/text-texto das abas,
+   das linhas de lista e dos botões-link saía azul. */
+@layer base {
+  a {
+    color: var(--azul-texto);
+  }
 }
 
 code,

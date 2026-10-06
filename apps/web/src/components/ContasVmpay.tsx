@@ -9,6 +9,7 @@ import { formatAtraso } from "@/lib/format";
 import { Botao } from "@/components/ui/Botao";
 import { Cartao } from "@/components/ui/Cartao";
 import { Lista } from "@/components/ui/Lista";
+import { Folha } from "@/components/ui/Folha";
 import { Selo } from "@/components/ui/Selo";
 import { IconeMaisSinal } from "@/components/ui/icones";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -27,25 +28,6 @@ function idade(iso: string | null): number | null {
 const CAMPO =
   "mt-1.5 block h-12 w-full rounded-xl border border-campo-borda bg-campo px-3.5 text-[16px] text-texto outline-none focus:border-azul";
 const ROTULO = "mt-4 block text-[13px] text-sec";
-
-/**
- * Modal que sobe de baixo no celular (componentes() da proposta) e fica
- * centrado de md para cima. O fundo escurecido não é tema: é o véu por cima
- * de qualquer tema.
- */
-function Folha({ rotulo, onSubmit, children }: { rotulo: string; onSubmit: (e: React.FormEvent) => void; children: React.ReactNode }) {
-  return (
-    <div role="dialog" aria-modal="true" aria-label={rotulo} className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 md:items-center md:p-4">
-      <form
-        onSubmit={onSubmit}
-        className="vidro-forte w-full rounded-t-[22px] px-5 pb-[max(22px,env(safe-area-inset-bottom))] pt-2.5 md:max-w-md md:rounded-[22px] md:p-6"
-      >
-        <div aria-hidden="true" className="mx-auto mb-3.5 h-[5px] w-9 rounded-full bg-seta md:hidden" />
-        {children}
-      </form>
-    </div>
-  );
-}
 
 function BotoesFolha({ busy, rotulo, ocupado, onClose }: { busy: boolean; rotulo: string; ocupado: string; onClose: () => void }) {
   return (
@@ -266,13 +248,13 @@ function NovaContaModal({
   }
 
   return (
-    <Folha rotulo="Adicionar loja" onSubmit={enviar}>
-      <h2 className="m-0 text-[20px] font-bold text-texto">Adicionar loja</h2>
-      <p className="m-0 mt-1 text-[14px] text-sec">
-        Para uma loja que está em outra conta VMpay (outro email de operador). Se a máquina
-        nova está na mesma conta de uma loja que já aparece aqui, não precisa: ela entra
-        sozinha na próxima atualização.
-      </p>
+    <Folha
+      titulo="Adicionar loja"
+      subtitulo="Para uma loja que está em outra conta VMpay (outro email de operador). Se a máquina nova está na mesma conta de uma loja que já aparece aqui, não precisa: ela entra sozinha na próxima atualização."
+      onFechar={onClose}
+      onSubmit={enviar}
+      largura="md:max-w-md"
+    >
 
       <label className={ROTULO}>
         Nome da loja
@@ -354,13 +336,17 @@ function TrocarTokenModal({
   }
 
   return (
-    <Folha rotulo="Trocar token" onSubmit={enviar}>
-      <h2 className="m-0 text-[20px] font-bold text-texto">Trocar token — {conta.nome}</h2>
-      <p className="m-0 mt-1 text-[14px] text-sec">
-        Gere um token novo na VMpay desta conta e cole aqui. Ele é testado antes de salvar e
-        precisa enxergar as mesmas máquinas desta conta. Depois, revogue o token antigo na VMpay.
-        {!conta.token_no_cofre ? " O token passa a ficar guardado cifrado no cofre do servidor." : ""}
-      </p>
+    <Folha
+      titulo={`Trocar token — ${conta.nome}`}
+      subtitulo={
+        "Gere um token novo na VMpay desta conta e cole aqui. Ele é testado antes de salvar e " +
+        "precisa enxergar as mesmas máquinas desta conta. Depois, revogue o token antigo na VMpay." +
+        (!conta.token_no_cofre ? " O token passa a ficar guardado cifrado no cofre do servidor." : "")
+      }
+      onFechar={onClose}
+      onSubmit={enviar}
+      largura="md:max-w-md"
+    >
       <label className={ROTULO}>
         Token novo
         <input

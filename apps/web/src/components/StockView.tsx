@@ -284,7 +284,7 @@ export function StockView({
                   valor: "todos",
                   rotulo: (
                     <>
-                      Todos<span className="tabular-nums md:hidden"> · {formatInt(contagens.todos)}</span>
+                      Todos<span className="tabular-nums md:hidden">{"\u00a0· "}{formatInt(contagens.todos)}</span>
                     </>
                   ),
                 },
@@ -293,7 +293,7 @@ export function StockView({
                   valor: "sem",
                   rotulo: (
                     <>
-                      Zerados<span className="tabular-nums md:hidden"> · {formatInt(contagens.sem)}</span>
+                      Zerados<span className="tabular-nums md:hidden">{"\u00a0· "}{formatInt(contagens.sem)}</span>
                     </>
                   ),
                 },

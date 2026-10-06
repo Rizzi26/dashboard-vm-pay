@@ -42,3 +42,9 @@ export function abaAtiva(pathname: string): Aba | null {
     return "mais";
   return null;
 }
+
+/** Letra do avatar. Fica aqui, e não no MenuConta ("use client"), porque a
+ *  tela Mais é componente de servidor e não pode chamar função de cliente. */
+export function inicialDe(email: string | null): string {
+  return (email?.trim()[0] ?? "?").toUpperCase();
+}

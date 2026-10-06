@@ -147,11 +147,11 @@ export function MembersView({
         <span className="inline-flex items-center gap-2">
           <Selo tom="cinza" simbolo={null}>leitura</Selo> vê, exporta e atualiza os dados
         </span>
-        <span aria-hidden="true">·</span>
+        <span aria-hidden="true" className="hidden md:inline">·</span>
         <span className="inline-flex items-center gap-2">
           <Selo tom="azul" simbolo={null}>operação</Selo> + pick list, reabastecimento, preço e cadastro
         </span>
-        <span aria-hidden="true">·</span>
+        <span aria-hidden="true" className="hidden md:inline">·</span>
         <span className="inline-flex items-center gap-2">
           <Selo tom="verde" simbolo={null}>master</Selo> + usuários, contas VMpay e auditoria
         </span>

@@ -2,8 +2,7 @@ import { Header } from "@/components/Header";
 import { BotaoSair } from "@/components/ui/BotaoSair";
 import { IconeCartao, IconeDinheiro, IconeLinhas, IconePessoas, IconeRelogio } from "@/components/ui/icones";
 import { CabecalhoLista, LinhaLista, Lista } from "@/components/ui/Lista";
-import { inicialDe } from "@/components/ui/MenuConta";
-import { ROLE_LABEL } from "@/components/ui/navegacao";
+import { inicialDe, ROLE_LABEL } from "@/components/ui/navegacao";
 import { Pagina } from "@/components/ui/Pagina";
 import { Titulo } from "@/components/ui/Titulo";
 import { serverApi } from "@/lib/api.server";
@@ -63,7 +62,7 @@ export default async function MaisPage() {
             href="/reposicao"
             principal="Reposição"
             esquerda={
-              <IconeOpcao cor="#FF9500">
+              <IconeOpcao cor="var(--laranja)">
                 <IconeLinhas tamanho={17} espessura={2.2} />
               </IconeOpcao>
             }
@@ -73,7 +72,7 @@ export default async function MaisPage() {
               href="/picklist"
               principal="Cupons carregados"
               esquerda={
-                <IconeOpcao cor="#34C759">
+                <IconeOpcao cor="var(--verde)">
                   <IconeDinheiro tamanho={17} espessura={2.2} />
                 </IconeOpcao>
               }
@@ -89,7 +88,7 @@ export default async function MaisPage() {
                 href="/usuarios"
                 principal="Usuários"
                 esquerda={
-                  <IconeOpcao cor="#007AFF">
+                  <IconeOpcao cor="var(--azul)">
                     <IconePessoas tamanho={17} espessura={2.2} />
                   </IconeOpcao>
                 }
@@ -98,7 +97,7 @@ export default async function MaisPage() {
                 href="/auditoria"
                 principal="Auditoria"
                 esquerda={
-                  <IconeOpcao cor="#5856D6">
+                  <IconeOpcao cor="var(--roxo)">
                     <IconeRelogio tamanho={17} espessura={2.2} />
                   </IconeOpcao>
                 }
@@ -108,7 +107,7 @@ export default async function MaisPage() {
                 principal="Contas VMpay"
                 direita={contas?.ok ? <span className="text-[15px] text-sec">{contas.data.length}</span> : null}
                 esquerda={
-                  <IconeOpcao cor="#8E8E93">
+                  <IconeOpcao cor="var(--terc)">
                     <IconeCartao tamanho={17} espessura={2.2} />
                   </IconeOpcao>
                 }

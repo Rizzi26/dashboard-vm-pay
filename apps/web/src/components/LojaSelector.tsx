@@ -45,7 +45,7 @@ export function LojaSelector({
           escolherLoja(e.target.value || null);
           router.refresh();
         }}
-        className="max-w-[62vw] truncate rounded border-none bg-transparent p-0 text-[15px] font-semibold text-azul-texto md:max-w-56 md:px-0.5 md:text-xs md:font-normal md:text-texto"
+        className="h-11 max-w-[62vw] truncate rounded border-none bg-transparent p-0 text-[15px] md:h-auto font-semibold text-azul-texto md:max-w-56 md:px-0.5 md:text-xs md:font-normal md:text-texto"
       >
         <option value="">Todas as lojas ({lojas.length})</option>
         {lojas.map((l) => (

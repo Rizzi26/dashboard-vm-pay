@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 const FOCAVEIS =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -98,7 +99,11 @@ export function Folha({
     </>
   );
 
-  return (
+  // Portal no <body>: aberta de dentro de um .vidro (Contas VMpay está num
+  // Cartao), o backdrop-filter do ancestral vira o bloco de contenção do
+  // `fixed` — a folha ficava presa ao cartão, no meio da tela, e o vidro dela
+  // não desfocava nada (filtro dentro de filtro), deixando o texto ilegível.
+  return createPortal(
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 md:items-center md:p-4">
       {onSubmit ? (
         <form
@@ -128,7 +133,8 @@ export function Folha({
           {conteudo}
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
