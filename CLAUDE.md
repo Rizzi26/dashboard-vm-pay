@@ -153,8 +153,11 @@ no centavo:
 - Banco: Supabase `bjmcakvubmggwqkigfle` (schemas `core`+`vmpay`, Data API OFF)
 - Ingestão: GitHub Actions de hora em hora (desde 2026-08-29; antes 3× ao
   dia); histórico completo desde o go-live do mercadinho (06/11/2025)
-- **Escrita na VMpay TRAVADA** (`VMPAY_ALLOW_WRITES=0` no Render) até a
-  homologação da Nayax — pendente do token de homolog (integracoes@nayax.com)
+- **Escrita na VMpay TRAVADA** em produção (`VMPAY_ALLOW_WRITES=0` no Render)
+  até ser provada em homologação
+- **Homologação** (desde 2026-10-05): Supabase `vmpay-hml`, Render
+  `vmpay-api-hml` (branch `homolog`, escrita ligada, VMpay demo), Preview da
+  Vercel na `homolog`. Detalhes e armadilhas em docs/deploy.md
 
 Validação de integridade (2026-08-25): soma dos vends = faturamento cashless
 OK = R$ 116.320,15; 15.612 transações − 1.626 não-OK = 13.986 vends exatos.

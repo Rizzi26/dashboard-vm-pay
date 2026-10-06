@@ -21,6 +21,11 @@ on:
     - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
+      ambiente:
+        description: "Onde ingerir (o cron roda só em produção)"
+        type: choice
+        options: [producao, homolog]
+        default: producao
       recurso:
         description: "Qual recurso ingerir"
         type: choice
@@ -35,9 +40,9 @@ on:
 # alcançar os secrets, e não há motivo para ingerir a partir de um PR.
 
 concurrency:
-  # Uma rodada por vez. Não cancela a que está correndo: durante um backfill,
-  # cancelar a cada 15 min impediria o cursor de progredir.
-  group: ingest
+  # Uma rodada por vez POR AMBIENTE. Não cancela a que está correndo: durante
+  # um backfill, cancelar a cada 15 min impediria o cursor de progredir.
+  group: ingest-${{ inputs.ambiente || 'producao' }}
   cancel-in-progress: false
 
 permissions:
@@ -54,14 +59,37 @@ jobs:
         with:
           enable-cache: true
 
-      - name: conferir secrets
+      # Homologação usa secrets de NOME PRÓPRIO (HML_*), escolhidos aqui em
+      # bash. Não são environments do GitHub de propósito: num environment, o
+      # secret que falta cai em silêncio no de mesmo nome do repositório — o
+      # de produção. Aqui, faltou, falha.
+      - name: escolher ambiente
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          VMPAY_INGEST_TOKEN: ${{ secrets.VMPAY_INGEST_TOKEN }}
+          AMBIENTE: ${{ inputs.ambiente || 'producao' }}
+          PRD_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PRD_VMPAY_INGEST_TOKEN: ${{ secrets.VMPAY_INGEST_TOKEN }}
+          PRD_VMPAY_BASE: ${{ secrets.VMPAY_BASE }}
+          HML_DATABASE_URL: ${{ secrets.HML_DATABASE_URL }}
+          HML_VMPAY_INGEST_TOKEN: ${{ secrets.HML_VMPAY_INGEST_TOKEN }}
+          HML_VMPAY_BASE: ${{ secrets.HML_VMPAY_BASE }}
         run: |
-          : "${DATABASE_URL:?defina o secret DATABASE_URL}"
-          : "${VMPAY_INGEST_TOKEN:?defina o secret VMPAY_INGEST_TOKEN}"
-          echo "secrets presentes"
+          if [ "$AMBIENTE" = "homolog" ]; then
+            : "${HML_DATABASE_URL:?defina o secret HML_DATABASE_URL}"
+            : "${HML_VMPAY_INGEST_TOKEN:?defina o secret HML_VMPAY_INGEST_TOKEN}"
+            # Base vazia = produção da VMpay; em homologação isso nunca é certo.
+            : "${HML_VMPAY_BASE:?defina o secret HML_VMPAY_BASE}"
+            pre=HML
+          else
+            : "${PRD_DATABASE_URL:?defina o secret DATABASE_URL}"
+            : "${PRD_VMPAY_INGEST_TOKEN:?defina o secret VMPAY_INGEST_TOKEN}"
+            pre=PRD
+          fi
+          for v in DATABASE_URL VMPAY_INGEST_TOKEN VMPAY_BASE; do
+            nome="${pre}_${v}"
+            # heredoc delimitado: valor nunca passa por echo nem vira log
+            { echo "$v<<__FIM__"; printenv "$nome" || true; echo "__FIM__"; } >> "$GITHUB_ENV"
+          done
+          echo "ambiente: $AMBIENTE"
 
       - name: instalar
         working-directory: apps/api
@@ -71,10 +99,9 @@ jobs:
 
       - name: ingerir
         working-directory: apps/api
+        # DATABASE_URL, VMPAY_INGEST_TOKEN e VMPAY_BASE vêm do passo
+        # "escolher ambiente", via GITHUB_ENV.
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          VMPAY_INGEST_TOKEN: ${{ secrets.VMPAY_INGEST_TOKEN }}
-          VMPAY_BASE: ${{ secrets.VMPAY_BASE }}
           INGEST_MAX_ROWS: ${{ inputs.max_rows || '50000' }}
           RECURSO: ${{ inputs.recurso || 'todos' }}
         # O log de Actions em repositório público é visível para qualquer um. O

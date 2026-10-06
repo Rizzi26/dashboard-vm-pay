@@ -11,11 +11,16 @@ on:
         description: "Nome do arquivo em supabase/migrations (ex.: 0004_stock_history.sql)"
         type: string
         required: true
+      ambiente:
+        description: "Banco de destino"
+        type: choice
+        options: [producao, homolog]
+        default: producao
 
 concurrency:
   # Mesmo grupo da ingestão: DDL não roda por cima de uma rodada de ingest —
   # espera a vez em vez de disputar lock com upsert no meio.
-  group: ingest
+  group: ingest-${{ inputs.ambiente }}
   cancel-in-progress: false
 
 permissions:
@@ -42,10 +47,19 @@ jobs:
 
       - name: aplicar
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AMBIENTE: ${{ inputs.ambiente }}
+          PRD_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HML_DATABASE_URL: ${{ secrets.HML_DATABASE_URL }}
         # -1 = transação única: ou a migration inteira entra, ou nada entra.
         # O log é público (repo público); psql só imprime os comandos do
         # arquivo, nunca a URL de conexão.
+        # Secret de homologação com nome próprio: se faltar, falha — nunca cai
+        # no banco de produção (ver ingest.yml).
         run: |
-          : "${DATABASE_URL:?defina o secret DATABASE_URL}"
+          if [ "$AMBIENTE" = "homolog" ]; then
+            DATABASE_URL="${HML_DATABASE_URL:?defina o secret HML_DATABASE_URL}"
+          else
+            DATABASE_URL="${PRD_DATABASE_URL:?defina o secret DATABASE_URL}"
+          fi
+          echo "ambiente: $AMBIENTE"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f "$caminho"

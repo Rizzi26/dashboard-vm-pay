@@ -56,6 +56,33 @@ host IPv4. A API web no Render usa a variante Transaction (porta 6543).
 Uma chave por consumidor: o limite de 300 req/min é por token, então a chave da
 ingestão não pode ser a mesma do MCP nem a da API.
 
+## Homologação
+
+Pilha paralela, separada de produção em tudo menos na conta:
+
+| Peça | Homologação |
+|---|---|
+| Banco | Supabase `vmpay-hml` (`opnacgflhzucmvmdhiny`, Ohio) — 2º projeto do free tier |
+| API | Render `vmpay-api-hml` (https://vmpay-api-hml.onrender.com), deploy da branch **`homolog`** |
+| Front | Preview da Vercel na branch `homolog` (variáveis de Preview escopadas à branch) |
+| VMpay | `https://demo.vmpay.vertitecnologia.com.br/api/v1`, token próprio |
+
+O `vmpay-api-hml` foi criado pela API do Render, **não** pelo `render.yaml` —
+declará-lo no Blueprint criaria um segundo serviço com o mesmo nome. Ele tem
+`VMPAY_ALLOW_WRITES=1`: homologação existe para provar a escrita antes de
+destravar produção. Sem `VMPAY_BASE` o cliente cai na VMpay de **produção** —
+por isso a escrita só foi ligada depois da base.
+
+Ingestão e migration de homologação: os mesmos workflows, com o input
+`ambiente: homolog` (o cron roda só produção). Os secrets de homologação têm
+nome próprio — `HML_DATABASE_URL`, `HML_VMPAY_INGEST_TOKEN`, `HML_VMPAY_BASE` —
+e o workflow falha se faltar um. Não são *environments* do GitHub de propósito:
+num environment, o secret ausente cai no de mesmo nome do repositório, o de
+produção.
+
+Para promover: a feature entra na `homolog`, é validada lá, e então vai para a
+`main`.
+
 ## V1 local completa (Docker)
 
 ```bash
