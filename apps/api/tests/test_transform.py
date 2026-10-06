@@ -279,3 +279,40 @@ async def test_falha_de_rede_no_meio_nao_abre_transacao(monkeypatch):
     report = await sync_core.sync_integration(sessao, integration(), client_factory=fast_client)
     assert report.error is not None
     assert [s for s in sessao.statements if s not in ("ROLLBACK",)] == []
+
+
+@respx.mock
+async def test_atualizacao_manual_pula_catalogo_sem_produto_novo(monkeypatch):
+    """O catálogo de produção leva minutos; sem produto novo nos saldos, não baixa."""
+    monkeypatch.setenv(sync_core.DEFAULT_TOKEN_ENV, "tok")
+    monkeypatch.setenv("VMPAY_BASE", BASE)
+    produtos = respx.get(f"{BASE}/products").mock(return_value=httpx.Response(200, json=[PRODUTO]))
+    respx.get(f"{BASE}/installations").mock(return_value=httpx.Response(200, json=INSTALACOES))
+    respx.get(f"{BASE}/installation_stock_balances").mock(
+        return_value=httpx.Response(200, json=[SALDO])
+    )
+    conhecido = str(SALDO["good"]["id"])
+    sessao = FakeSession(scalar_lists=[[conhecido], [], []])
+    report = await sync_core.sync_integration(
+        sessao, integration(), client_factory=fast_client, catalogo_completo=False
+    )
+    assert report.error is None
+    assert report.catalogo == "pulado"
+    assert not produtos.called
+
+
+@respx.mock
+async def test_atualizacao_manual_baixa_catalogo_se_aparece_produto_novo(monkeypatch):
+    monkeypatch.setenv(sync_core.DEFAULT_TOKEN_ENV, "tok")
+    monkeypatch.setenv("VMPAY_BASE", BASE)
+    produtos = respx.get(f"{BASE}/products").mock(return_value=httpx.Response(200, json=[PRODUTO]))
+    respx.get(f"{BASE}/installations").mock(return_value=httpx.Response(200, json=INSTALACOES))
+    respx.get(f"{BASE}/installation_stock_balances").mock(
+        return_value=httpx.Response(200, json=[SALDO])
+    )
+    sessao = FakeSession(scalar_lists=[[], [], []])  # nenhum produto conhecido
+    report = await sync_core.sync_integration(
+        sessao, integration(), client_factory=fast_client, catalogo_completo=False
+    )
+    assert report.catalogo == "completo"
+    assert produtos.called

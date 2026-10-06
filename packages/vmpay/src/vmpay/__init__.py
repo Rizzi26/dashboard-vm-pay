@@ -11,7 +11,7 @@ from .errors import (
     VMpayValidationError,
 )
 from .ratelimit import TokenBucket
-from .redact import redact
+from .redact import proteger_logs_http, redact
 
 __all__ = [
     "MAX_PER_PAGE",
@@ -28,3 +28,6 @@ __all__ = [
     "redact",
     "to_vmpay_datetime",
 ]
+
+# Importar o pacote já protege os logs: nenhum consumidor precisa lembrar.
+proteger_logs_http()

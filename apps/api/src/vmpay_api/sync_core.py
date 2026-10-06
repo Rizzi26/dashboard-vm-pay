@@ -43,6 +43,8 @@ class SnapshotReport:
     locations: int = 0
     balances: int = 0
     stale_balances_removed: int = 0
+    # "completo" ou "pulado" (atualização manual sem produto novo à vista).
+    catalogo: str = "completo"
     error: str | None = None
     details: dict[str, Any] = field(default_factory=dict)
 
@@ -51,6 +53,7 @@ class SnapshotReport:
             "integration": self.integration_id,
             "org": self.org_id,
             "produtos": self.products,
+            "catalogo": self.catalogo,
             "locais": self.locations,
             "saldos": self.balances,
             "saldos_removidos": self.stale_balances_removed,
@@ -327,7 +330,16 @@ async def sync_integration(
     integration: core.Integration,
     *,
     client_factory=VMpayClient,
+    catalogo_completo: bool = True,
 ) -> SnapshotReport:
+    """Retrato de catálogo + locais + saldos de uma integração.
+
+    catalogo_completo=False é o "Atualizar dados" do painel: o catálogo de
+    produção tem milhares de produtos e a VMpay serve devagar (minutos), mas
+    produto novo é raro. Saldos e instalações vêm sempre; o catálogo só se
+    algum saldo citar produto que ainda não conhecemos. O cron segue completo
+    — é ele que pega renome e cadastro alterado.
+    """
     report = SnapshotReport(str(integration.id), str(integration.org_id))
     try:
         token = resolve_token(integration.config or {})
@@ -337,7 +349,32 @@ async def sync_integration(
         # tempo todo, o pooler a derrubava, e o rollback do erro estourava em
         # MissingGreenlet — três rodadas seguidas sem estoque em 05/10/2026.
         async with client_factory(token, base_url=base) as client:
-            baixado = await _Baixado.de(client, SNAPSHOT_RESOURCES)
+            if catalogo_completo:
+                baixado = await _Baixado.de(client, SNAPSHOT_RESOURCES)
+            else:
+                baixado = await _Baixado.de(client, SNAPSHOT_RESOURCES[1:])
+                conhecidos = {
+                    str(x)
+                    for x in (
+                        await session.execute(
+                            select(core.ProductLink.external_id).where(
+                                core.ProductLink.integration_id == integration.id
+                            )
+                        )
+                    ).scalars()
+                }
+                # Fecha a leitura antes de voltar à rede (ver o comentário abaixo).
+                await session.commit()
+                citados = {
+                    str(linha["good_id"])
+                    for linha in map(map_balance, baixado._dados["installation_stock_balances"])
+                    if linha is not None and linha.get("good_id") is not None
+                }
+                if citados - conhecidos:
+                    baixado._dados["products"] = [p async for p in client.paginate("products")]
+                else:
+                    baixado._dados["products"] = []
+                    report.catalogo = "pulado"
         report.products, by_external = await sync_products(baixado, session, integration)
         report.locations, report.balances, report.stale_balances_removed = (
             await sync_stock(baixado, session, integration, by_external)
@@ -350,7 +387,9 @@ async def sync_integration(
     return report
 
 
-async def sync_all_integrations(session: AsyncSession) -> list[dict[str, Any]]:
+async def sync_all_integrations(
+    session: AsyncSession, *, catalogo_completo: bool = True
+) -> list[dict[str, Any]]:
     integrations = (
         (
             await session.execute(
@@ -367,7 +406,7 @@ async def sync_all_integrations(session: AsyncSession) -> list[dict[str, Any]]:
         return []
     out = []
     for integration in integrations:
-        report = await sync_integration(session, integration)
+        report = await sync_integration(session, integration, catalogo_completo=catalogo_completo)
         log.info("snapshot: %s", report.as_dict())
         out.append(report.as_dict())
     return out
