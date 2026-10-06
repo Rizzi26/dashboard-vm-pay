@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import type { CurvaAbc as Dados } from "@/lib/api";
+import { Paginacao, usePaginacao } from "@/components/Paginacao";
 import { formatInt, formatMoney } from "@/lib/format";
 
 const pct = (v: number) => `${(v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
@@ -19,11 +19,10 @@ const SIGNIFICADO: Record<string, string> = {
  * orienta o que manter, destacar ou tirar do planograma.
  */
 export function CurvaAbc({ dados }: { dados: Dados }) {
-  const [todos, setTodos] = useState(false);
+  const pag = usePaginacao(dados.itens, 20);
   if (dados.itens.length === 0) {
     return <p className="text-sm text-[var(--text-secondary)]">Sem vendas no período.</p>;
   }
-  const visiveis = todos ? dados.itens : dados.itens.slice(0, 20);
   const vendidos = dados.itens.length;
 
   return (
@@ -59,7 +58,7 @@ export function CurvaAbc({ dados }: { dados: Dados }) {
             </tr>
           </thead>
           <tbody>
-            {visiveis.map((i) => (
+            {pag.visiveis.map((i) => (
               <tr key={i.posicao} className="border-t border-[var(--grid)] tabular-nums text-[var(--text-primary)]">
                 <td className="py-1.5 pr-2 text-[var(--text-secondary)]">{i.posicao}</td>
                 <td className="py-1.5">
@@ -80,15 +79,7 @@ export function CurvaAbc({ dados }: { dados: Dados }) {
           </tbody>
         </table>
       </div>
-      {dados.itens.length > 20 ? (
-        <button
-          type="button"
-          onClick={() => setTodos((t) => !t)}
-          className="mt-2 text-xs text-[var(--text-secondary)] underline hover:text-[var(--text-primary)]"
-        >
-          {todos ? "mostrar só os 20 primeiros" : `ver todos os ${formatInt(dados.itens.length)}`}
-        </button>
-      ) : null}
+      <Paginacao {...pag.rodape} rotulo="produtos" />
     </div>
   );
 }

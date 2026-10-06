@@ -13,6 +13,7 @@ import type {
 } from "@/lib/api";
 import { browserApi } from "@/lib/api";
 import { NewProductModal } from "@/components/NewProductModal";
+import { Paginacao, usePaginacao } from "@/components/Paginacao";
 import { ProductPicker } from "@/components/ProductPicker";
 import { formatDayTime, formatMoney } from "@/lib/format";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -191,6 +192,11 @@ export function PickListView({
     };
   }, [reposicao, linhas]);
 
+  // Cupom grande (atacado) passa de 50 linhas: a conferência pagina, mas a
+  // edição e a aprovação valem para TODAS as linhas — só a vista é fatiada.
+  const pagLinhas = usePaginacao(linhas, 20);
+  const pagHistorico = usePaginacao(historico, 10);
+
   const pendencias = useMemo(
     () =>
       linhas.filter(
@@ -364,7 +370,8 @@ export function PickListView({
           </label>
 
           <ul className="mt-4 divide-y divide-[var(--grid)]">
-            {linhas.map((l, idx) => {
+            {pagLinhas.visiveis.map((l, k) => {
+              const idx = pagLinhas.pagina * 20 + k;
               const manual = consulta.origem === "manual";
               const falta = !l.ignorar && !l.product_id;
               return (
@@ -470,6 +477,7 @@ export function PickListView({
               );
             })}
           </ul>
+          <Paginacao {...pagLinhas.rodape} rotulo="linhas do cupom" />
 
           {consulta.origem === "manual" ? (
             <button
@@ -554,7 +562,7 @@ export function PickListView({
         <section>
           <h2 className="mb-2 text-sm font-semibold text-[var(--text-primary)]">Cupons carregados</h2>
           <ul className="divide-y divide-[var(--grid)] rounded-xl border border-[var(--grid)] bg-[var(--surface-1)]">
-            {historico.map((h) => (
+            {pagHistorico.visiveis.map((h) => (
               <li key={h.id} className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3 text-sm">
                 <Link href={`/picklist/cupom/${h.id}`} className="min-w-0 text-[var(--text-primary)] hover:underline">
                   {h.supplier_name || "Fornecedor"}
@@ -572,6 +580,7 @@ export function PickListView({
               </li>
             ))}
           </ul>
+          <Paginacao {...pagHistorico.rodape} rotulo="cupons" />
         </section>
       ) : null}
 

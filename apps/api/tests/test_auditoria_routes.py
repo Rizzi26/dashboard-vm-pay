@@ -14,6 +14,7 @@ def evento(**extra):
         "fonte": "evento", "id": 1, "em": datetime(2026, 10, 6, 12, 0, tzinfo=timezone.utc),
         "user_id": USER_ID, "session_id": SID, "action": "login", "alvo": {},
         "status": None, "erro": None, "ip": "200.1.2.3", "user_agent": "Mozilla", "email": "op@teste.dev",
+        "total_filtro": 2,
     }
     return {**base, **extra}
 
@@ -46,6 +47,15 @@ async def test_master_ve_linha_do_tempo_com_as_duas_fontes():
     _, params = next((q, p) for q, p in sessao.executed if "with eventos as" in q)
     assert params["org_id"] == str(ORG_ID)  # nunca lê outra organização
     assert params["sessao"] == str(SID)
+    assert body["total"] == 2 and body["pagina"] == 1
+
+
+async def test_pagina_vira_offset():
+    use_role("master")
+    sessao = use_session([("with eventos as", [evento()])])
+    await call("GET", "/orgs/mercadinho/auditoria?pagina=3&limite=50")
+    _, params = next((q, p) for q, p in sessao.executed if "with eventos as" in q)
+    assert params["offset"] == 100
 
 
 async def test_logout_vira_evento():

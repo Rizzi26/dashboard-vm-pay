@@ -1,5 +1,3 @@
-import Link from "next/link";
-import { EncalheView } from "@/components/EncalheView";
 import { Header } from "@/components/Header";
 import { Offline } from "@/components/Offline";
 import { StockView } from "@/components/StockView";
@@ -23,16 +21,12 @@ function atrasoDoEstoque(rows: { atualizado_em: string }[]): number | null {
 export default async function PrateleiraPage({
   searchParams,
 }: {
-  searchParams: Promise<{ disp?: string; q?: string; ver?: string }>;
+  searchParams: Promise<{ disp?: string; q?: string }>;
 }) {
   const { me, org } = await orgSession();
-  const { disp, q, ver } = await searchParams;
-  const aba = ver === "encalhe" ? "encalhe" : "saldo";
+  const { disp, q } = await searchParams;
   const initialDisp = disp === "com" || disp === "sem" ? disp : undefined;
-  const [todos, encalhe] = await Promise.all([
-    serverApi.stock(org.slug),
-    serverApi.encalhe(org.slug, org.loja ? `?loja=${org.loja}` : ""),
-  ]);
+  const todos = await serverApi.stock(org.slug);
   // Loja escolhida na barra: só os saldos dela.
   const stock = todos.ok && org.loja
     ? { ...todos, data: todos.data.filter((r) => r.location_id === org.loja) }
@@ -62,36 +56,8 @@ export default async function PrateleiraPage({
             ) : null}
             .
           </p>
-          <nav aria-label="Visão" className="mt-3 inline-flex rounded-lg border border-[var(--grid)] bg-[var(--surface-0)] p-0.5">
-            {[
-              { key: "saldo", label: "Saldo", href: "/prateleira" },
-              {
-                key: "encalhe",
-                label: `Encalhados${encalhe.ok ? ` (${encalhe.data.resumo.itens})` : ""}`,
-                href: "/prateleira?ver=encalhe",
-              },
-            ].map((t) => (
-              <Link
-                key={t.key}
-                href={t.href}
-                className={
-                  t.key === aba
-                    ? "flex min-h-11 items-center rounded-md bg-[var(--surface-1)] px-3 text-sm font-medium text-[var(--text-primary)] shadow-[var(--shadow-card)]"
-                    : "flex min-h-11 items-center rounded-md px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }
-              >
-                {t.label}
-              </Link>
-            ))}
-          </nav>
         </header>
-        {aba === "encalhe" ? (
-          encalhe.ok ? (
-            <EncalheView dados={encalhe.data} />
-          ) : (
-            <Offline error={encalhe.error} />
-          )
-        ) : stock.ok ? (
+        {stock.ok ? (
           <StockView
             rows={stock.data}
             org={org.slug}

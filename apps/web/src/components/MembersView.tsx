@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { MemberRow } from "@/lib/api";
 import { browserApi } from "@/lib/api";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import { Paginacao, usePaginacao } from "@/components/Paginacao";
 
 const PAPEIS = [
   { value: "viewer", label: "leitura" },
@@ -22,6 +23,7 @@ export function MembersView({
   selfId: string;
 }) {
   const router = useRouter();
+  const pagMembros = usePaginacao(rows, 20);
   const [email, setEmail] = useState("");
   const [papel, setPapel] = useState("viewer");
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -149,7 +151,7 @@ export function MembersView({
           </tr>
         </thead>
         <tbody className="text-[var(--text-primary)]">
-          {rows.map((m) => {
+          {pagMembros.visiveis.map((m) => {
             const self = m.user_id === selfId;
             return (
               <tr
@@ -200,6 +202,7 @@ export function MembersView({
           })}
         </tbody>
       </table>
+      <Paginacao {...pagMembros.rodape} rotulo="pessoas" />
       </div>
     </div>
   );

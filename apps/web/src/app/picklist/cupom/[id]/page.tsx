@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/Header";
 import { Offline } from "@/components/Offline";
+import { PaginacaoLinks, paginaDaUrl } from "@/components/PaginacaoLinks";
 import { serverApi } from "@/lib/api.server";
 import { formatDayTime, formatInt, formatMoney } from "@/lib/format";
 import { orgSession } from "@/lib/org";
@@ -13,10 +14,19 @@ const STATUS: Record<string, string> = {
 };
 
 /** Um cupom carregado: o que entrou em cada produto, quem aprovou e o que a VMpay respondeu. */
-export default async function CupomPage({ params }: { params: Promise<{ id: string }> }) {
+const POR_PAGINA = 20;
+
+export default async function CupomPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ pagina?: string }>;
+}) {
   const { me, org } = await orgSession();
   if (org.role === "viewer" && !me.platform_admin) redirect("/");
   const { id } = await params;
+  const pagina = paginaDaUrl((await searchParams).pagina);
   const cupom = await serverApi.picklistCupom(org.slug, id);
 
   return (
@@ -54,7 +64,7 @@ export default async function CupomPage({ params }: { params: Promise<{ id: stri
             </header>
 
             <ul className="divide-y divide-[var(--grid)] rounded-xl border border-[var(--grid)] bg-[var(--surface-1)]">
-              {cupom.data.itens.map((i) => (
+              {cupom.data.itens.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA).map((i) => (
                 <li key={i.linha} className={`flex flex-wrap items-baseline justify-between gap-2 px-4 py-3 ${i.ignorado ? "opacity-50" : ""}`}>
                   <div className="min-w-0">
                     <p className="text-sm text-[var(--text-primary)]">
@@ -87,6 +97,13 @@ export default async function CupomPage({ params }: { params: Promise<{ id: stri
                 </li>
               ))}
             </ul>
+            <PaginacaoLinks
+              pagina={pagina}
+              total={cupom.data.itens.length}
+              porPagina={POR_PAGINA}
+              href={(n) => `/picklist/cupom/${id}?pagina=${n}`}
+              rotulo="linhas"
+            />
             <p className="mt-4 text-xs text-[var(--text-secondary)]">Chave de acesso {cupom.data.chave}</p>
           </>
         )}

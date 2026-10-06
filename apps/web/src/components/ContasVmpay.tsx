@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ContaVmpay } from "@/lib/api";
+import { Paginacao, usePaginacao } from "@/components/Paginacao";
 import { browserApi } from "@/lib/api";
 import { formatAtraso } from "@/lib/format";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -26,6 +27,7 @@ export function ContasVmpay({ org, contas }: { org: string; contas: ContaVmpay[]
   const router = useRouter();
   const [abrindo, setAbrindo] = useState(false);
   const [trocando, setTrocando] = useState<ContaVmpay | null>(null);
+  const pagContas = usePaginacao(contas, 10);
   const [aviso, setAviso] = useState<string | null>(null);
 
   async function desativar(c: ContaVmpay) {
@@ -67,7 +69,7 @@ export function ContasVmpay({ org, contas }: { org: string; contas: ContaVmpay[]
       ) : null}
 
       <ul className="divide-y divide-[var(--grid)] rounded-xl border border-[var(--grid)] bg-[var(--surface-1)]">
-        {contas.map((c) => {
+        {pagContas.visiveis.map((c) => {
           const lida = idade(c.ultima_leitura);
           return (
             <li key={c.id} className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${c.ativa ? "" : "opacity-50"}`}>
@@ -118,6 +120,7 @@ export function ContasVmpay({ org, contas }: { org: string; contas: ContaVmpay[]
           );
         })}
       </ul>
+      <Paginacao {...pagContas.rodape} rotulo="contas" />
 
       {trocando ? (
         <TrocarTokenModal
