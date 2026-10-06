@@ -5,6 +5,9 @@
 
 import type {
   ActionRow,
+  Auditoria,
+  Central,
+  ContaVmpay,
   DailyPoint,
   Fetched,
   LostSales,
@@ -57,6 +60,9 @@ export const serverApi = {
     serverGet<StockHistoryPoint[]>(`/orgs/${org}/stock/history/${productId}?days=${dias}`),
   members: (org: string) => serverGet<MemberRow[]>(`/orgs/${org}/members`),
   actions: (org: string) => serverGet<ActionRow[]>(`/orgs/${org}/stock/actions`),
+  lojas: (org: string) => serverGet<Central>(`/orgs/${org}/lojas`),
+  contas: (org: string) => serverGet<ContaVmpay[]>(`/orgs/${org}/contas`),
+  auditoria: (org: string, qs = "") => serverGet<Auditoria>(`/orgs/${org}/auditoria${qs}`),
   picklistOpcoes: (org: string) => serverGet<PicklistOpcoes>(`/orgs/${org}/picklist/opcoes`),
   picklistHistorico: (org: string) => serverGet<PicklistCarga[]>(`/orgs/${org}/picklist`),
 };

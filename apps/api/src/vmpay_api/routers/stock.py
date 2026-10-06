@@ -26,12 +26,13 @@ from vmpay import VMpayClient, VMpayError
 from vmpay.client import PRODUCTION
 from vmpay.redact import redact
 
+from ..audit import registrar
 from ..auth import OrgContext, require_role
 from ..config import settings
 from ..connector import VMpayConnector
 from ..db import get_session, session_factory
 from ..models_core import Integration
-from ..sync_core import resolve_token, sync_integration
+from ..sync_core import resolve_token, sync_integration, token_da_conta
 
 router = APIRouter(prefix="/orgs/{org}/stock", tags=["estoque"])
 
@@ -55,9 +56,13 @@ def require_writes_enabled() -> None:
         )
 
 
-def get_connector(config: dict[str, Any]) -> VMpayConnector:
-    """Constrói o conector da integração. Separado para os testes trocarem."""
-    token = resolve_token(config or {})
+def get_connector(config: dict[str, Any], token: str | None = None) -> VMpayConnector:
+    """Constrói o conector da integração. Separado para os testes trocarem.
+
+    `token` vem de token_da_conta() (cofre ou env); sem ele, só a conta
+    original (env var) resolve — conta do cofre levanta em vez de usar outra.
+    """
+    token = token or resolve_token(config or {})
     base = os.environ.get("VMPAY_BASE") or PRODUCTION
     return VMpayConnector(VMpayClient(token, base_url=base))
 
@@ -121,6 +126,7 @@ async def export_csv(ctx: ViewerCtx, session: Session) -> Response:
                 r["updated_at"].isoformat(),
             ]
         )
+    await registrar(session, ctx, "estoque.exportar", {"linhas": len(rows)})
     return Response(
         content=buffer.getvalue(),
         media_type="text/csv; charset=utf-8",
@@ -260,6 +266,7 @@ async def restock_csv(ctx: ViewerCtx, session: Session, days: int = 30) -> Respo
                 i["sugestao"],
             ]
         )
+    await registrar(session, ctx, "reposicao.exportar", {"linhas": len(itens), "dias": days})
     return Response(
         content=buffer.getvalue(),
         media_type="text/csv; charset=utf-8",
@@ -488,6 +495,14 @@ class PriceBody(BaseModel):
         return v.quantize(Decimal("0.01"))
 
 
+async def _token_ou_502(session: AsyncSession, config: dict[str, Any]) -> str:
+    """Token da conta da loja, antes de qualquer escrita (e do action_log)."""
+    try:
+        return await token_da_conta(session, config or {})
+    except VMpayError as exc:
+        raise HTTPException(502, f"conta VMpay sem token utilizável: {redact(str(exc))}") from None
+
+
 async def _load_target(session: AsyncSession, org_id: uuid.UUID, location_id: uuid.UUID) -> dict:
     """Local + vínculo + integração, sempre escopado pela organização."""
     row = (
@@ -542,14 +557,17 @@ async def _open_action(
         await session.execute(
             text(
                 """
-                insert into core.action_log (org_id, actor_user_id, action, target, params)
-                values (:org_id, :actor, :action, cast(:target as jsonb), cast(:params as jsonb))
+                insert into core.action_log
+                    (org_id, actor_user_id, session_id, action, target, params)
+                values (:org_id, :actor, :session_id, :action,
+                        cast(:target as jsonb), cast(:params as jsonb))
                 returning id
                 """
             ),
             {
                 "org_id": str(ctx.org_id),
                 "actor": str(ctx.principal.user_id),
+                "session_id": str(ctx.principal.session_id) if ctx.principal.session_id else None,
                 "action": action,
                 "target": json.dumps(target),
                 "params": json.dumps(params),
@@ -596,7 +614,9 @@ async def preparar_restock(session: AsyncSession, ctx: OrgContext, body: Restock
     faltando = [str(i.product_id) for i in body.items if i.product_id not in externals]
     if faltando:
         raise HTTPException(422, f"produtos sem vínculo com a integração: {', '.join(faltando)}")
-    return {"body": body, "target": target, "externals": externals}
+    # Token da conta VMpay DESTA loja — cada loja pode ser uma conta diferente.
+    token = await _token_ou_502(session, target["config"])
+    return {"body": body, "target": target, "externals": externals, "token": token}
 
 
 async def executar_restock(
@@ -621,7 +641,7 @@ async def executar_restock(
         },
     )
     try:
-        connector = get_connector(target["config"])
+        connector = get_connector(target["config"], plano.get("token"))
         async with connector.client:
             result = await connector.restock(
                 target["machine_id"],
@@ -692,6 +712,7 @@ async def set_price(body: PriceBody, ctx: AdminCtx, session: Session) -> dict:
     externals = await _external_ids(session, target["integration_id"], [body.product_id])
     if body.product_id not in externals:
         raise HTTPException(422, "produto sem vínculo com a integração")
+    token = await _token_ou_502(session, target["config"])
 
     action_id = await _open_action(
         session,
@@ -701,7 +722,7 @@ async def set_price(body: PriceBody, ctx: AdminCtx, session: Session) -> dict:
         {"product_id": str(body.product_id), "price": float(body.price)},
     )
     try:
-        connector = get_connector(target["config"])
+        connector = get_connector(target["config"], token)
         async with connector.client:
             result = await connector.set_price(
                 target["machine_id"],

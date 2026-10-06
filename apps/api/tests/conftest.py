@@ -20,6 +20,8 @@ def _clean_settings(monkeypatch):
     # Os testes de ação assumem write-back ligado; os que provam a trava
     # desligam explicitamente.
     monkeypatch.setenv("VMPAY_ALLOW_WRITES", "1")
+    # Token da conta original (env var). Valor falso — nunca um real em teste.
+    monkeypatch.setenv("VMPAY_INGEST_TOKEN", "tok-falso-de-teste")
     settings.cache_clear()
     yield
     settings.cache_clear()

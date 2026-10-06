@@ -26,13 +26,17 @@ export default async function EstoquePage({
   const { me, org } = await orgSession();
   const { disp, q } = await searchParams;
   const initialDisp = disp === "com" || disp === "sem" ? disp : undefined;
-  const stock = await serverApi.stock(org.slug);
+  const todos = await serverApi.stock(org.slug);
+  // Loja escolhida na barra: só os saldos dela.
+  const stock = todos.ok && org.loja
+    ? { ...todos, data: todos.data.filter((r) => r.location_id === org.loja) }
+    : todos;
 
   const atrasoSeg = stock.ok ? atrasoDoEstoque(stock.data) : null;
 
   return (
     <div className="viz-root min-h-screen bg-[var(--surface-0)]">
-      <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} local={org.local} />
+      <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} lojas={org.lojas} loja={org.loja} />
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Estoque</h1>
@@ -60,6 +64,7 @@ export default async function EstoquePage({
             role={org.role}
             initialDisp={initialDisp}
             initialBusca={q}
+            loja={org.loja}
           />
         ) : (
           <Offline error={stock.error} />

@@ -1,112 +1,65 @@
-import { Card } from "@/components/Card";
-import { MachineTable } from "@/components/MachineTable";
-import { Offline } from "@/components/Offline";
-import { PeriodoNav } from "@/components/PeriodoNav";
-import { RevenueChart } from "@/components/RevenueChart";
-import { StatTile } from "@/components/StatTile";
-import { SyncStatus } from "@/components/SyncStatus";
-
+import { ContasVmpay } from "@/components/ContasVmpay";
 import { Header } from "@/components/Header";
+import { LojaCards } from "@/components/LojaCards";
+import { Offline } from "@/components/Offline";
+import { StatTile } from "@/components/StatTile";
 import { serverApi } from "@/lib/api.server";
-import { formatDay, formatInt, formatMoney } from "@/lib/format";
+import { formatInt, formatMoney } from "@/lib/format";
 import { orgSession } from "@/lib/org";
-import { startFor } from "@/lib/periodos";
 
-export default async function Dashboard({
-  searchParams,
-}: {
-  searchParams: Promise<{ periodo?: string }>;
-}) {
+/**
+ * Central das lojas: a primeira tela. O lojista é a organização; cada
+ * mercadinho dele é uma loja. Daqui se vê qual loja pede atenção e se entra
+ * nela — a loja escolhida passa a valer em Vendas, Estoque e Reposição.
+ */
+export default async function CentralPage() {
   const { me, org } = await orgSession();
-  const { periodo = "30" } = await searchParams;
-  const qs = `?start=${startFor(periodo)}`;
-
-  // Em paralelo: um bloco lento não segura os outros, e um que falha não
-  // derruba a página.
-  const [summary, daily, machines, sync] = await Promise.all([
-    serverApi.summary(org.slug, qs),
-    serverApi.daily(org.slug, qs),
-    serverApi.byMachine(org.slug, `${qs}&limit=10`),
-    serverApi.syncStatus(org.slug),
+  const ehMaster = org.role === "master" || me.platform_admin;
+  // Contas só para master: é ele quem conecta loja nova (o servidor nega a quem não for).
+  const [central, contas] = await Promise.all([
+    serverApi.lojas(org.slug),
+    ehMaster ? serverApi.contas(org.slug) : Promise.resolve(null),
   ]);
 
   return (
     <div className="viz-root min-h-screen bg-[var(--surface-0)]">
-      <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} local={org.local} periodo={periodo} />
+      <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} lojas={org.lojas} loja={org.loja} />
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-          Vendas
-        </h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          {summary.ok
-            ? `${formatDay(summary.data.periodo.inicio)} a ${formatDay(summary.data.periodo.fim)}`
-            : "Últimos 30 dias"}
-        </p>
-        <PeriodoNav basePath="/" periodo={periodo} />
-      </header>
-
-      {summary.ok ? (
-        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatTile
-            label="Faturamento"
-            value={formatMoney(summary.data.faturamento)}
-            hint={
-              summary.data.descontos > 0
-                ? `descontos de ${formatMoney(summary.data.descontos)}`
-                : "transações confirmadas"
-            }
-          />
-          <StatTile
-            label="Transações"
-            value={formatInt(summary.data.transacoes)}
-            hint={`${formatInt(summary.data.itens)} itens vendidos`}
-          />
-          <StatTile
-            label="Ticket médio"
-            value={formatMoney(summary.data.ticket_medio)}
-          />
-          <StatTile
-            label="Máquinas ativas"
-            value={formatInt(summary.data.maquinas_ativas)}
-          />
-        </div>
-      ) : (
-        <div className="mb-6">
-          <Offline error={summary.error} />
-        </div>
-      )}
-
-      <div className="space-y-6">
-        <Card
-          title="Faturamento por dia"
-          subtitle="Só transações com status OK — canceladas não entram."
-        >
-          {daily.ok ? (
-            <RevenueChart points={daily.data} />
-          ) : (
-            <Offline error={daily.error} />
-          )}
-        </Card>
-
-        <Card title="Máquinas" subtitle="Top 10 por faturamento no período">
-          {machines.ok ? (
-            <MachineTable rows={machines.data} />
-          ) : (
-            <Offline error={machines.error} />
-          )}
-        </Card>
-      </div>
-
-      <footer className="mt-8 border-t border-[var(--grid)] pt-4">
-        {sync.ok ? (
-          <SyncStatus rows={sync.data} />
-        ) : (
-          <p className="text-xs text-[var(--text-secondary)]">
-            Sem informação de sincronização — {sync.error}
+        <header className="mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
+            Central das lojas
+          </h1>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            {org.name} · {org.lojas.length} loja{org.lojas.length === 1 ? "" : "s"}
           </p>
+        </header>
+
+        {!central.ok ? (
+          <Offline error={central.error} />
+        ) : central.data.lojas.length === 0 ? (
+          <p className="rounded-md border border-dashed border-[var(--grid)] p-8 text-center text-sm text-[var(--text-secondary)]">
+            Nenhuma loja ainda. Cada máquina instalada na VMpay vira uma loja aqui — ela
+            aparece na próxima atualização dos dados.
+          </p>
+        ) : (
+          <>
+            {central.data.lojas.length > 1 ? (
+              <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <StatTile label="Hoje · todas" value={formatMoney(central.data.totais.hoje)} />
+                <StatTile label="7 dias" value={formatMoney(central.data.totais.d7)} />
+                <StatTile label="30 dias" value={formatMoney(central.data.totais.d30)} />
+                <StatTile
+                  label="Itens zerados"
+                  value={formatInt(central.data.totais.zerados)}
+                  hint={`${formatInt(central.data.totais.acabando)} acabando`}
+                  tone={central.data.totais.zerados > 0 ? "warning" : undefined}
+                />
+              </div>
+            ) : null}
+            <LojaCards lojas={central.data.lojas} />
+          </>
         )}
-      </footer>
+        {contas?.ok ? <ContasVmpay org={org.slug} contas={contas.data} /> : null}
       </main>
     </div>
   );

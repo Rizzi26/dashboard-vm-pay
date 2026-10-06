@@ -20,6 +20,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import registrar
 from ..auth import OrgContext, require_role
 from ..config import settings
 from ..db import get_session
@@ -114,5 +115,6 @@ async def atualizar(ctx: ViewerCtx, session: Session, background: BackgroundTask
                 f"aguarde {INTERVALO_MINIMO_S - int(idade)}s para pedir de novo",
             )
 
+    await registrar(session, ctx, "dados.atualizar")
     background.add_task(_rodada)
     return {"status": "agendado", "pedido_em": datetime.now(timezone.utc).isoformat()}

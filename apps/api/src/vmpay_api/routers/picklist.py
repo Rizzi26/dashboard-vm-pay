@@ -25,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .. import nfce
+from ..audit import registrar
 from ..auth import OrgContext, require_role
 from ..db import get_session
 from .stock import RestockBody, RestockItem, RestockRecusado, executar_restock, preparar_restock
@@ -110,7 +111,7 @@ async def _produtos_vinculados(session: AsyncSession, org_id: uuid.UUID) -> list
         await session.execute(
             text(
                 """
-                select distinct p.id, p.name, p.barcode
+                select distinct p.id, p.name, p.barcode, pl.integration_id
                   from core.product p
                   join core.product_link pl on pl.product_id = p.id
                   join core.integration i on i.id = pl.integration_id and i.active
@@ -121,7 +122,12 @@ async def _produtos_vinculados(session: AsyncSession, org_id: uuid.UUID) -> list
             {"org_id": str(org_id)},
         )
     ).mappings().all()
-    return [{"id": str(r["id"]), "name": r["name"], "barcode": r["barcode"]} for r in rows]
+    # integration_id: com várias contas VMpay, a tela só oferece os produtos
+    # da conta da loja escolhida — produto de outra conta a VMpay recusa.
+    return [
+        {"id": str(r["id"]), "name": r["name"], "barcode": r["barcode"], "conta": str(r["integration_id"])}
+        for r in rows
+    ]
 
 
 async def _de_para(session: AsyncSession, org_id: uuid.UUID, cnpj: str) -> dict[str, dict]:
@@ -184,6 +190,7 @@ async def consulta(body: ConsultaBody, ctx: AdminCtx, session: Session) -> dict:
         "cupom": None,
     }
     if entrada.qr_param is None:
+        await registrar(session, ctx, "picklist.consultar", {"chave": entrada.chave, "origem": "manual"})
         return resposta
 
     try:
@@ -223,6 +230,12 @@ async def consulta(body: ConsultaBody, ctx: AdminCtx, session: Session) -> dict:
         "valor_total": cupom.valor_total,
         "itens": itens,
     }
+    await registrar(
+        session,
+        ctx,
+        "picklist.consultar",
+        {"chave": entrada.chave, "origem": "qrcode", "itens": len(cupom.itens), "fornecedor": cupom.emitente_nome},
+    )
     return resposta
 
 
@@ -231,12 +244,21 @@ async def opcoes(ctx: AdminCtx, session: Session) -> dict:
     """Locais e produtos que a tela oferece para destino e vínculo."""
     locais = (
         await session.execute(
-            text("select id, name from core.location where org_id = :org_id order by name"),
+            text(
+                """
+                select l.id, l.name, min(cast(ll.integration_id as text)) as conta
+                  from core.location l
+                  left join core.location_link ll on ll.location_id = l.id
+                 where l.org_id = :org_id
+                 group by l.id, l.name
+                 order by l.name
+                """
+            ),
             {"org_id": str(ctx.org_id)},
         )
     ).mappings().all()
     return {
-        "locais": [{"id": str(r["id"]), "name": r["name"]} for r in locais],
+        "locais": [{"id": str(r["id"]), "name": r["name"], "conta": r["conta"]} for r in locais],
         "produtos": await _produtos_vinculados(session, ctx.org_id),
     }
 

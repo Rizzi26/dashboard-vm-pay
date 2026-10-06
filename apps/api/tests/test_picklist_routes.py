@@ -25,6 +25,7 @@ CHAVE = "35260911222333000181650010000141921386520530"
 CNPJ = "11222333000181"
 P = f"{CHAVE}|2|1|2|{'0' * 40}"
 RECEIPT_ID = uuid.UUID("00000000-0000-0000-0000-0000000c0de0")
+INTEG = uuid.UUID("00000000-0000-0000-0000-00000000dddd")
 OUTRO_PROD = uuid.UUID("00000000-0000-0000-0000-00000000f00f")
 
 
@@ -71,9 +72,9 @@ async def test_consulta_traz_cupom_com_de_para_lembrado():
             ("from core.supplier_product_map",
              [{"supplier_code": "24344", "product_id": PROD_ID, "factor": 1, "ignored": False}]),
             ("join core.product_link", [
-                {"id": OUTRO_PROD, "name": "Chocolate Lacta Diamante Negro 80g", "barcode": None},
-                {"id": uuid.UUID(int=1), "name": "Chocolate Lacta ao Leite 80g", "barcode": None},
-                {"id": uuid.UUID(int=2), "name": "Chocolate Ouro Branco 20g", "barcode": None},
+                {"id": OUTRO_PROD, "name": "Chocolate Lacta Diamante Negro 80g", "barcode": None, "integration_id": INTEG},
+                {"id": uuid.UUID(int=1), "name": "Chocolate Lacta ao Leite 80g", "barcode": None, "integration_id": INTEG},
+                {"id": uuid.UUID(int=2), "name": "Chocolate Ouro Branco 20g", "barcode": None, "integration_id": INTEG},
             ]),
         ]
     )

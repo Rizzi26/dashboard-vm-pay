@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from vmpay import VMpayClient, VMpayError
@@ -62,7 +62,13 @@ class SnapshotReport:
 
 
 def resolve_token(config: dict[str, Any]) -> str:
-    """O config aponta o NOME da env var; o valor nunca sai do ambiente."""
+    """Token da conta ORIGINAL: o config aponta o NOME da env var.
+
+    Conta com token no Vault (config.secret_id) não passa por aqui: cair no
+    token da env var leria OUTRA conta em silêncio. Use token_da_conta().
+    """
+    if config.get("secret_id"):
+        raise VMpayError("conta com token no cofre: resolva com token_da_conta()")
     env_name = config.get("token_env", DEFAULT_TOKEN_ENV)
     # strip: valor colado em dashboard costuma vir com quebra de linha, espaço
     # ou aspas junto — e a VMpay responde 401 sem dizer por quê.
@@ -70,6 +76,30 @@ def resolve_token(config: dict[str, Any]) -> str:
     if not token:
         raise VMpayError(f"env var {env_name} (token da integração) não está definida")
     return token
+
+
+async def token_da_conta(session: AsyncSession, config: dict[str, Any]) -> str:
+    """Token de qualquer conta: Vault (contas do painel) ou env (a original).
+
+    Quem chama faz commit/rollback logo depois, ANTES de ir à rede: a leitura
+    do cofre abre transação, e transação ociosa esperando a VMpay é o que o
+    pooler derruba (ver sync_integration).
+    """
+    secret_id = (config or {}).get("secret_id")
+    if not secret_id:
+        return resolve_token(config or {})
+    token = await session.scalar(
+        text("select decrypted_secret from vault.decrypted_secrets where id = cast(:id as uuid)"),
+        {"id": str(secret_id)},
+    )
+    if not token:
+        raise VMpayError("token da conta não encontrado no cofre (vault)")
+    return token.strip()
+
+
+def eh_conta_original(config: dict[str, Any]) -> bool:
+    """A conta de antes das contas múltiplas: token em env var."""
+    return not (config or {}).get("secret_id")
 
 
 #: Linhas por statement. O asyncpg limita a 32.767 parâmetros por query; com
@@ -342,7 +372,8 @@ async def sync_integration(
     """
     report = SnapshotReport(str(integration.id), str(integration.org_id))
     try:
-        token = resolve_token(integration.config or {})
+        token = await token_da_conta(session, integration.config or {})
+        await session.commit()  # fecha a leitura do cofre antes da rede
         base = os.environ.get("VMPAY_BASE") or PRODUCTION
         # Rede primeiro, banco depois. Baixar o catálogo de produção leva
         # minutos; com a transação já aberta, a conexão ficava ociosa esse

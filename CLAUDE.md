@@ -96,8 +96,12 @@ python3 apps/mcp/tools/build_catalog.py
 
 ## Regras da casa
 
-**Nunca escreva o token em arquivo, teste ou log.** Ele vem só de variável de
-ambiente (`VMPAY_TOKEN`). Em teste, use um valor falso e verifique que ele *não*
+**Nunca escreva o token em arquivo, teste ou log.** A conta principal lê de
+variável de ambiente (`VMPAY_INGEST_TOKEN`); contas adicionadas pelo painel
+ficam no **Supabase Vault**, cifradas — `core.integration.config` guarda só o
+`secret_id`. Resolva sempre por `token_da_conta()`; `resolve_token()` recusa
+conta do cofre para nunca cair no token de outra conta. O `packages/vmpay`
+filtra o log do httpx (a URL carrega o token). Em teste, use um valor falso e verifique que ele *não*
 aparece na saída — há um teste exatamente para isso.
 
 **Não edite `apps/mcp/src/vmpay_mcp/catalog.json` à mão.** Ele é gerado por
@@ -202,6 +206,25 @@ O kiosk é 100% cashless, um item por transação.
    com o cupom no mesmo commit do action_log; de-para por (CNPJ emitente,
    código do item) com fator de conversão. Migration 0005. Custo fora do
    escopo por decisão. A fixture de teste é anonimizada — repo público.
+11. **Lojista = organização; loja = core.location** (2026-10-06). Home `/` é a
+   Central das lojas (`GET /orgs/{org}/lojas`); a loja escolhida na barra vai
+   num cookie e filtra Vendas/Perdas/Estoque/Reposição. Vendas são amarradas à
+   organização pelas MÁQUINAS dos locais (`MAQUINAS_DA_ORG` em sales.py) — o
+   staging vmpay.* não tem coluna de organização; é esse filtro que separa um
+   lojista de outro. Ingestão ainda é de token único: o 2º lojista com conta
+   VMpay própria exige ingestão por integração.
+12. **Auditoria** (2026-10-06, master): `core.audit_event` (migration 0006) +
+   `core.action_log`, numa linha do tempo em `/auditoria`. O login é
+   registrado pela API na 1ª requisição de cada `session_id` do JWT (o
+   Supabase do projeto não grava histórico de auth no banco). Ação nova que
+   importe para auditoria: `audit.registrar(...)` na rota.
+13. **Contas VMpay por lojista** (2026-10-06): o dono pode ter cada loja numa
+   conta VMpay separada. "Adicionar loja" na Central (master) testa o token
+   na VMpay, recusa conta já conectada, guarda no Vault e importa em segundo
+   plano. Vendas: uma passada por conta, cursor `"<recurso>@<integração>"`
+   (a principal mantém a chave antiga). Escrita usa o token da conta DA LOJA;
+   cadastro de produto exige a loja quando há mais de uma conta. Produtos não
+   são unificados entre contas (a mesma Coca em duas contas = 2 produtos).
 8. Migrations são **automáticas** (migrate.yml): push na `homolog` aplica no
    banco de homologação, push na `main` no de produção — só os arquivos que
    faltam em `core.schema_migration`, cada um numa transação com o próprio
