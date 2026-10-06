@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PAGINACAO_NAV, PAGINACAO_SETA, PAGINACAO_SETA_OFF } from "@/components/ui/paginacao-estilo";
 
 /**
  * Paginação das telas de servidor: a página vai na URL (sobrevive ao recarregar
@@ -23,32 +24,32 @@ export function PaginacaoLinks({
   const atual = Math.min(Math.max(1, pagina), totalPaginas);
   const inicio = (atual - 1) * porPagina + 1;
   const fim = Math.min(atual * porPagina, total);
-  const botao = "rounded-md border border-[var(--grid)] px-4 py-2";
   return (
-    <nav
-      aria-label="Paginação"
-      className="mt-4 flex flex-col gap-2 text-sm text-[var(--text-secondary)] sm:flex-row sm:items-center sm:justify-between"
-    >
+    <nav aria-label="Paginação" className={PAGINACAO_NAV}>
       <span className="tabular-nums">
         {inicio}–{fim} de {total} {rotulo}
       </span>
       <span className="flex items-center gap-2">
         {atual > 1 ? (
-          <Link href={href(atual - 1)} scroll={false} className={botao}>
-            ← Anterior
+          <Link href={href(atual - 1)} scroll={false} aria-label="Página anterior" className={PAGINACAO_SETA}>
+            <span aria-hidden="true">‹</span>
           </Link>
         ) : (
-          <span className={`${botao} opacity-40`}>← Anterior</span>
+          <span aria-hidden="true" className={PAGINACAO_SETA_OFF}>
+            ‹
+          </span>
         )}
         <span className="tabular-nums">
-          {atual}/{totalPaginas}
+          {atual} de {totalPaginas}
         </span>
         {atual < totalPaginas ? (
-          <Link href={href(atual + 1)} scroll={false} className={botao}>
-            Próxima →
+          <Link href={href(atual + 1)} scroll={false} aria-label="Próxima página" className={PAGINACAO_SETA}>
+            <span aria-hidden="true">›</span>
           </Link>
         ) : (
-          <span className={`${botao} opacity-40`}>Próxima →</span>
+          <span aria-hidden="true" className={PAGINACAO_SETA_OFF}>
+            ›
+          </span>
         )}
       </span>
     </nav>

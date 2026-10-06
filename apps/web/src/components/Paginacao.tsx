@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PAGINACAO_NAV, PAGINACAO_SETA, PAGINACAO_SETA_OFF } from "@/components/ui/paginacao-estilo";
 
 /**
  * Paginação das listas do painel — nenhuma tabela rola sem fim. Mesmo visual
@@ -43,32 +44,31 @@ export function Paginacao({
   const inicio = pagina * porPagina + 1;
   const fim = Math.min((pagina + 1) * porPagina, total);
   return (
-    <nav
-      aria-label="Paginação"
-      className="mt-4 flex flex-col gap-2 text-sm text-[var(--text-secondary)] sm:flex-row sm:items-center sm:justify-between"
-    >
+    <nav aria-label="Paginação" className={PAGINACAO_NAV}>
       <span className="tabular-nums">
         {inicio}–{fim} de {total} {rotulo}
       </span>
       <span className="flex items-center gap-2">
         <button
           type="button"
+          aria-label="Página anterior"
           disabled={pagina === 0}
           onClick={() => onMudar(pagina - 1)}
-          className="rounded-md border border-[var(--grid)] px-4 py-2 disabled:opacity-40"
+          className={pagina === 0 ? PAGINACAO_SETA_OFF : PAGINACAO_SETA}
         >
-          ← Anterior
+          <span aria-hidden="true">‹</span>
         </button>
         <span className="tabular-nums">
-          {pagina + 1}/{totalPaginas}
+          {pagina + 1} de {totalPaginas}
         </span>
         <button
           type="button"
+          aria-label="Próxima página"
           disabled={pagina >= totalPaginas - 1}
           onClick={() => onMudar(pagina + 1)}
-          className="rounded-md border border-[var(--grid)] px-4 py-2 disabled:opacity-40"
+          className={pagina >= totalPaginas - 1 ? PAGINACAO_SETA_OFF : PAGINACAO_SETA}
         >
-          Próxima →
+          <span aria-hidden="true">›</span>
         </button>
       </span>
     </nav>

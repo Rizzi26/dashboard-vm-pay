@@ -1,63 +1,117 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
-}
-
-code,
-pre {
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-}
-
-/* ---------------------------------------------------------------- data viz
+/* ================================================================ tema
  *
- * Tokens da paleta de referência, validados pelo script do skill de dataviz
- * (PASS em light e dark: banda de luminosidade, piso de croma, contraste >= 3:1).
- * O gráfico é escrito contra os papéis, não contra hex, para o modo escuro
- * trocar num lugar só.
+ * Tokens da proposta "vidro" aprovada (design/tema.py: CLARO/ESCURO), valores
+ * copiados sem arredondar. O tema SEMPRE segue o aparelho: não há seletor
+ * manual, então o escuro vive só na media query — nada de [data-theme] nem de
+ * classe-escopo (.viz-root era isso; hoje o tema vale no :root inteiro, e
+ * .viz-root fica só como nome legado, sem efeito).
  *
- * O escuro é declarado nos dois escopos de propósito: a media query cobre a
- * preferência do sistema, e o [data-theme] cobre um seletor explícito, que
- * precisa ganhar nos dois sentidos.
+ * Regra de uso das cores:
+ *   texto azul (link, botão tingido/texto) → --azul-texto, não --azul.
+ *     #007AFF sobre branco dá 4,0:1 — abaixo do AA para texto pequeno.
+ *   fundo do botão cheio → --azul-cheio (branco sobre ele ≥ 4,5:1).
+ *   --azul puro só para ícone, ponto, borda de foco.
+ *   --terc é ~3:1 no claro: só para placeholder/decoração, nunca para
+ *   informação que alguém precisa ler.
  */
-.viz-root {
-  color-scheme: light;
-  --surface-0: #f6f6f4;
-  --surface-1: #fcfcfb;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --grid: #e6e5e1;
+:root {
+  color-scheme: light dark;
+
+  --fundo:
+    radial-gradient(900px 600px at 8% 0%, rgba(0, 122, 255, 0.16), transparent 60%),
+    radial-gradient(800px 600px at 95% 15%, rgba(175, 82, 222, 0.12), transparent 60%),
+    radial-gradient(800px 500px at 50% 100%, rgba(52, 199, 89, 0.08), transparent 60%),
+    #f2f2f7;
+  /* Cor lisa do fundo: theme-color, overscroll do iOS, fallback do vidro. */
+  --fundo-liso: #f2f2f7;
+
+  --vidro: rgba(255, 255, 255, 0.62);
+  --vidro-forte: rgba(255, 255, 255, 0.8);
+  --vidro-fraco: rgba(255, 255, 255, 0.35);
+  /* Quando não há blur (navegador sem suporte ou "reduzir transparência"),
+     vidro translúcido sobre o gradiente perde contraste: vira sólido. */
+  --vidro-solido: #ffffff;
+  --borda: rgba(255, 255, 255, 0.75);
+  --sombra: 0 10px 36px rgba(31, 38, 64, 0.1), 0 1px 2px rgba(31, 38, 64, 0.06);
+  --sombra-forte: 0 14px 40px rgba(31, 38, 64, 0.18);
+
+  --texto: #1d1d1f;
+  --sec: #6e6e73;
+  --terc: #8e8e93;
+  --seta: #c7c7cc;
+
+  --trilho: rgba(118, 118, 128, 0.12);
+  --ativo: #ffffff;
+  --ativo-sombra: 0 1px 3px rgba(0, 0, 0, 0.12);
+
+  --sep: rgba(60, 60, 67, 0.12);
+  --campo: rgba(255, 255, 255, 0.92);
+  --campo-borda: rgba(60, 60, 67, 0.16);
+  --lista: rgba(255, 255, 255, 0.72);
+  --solido: #ffffff;
+  --solido-borda: rgba(60, 60, 67, 0.08);
+
+  --azul: #007aff;
+  --azul-tinta: rgba(0, 122, 255, 0.12);
+  --azul-texto: #0062cc;
+  --azul-cheio: #0071e3;
+  --sobre-azul: #ffffff;
+
+  --verde: #34c759;
+  --verde-texto: #1f7a34;
+  --verde-fundo: rgba(52, 199, 89, 0.16);
+
+  --laranja: #ff9500;
+  --laranja-texto: #b25000;
+  --laranja-fundo: rgba(255, 149, 0, 0.16);
+  --laranja-borda: rgba(255, 149, 0, 0.45);
+  --laranja-campo: rgba(255, 149, 0, 0.08);
+
+  --vermelho: #ff3b30;
+  --vermelho-texto: #c4171d;
+  --vermelho-fundo: rgba(255, 59, 48, 0.12);
+  --vermelho-borda: rgba(255, 59, 48, 0.35);
+
+  --roxo: #5856d6;
+  --roxo-fundo: rgba(88, 86, 214, 0.14);
+
+  --tracejado: rgba(60, 60, 67, 0.25);
+  --avatar: linear-gradient(160deg, #8e8e93, #5a5a5f);
+  --marca: linear-gradient(160deg, #3a9bff, #0060df);
+
+  /* Altura reservada para a barra de abas do celular (sem a safe-area). */
+  --abas-altura: 84px;
+
+  /* ------------------------------------------------------------ data viz
+   * Os gráficos e as telas ainda não migradas escrevem contra estes papéis.
+   * --surface-*, --text-*, --grid e --accent foram remapeados para a paleta
+   * nova; --series-1 e --seq-* NÃO mudam: passaram no validador do skill de
+   * dataviz (banda de luminosidade, croma, contraste ≥ 3:1) e trocá-los
+   * exigiria validar de novo.
+   */
+  /* Fundo de página: transparente para o gradiente do body aparecer nas
+     telas antigas, que pintam o invólucro com bg-[var(--surface-0)]. */
+  --surface-0: transparent;
+  /* Superfície sólida: gráfico, modal, menu. Igual a --solido para o halo
+     dos pontos (stroke surface-1) casar com o fundo do SuperficieGrafico. */
+  --surface-1: var(--solido);
+  --text-primary: var(--texto);
+  --text-secondary: var(--sec);
+  /* Sólido, não translúcido: linha de grade de gráfico sobre fundo sólido
+     e borda das telas antigas. */
+  --grid: #e5e5ea;
   --series-1: #2a78d6;
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-critical: #d03b3b;
-  /* Ações e foco — libera --series-1 só para dataviz. */
-  --accent: #2a78d6;
-  --accent-contrast: #ffffff;
-  --shadow-card: 0 1px 2px 0 rgb(27 25 20 / 0.05);
-  /* color-mix sobre --text-primary acompanha o tema sozinho. */
-  --row-hover: color-mix(in oklab, var(--text-primary) 5%, transparent);
+  --status-good: var(--verde-texto);
+  /* Era amarelo (#fab219) e é usado como cor de TEXTO — reprovava contraste. */
+  --status-warning: var(--laranja-texto);
+  --status-critical: var(--vermelho-texto);
+  --accent: var(--azul-cheio);
+  --accent-contrast: var(--sobre-azul);
+  --shadow-card: var(--sombra);
+  /* color-mix sobre o texto acompanha o tema sozinho. */
+  --row-hover: color-mix(in oklab, var(--texto) 5%, transparent);
   /* Faixas do mapa de calor: azul, claro → escuro, passos 250/350/450/550/650
      da rampa de referência. Validadas como ordinais (validate_palette.js
      --ordinal): a faixa mais leve passa 2:1 contra a superfície — "pouca
@@ -70,16 +124,73 @@ pre {
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) .viz-root {
-    color-scheme: dark;
-    --surface-0: #111110;
-    --surface-1: #1a1a19;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --grid: #33322f;
+  :root {
+    --fundo:
+      radial-gradient(900px 600px at 10% 0%, rgba(10, 132, 255, 0.22), transparent 60%),
+      radial-gradient(800px 600px at 95% 20%, rgba(94, 92, 230, 0.2), transparent 60%),
+      radial-gradient(700px 500px at 50% 100%, rgba(48, 209, 88, 0.1), transparent 60%),
+      #0b0b0f;
+    --fundo-liso: #0b0b0f;
+
+    --vidro: rgba(44, 44, 48, 0.55);
+    --vidro-forte: rgba(44, 44, 48, 0.82);
+    --vidro-fraco: rgba(44, 44, 48, 0.3);
+    --vidro-solido: #1c1c1e;
+    --borda: rgba(255, 255, 255, 0.1);
+    --sombra: 0 10px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --sombra-forte: 0 14px 44px rgba(0, 0, 0, 0.55);
+
+    --texto: #f5f5f7;
+    --sec: #a1a1a6;
+    --terc: #8e8e93;
+    --seta: #636366;
+
+    --trilho: rgba(118, 118, 128, 0.24);
+    --ativo: rgba(99, 99, 102, 0.9);
+    --ativo-sombra: none;
+
+    --sep: rgba(84, 84, 88, 0.45);
+    --campo: rgba(28, 28, 30, 0.85);
+    --campo-borda: rgba(255, 255, 255, 0.12);
+    --lista: rgba(28, 28, 30, 0.7);
+    --solido: #1c1c1e;
+    --solido-borda: rgba(255, 255, 255, 0.06);
+
+    --azul: #0a84ff;
+    --azul-tinta: rgba(10, 132, 255, 0.2);
+    --azul-texto: #64b5ff;
+    /* #0A84FF com branco dá 3,6:1; o cheio fica no tom do claro. */
+    --azul-cheio: #0071e3;
+    --sobre-azul: #ffffff;
+
+    --verde: #30d158;
+    --verde-texto: #30d158;
+    --verde-fundo: rgba(48, 209, 88, 0.18);
+
+    --laranja: #ff9f0a;
+    --laranja-texto: #ff9f0a;
+    --laranja-fundo: rgba(255, 159, 10, 0.18);
+    --laranja-borda: rgba(255, 159, 10, 0.5);
+    --laranja-campo: rgba(255, 159, 10, 0.1);
+
+    --vermelho: #ff453a;
+    --vermelho-texto: #ff6961;
+    --vermelho-fundo: rgba(255, 69, 58, 0.18);
+    --vermelho-borda: rgba(255, 69, 58, 0.45);
+
+    --roxo: #7d7aff;
+    --roxo-fundo: rgba(94, 92, 230, 0.24);
+
+    --tracejado: rgba(255, 255, 255, 0.22);
+    --avatar: linear-gradient(160deg, #8e8e93, #48484a);
+
+    --grid: #38383a;
     --series-1: #3987e5;
-    --accent: #3987e5;
-    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.45);
+    /* As telas antigas usam --accent como texto E como fundo de botão. O
+       #0071E3 como texto some no escuro (3,6:1); o #0A84FF lê como texto
+       (4,6:1) e, como fundo, fica onde o accent antigo já estava. Tela
+       migrada usa --azul-texto / --azul-cheio e não depende disto. */
+    --accent: #0a84ff;
     /* No escuro: passos 600/500/400/300/200 — a faixa mais leve não desce de
        600 (2,15:1 contra o fundo); "muito" acende. Não é inversão automática. */
     --seq-1: #184f95;
@@ -90,37 +201,186 @@ pre {
   }
 }
 
-:root[data-theme="dark"] .viz-root {
-  color-scheme: dark;
-  --surface-0: #111110;
-  --surface-1: #1a1a19;
-  --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --grid: #33322f;
-  --series-1: #3987e5;
-  --accent: #3987e5;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.45);
-  /* No escuro: passos 600/500/400/300/200 — a faixa mais leve não desce de
-     600 (2,15:1 contra o fundo); "muito" acende. Não é inversão automática. */
-  --seq-1: #184f95;
-  --seq-2: #256abf;
-  --seq-3: #3987e5;
-  --seq-4: #6da7ec;
-  --seq-5: #9ec5f4;
+/* Utilitários do Tailwind sobre os tokens: text-sec, bg-lista, border-sep,
+   shadow-vidro… Sem isso cada tela escreveria text-[var(--sec)]. Os nomes em
+   português não colidem com a paleta padrão do Tailwind. */
+@theme inline {
+  --color-background: var(--fundo-liso);
+  --color-foreground: var(--texto);
+  --color-texto: var(--texto);
+  --color-sec: var(--sec);
+  --color-terc: var(--terc);
+  --color-seta: var(--seta);
+  --color-trilho: var(--trilho);
+  --color-ativo: var(--ativo);
+  --color-sep: var(--sep);
+  --color-borda: var(--borda);
+  --color-campo: var(--campo);
+  --color-campo-borda: var(--campo-borda);
+  --color-lista: var(--lista);
+  --color-solido: var(--solido);
+  --color-solido-borda: var(--solido-borda);
+  --color-vidro: var(--vidro);
+  --color-vidro-forte: var(--vidro-forte);
+  --color-vidro-fraco: var(--vidro-fraco);
+  --color-tracejado: var(--tracejado);
+  --color-azul: var(--azul);
+  --color-azul-tinta: var(--azul-tinta);
+  --color-azul-texto: var(--azul-texto);
+  --color-azul-cheio: var(--azul-cheio);
+  --color-sobre-azul: var(--sobre-azul);
+  --color-verde: var(--verde);
+  --color-verde-texto: var(--verde-texto);
+  --color-verde-fundo: var(--verde-fundo);
+  --color-laranja: var(--laranja);
+  --color-laranja-texto: var(--laranja-texto);
+  --color-laranja-fundo: var(--laranja-fundo);
+  --color-laranja-borda: var(--laranja-borda);
+  --color-laranja-campo: var(--laranja-campo);
+  --color-vermelho: var(--vermelho);
+  --color-vermelho-texto: var(--vermelho-texto);
+  --color-vermelho-fundo: var(--vermelho-fundo);
+  --color-vermelho-borda: var(--vermelho-borda);
+  --color-roxo: var(--roxo);
+  --color-roxo-fundo: var(--roxo-fundo);
+  --shadow-vidro: var(--sombra);
+  --shadow-vidro-forte: var(--sombra-forte);
+  --shadow-ativo: var(--ativo-sombra);
+  /* Pilha do sistema primeiro: no iPhone/Mac sai SF, que é a fonte da
+     proposta, sem baixar nada. Fora da Apple, Geist (já servida pelo
+     next/font, mesma geometria neutra, números tabulares) em vez de cair em
+     Segoe/Roboto — mantém o painel com a mesma cara no Windows e Android. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-geist-sans), "Segoe UI",
+    Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-/* Foco visível em qualquer controle, nos dois temas. */
-.viz-root :where(a, button, input, select, textarea, summary):focus-visible {
-  outline: 2px solid var(--accent);
+html {
+  /* Cor lisa no html: o que aparece no overscroll do iOS e atrás da barra. */
+  background-color: var(--fundo-liso);
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--fundo);
+  background-color: var(--fundo-liso);
+  color: var(--texto);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* No celular, a barra de abas é fixa embaixo: o conteúdo de QUALQUER tela
+   (migrada ou não) ganha folga para nada ficar coberto. Fica aqui, e não em
+   cada página, para uma tela nova não esquecer. */
+@media (width < 48rem) {
+  body:has(.abas-inferiores) {
+    padding-bottom: calc(var(--abas-altura) + env(safe-area-inset-bottom));
+  }
+}
+
+a {
+  color: var(--azul-texto);
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+}
+
+/* Foco visível em qualquer controle, nos dois temas — global, não mais
+   preso a .viz-root. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--azul);
   outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .viz-root :where(a, button, input, select) {
+  :where(a, button, input, select) {
     transition:
       color 0.15s ease,
       background-color 0.15s ease,
       border-color 0.15s ease,
       box-shadow 0.15s ease;
+  }
+}
+
+/* ================================================================ vidro
+ *
+ * Em @layer components para um utilitário (bg-*, shadow-none…) poder
+ * sobrescrever caso a caso — fora de camada, a classe ganharia de tudo.
+ *   .vidro        superfície padrão (cartão, tile, barra do computador)
+ *   .vidro-forte  mais opaca, por cima de conteúdo (barra de abas, barra de ação)
+ *   .vidro-lista  fundo de lista agrupada, sem sombra
+ */
+@layer components {
+  .vidro,
+  .vidro-forte,
+  .vidro-lista {
+    border: 1px solid var(--borda);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+  }
+  .vidro {
+    background-color: var(--vidro);
+    box-shadow: var(--sombra);
+  }
+  .vidro-forte {
+    background-color: var(--vidro-forte);
+    box-shadow: var(--sombra-forte);
+  }
+  .vidro-lista {
+    background-color: var(--lista);
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .vidro,
+    .vidro-forte,
+    .vidro-lista {
+      background-color: var(--vidro-solido);
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .vidro,
+    .vidro-forte,
+    .vidro-lista {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background-color: var(--vidro-solido);
+    }
+  }
+
+  /* A barra do topo só é vidro de md para cima; no celular ela é o topo
+     compacto, sem fundo, como o título grande do iOS. Classe própria porque
+     no Tailwind v4 classe de @layer components não aceita variante (md:vidro). */
+  @media (width >= 48rem) {
+    .barra-topo {
+      border: 1px solid var(--borda);
+      background-color: var(--vidro);
+      box-shadow: var(--sombra);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      backdrop-filter: blur(24px) saturate(180%);
+    }
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .barra-topo {
+        background-color: var(--vidro-solido);
+      }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      .barra-topo {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background-color: var(--vidro-solido);
+      }
+    }
+  }
+
+  /* Gráfico nunca em vidro: o blur por trás muda a cor percebida da série e
+     derruba o contraste validado. */
+  .superficie-grafico {
+    background-color: var(--solido);
+    border: 1px solid var(--solido-borda);
+    border-radius: 14px;
   }
 }

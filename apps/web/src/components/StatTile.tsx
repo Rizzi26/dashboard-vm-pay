@@ -1,6 +1,9 @@
+import { Tile } from "@/components/ui/Tile";
+
 /**
- * Número em destaque. Sem gráfico e sem hover — quando o dado é um valor só, o
- * gráfico é ruído. Com onClick, o tile vira botão de filtro (ver StockView).
+ * API antiga sobre o Tile novo — vários lugares usam StatTile (StockView usa
+ * onClick como filtro). Tela nova usa Tile direto, que aceita ícone e
+ * `destaque`.
  */
 export function StatTile({
   label,
@@ -17,47 +20,14 @@ export function StatTile({
   onClick?: () => void;
   active?: boolean;
 }) {
-  const valueColor =
-    tone === "critical"
-      ? "text-[var(--status-critical)]"
-      : tone === "warning"
-        ? "text-[var(--status-warning)]"
-        : "text-[var(--text-primary)]";
-
-  const boxClasses = `rounded-xl border ${
-    active ? "border-[var(--accent)]" : "border-[var(--grid)]"
-  } bg-[var(--surface-1)] p-4 shadow-[var(--shadow-card)] sm:p-5`;
-
-  const inner = (
-    <>
-      <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--text-secondary)]">
-        {label}
-      </div>
-      {/* Menor no mobile: o tile de grid-cols-2 tem ~160px e "R$ 12.280,84"
-          estoura em 1.75rem; break-words segura o pior caso em vez de vazar. */}
-      <div
-        className={`mt-2 break-words text-xl leading-tight tracking-tight font-semibold tabular-nums sm:text-[1.75rem] ${valueColor}`}
-      >
-        {value}
-      </div>
-      {hint ? (
-        <div className="mt-1 text-xs text-[var(--text-secondary)]">{hint}</div>
-      ) : null}
-    </>
+  return (
+    <Tile
+      rotulo={label}
+      valor={value}
+      dica={hint}
+      tom={tone === "critical" ? "critico" : tone === "warning" ? "alerta" : undefined}
+      onClick={onClick}
+      ativo={active}
+    />
   );
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        aria-pressed={active}
-        className={`w-full text-left ${boxClasses}`}
-      >
-        {inner}
-      </button>
-    );
-  }
-
-  return <div className={boxClasses}>{inner}</div>;
 }

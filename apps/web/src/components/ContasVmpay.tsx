@@ -42,7 +42,8 @@ export function ContasVmpay({ org, contas }: { org: string; contas: ContaVmpay[]
   }
 
   return (
-    <section className="mt-8">
+    // id: âncora de "Contas VMpay" na tela Mais (/#contas).
+    <section id="contas" className="mt-8 scroll-mt-28">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Contas VMpay</h2>
