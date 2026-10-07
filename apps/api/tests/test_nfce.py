@@ -33,6 +33,26 @@ def test_interpretar_qrcode(texto):
     assert entrada == nfce.Entrada(chave=CHAVE, qr_param=P)
 
 
+def test_interpretar_qrcode_de_contingencia_offline():
+    """Cupom emitido offline: o QR traz o valor da nota, com ponto decimal."""
+    p = f"{CHAVE}|2|1|05|165.21|{'ab' * 28}|1|{'F' * 40}"
+    url = f"{nfce.SP_QRCODE_URL}?p={p.replace('|', '%7C')}"
+    assert nfce.interpretar(url) == nfce.Entrada(chave=CHAVE, qr_param=p)
+    assert nfce.interpretar(p).qr_param == p
+
+
+def test_recusa_da_sefaz_chega_ao_operador():
+    """A SEFAZ responde 200 com o erro num diálogo de script — o motivo tem de aparecer."""
+    pagina = (
+        "<html><body><script>//<![CDATA[ $('#spnErroProsseguirMaster').html('<ul><li>"
+        "Problemas na consulta via QR Code – QR Code inválido. Erro(s): </br>- Assinatura "
+        "do documento (Digest Value) inconsistente com dado constante da NFC-e</li></ul>');"
+        "//]]></script></body></html>"
+    )
+    with pytest.raises(nfce.NFCeError, match=r"Digest Value\) inconsistente.*chave de acesso"):
+        nfce.parse(pagina)
+
+
 def test_interpretar_chave_com_espacos():
     espacada = " ".join(CHAVE[i : i + 4] for i in range(0, 44, 4))
     assert nfce.interpretar(espacada) == nfce.Entrada(chave=CHAVE, qr_param=None)

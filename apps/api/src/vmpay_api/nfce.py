@@ -32,7 +32,11 @@ MODELO_NFCE = "65"
 # 2019, então -03:00 fixo é exato — e não depende de tzdata na imagem Docker.
 _BRT = timezone(timedelta(hours=-3))
 
-_P_RE = re.compile(r"^\d{44}(\|[0-9A-Za-z]+)+$")
+# QR v2 online: chave|2|amb|idCSC|hash. Emitido em contingência (offline),
+# vem também dia, valor da nota e digVal: chave|2|amb|dia|165.21|digVal|idCSC|hash
+# — o ponto decimal do valor tem de passar. Nada além de alfanumérico e ponto:
+# o `p` vai para a SEFAZ como parâmetro, e só ele.
+_P_RE = re.compile(r"^\d{44}(\|[0-9A-Za-z.]+)+$")
 
 
 class NFCeError(Exception):
@@ -143,9 +147,32 @@ def _depois_do_rotulo(texto: str, rotulo: str) -> str:
     return texto.split(rotulo, 1)[-1].strip()
 
 
+_RECUSA_RE = re.compile(r"\$\('#spnErro(?:Prosseguir)?Master'\)\.html\('(.*?)'\);", re.S)
+
+
+def motivo_da_sefaz(pagina: str) -> str | None:
+    """A recusa da SEFAZ vem num diálogo montado por script, não no HTML.
+
+    Ex.: cupom emitido em contingência cujo QR não bate com a nota autorizada
+    ("Digest Value inconsistente"). Sem isto o operador só via "não devolveu".
+    """
+    m = _RECUSA_RE.search(pagina)
+    if not m:
+        return None
+    texto = " ".join(html_lib.unescape(_TAG_RE.sub(" ", m.group(1))).split())
+    # "Problemas na consulta via QR Code – QR Code inválido. Erro(s): - X" → o essencial.
+    texto = re.sub(r"^.*?Erro\(s\):\s*-?\s*", "", texto) or texto
+    return texto[:200] or None
+
+
 def parse(pagina: str) -> Cupom:
     """Lê a página de resultado do QR Code (layout XSLT 2.05 da SEFAZ-SP)."""
     if 'id="tabResult"' not in pagina:
+        recusa = motivo_da_sefaz(pagina)
+        if recusa:
+            raise NFCeError(
+                f"a SEFAZ recusou o QR Code: {recusa} — lance pela chave de acesso"
+            )
         raise NFCeError(
             "a SEFAZ não devolveu o cupom — o QR pode estar incompleto ou a nota "
             "ainda não foi autorizada"
