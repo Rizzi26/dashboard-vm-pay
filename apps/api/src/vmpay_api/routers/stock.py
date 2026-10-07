@@ -77,10 +77,20 @@ select l.id   as location_id,
        p.barcode,
        coalesce(b.price, p.unit_price) as unit_price,
        b.quantity,
-       b.updated_at
+       b.updated_at,
+       f.nomes as nomes_fornecedor
   from core.stock_balance b
   join core.location l on l.id = b.location_id
   join core.product  p on p.id = b.product_id
+  -- Como o produto vem escrito nos cupons de compra ("CHOC ARCOR TORTUGUIT"):
+  -- quem acabou de carregar um cupom busca a prateleira pelo nome do papel.
+  left join (
+        select i.product_id, array_agg(distinct i.description order by i.description) as nomes
+          from core.purchase_receipt_item i
+          join core.purchase_receipt r on r.id = i.receipt_id
+         where r.org_id = :org_id and not i.ignored and i.product_id is not null
+         group by i.product_id
+       ) f on f.product_id = p.id
  where l.org_id = :org_id
  order by l.name, p.name
 """
@@ -101,6 +111,7 @@ async def list_stock(ctx: ViewerCtx, session: Session) -> list[dict]:
             "preco": float(r["unit_price"]) if r["unit_price"] is not None else None,
             "quantidade": float(r["quantity"]),
             "atualizado_em": r["updated_at"].isoformat(),
+            "nomes_fornecedor": list(r.get("nomes_fornecedor") or []),
         }
         for r in rows
     ]
@@ -130,7 +141,7 @@ async def export_csv(ctx: ViewerCtx, session: Session) -> Response:
     return Response(
         content=buffer.getvalue(),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="estoque.csv"'},
+        headers={"Content-Disposition": 'attachment; filename="prateleira.csv"'},
     )
 
 
@@ -399,6 +410,82 @@ select q.location_id,
 """
 
 
+# ------------------------------------------------------------------ encalhe
+
+#: Item com saldo na prateleira e sem venda nesta janela é encalhe: ocupa
+#: canaleta e prende dinheiro. "Nunca vendeu" entra também (ultima_venda nula).
+ENCALHE_SQL = """
+select b.location_id,
+       l.name                          as location_name,
+       p.id                            as product_id,
+       p.name                          as product_name,
+       p.barcode,
+       b.quantity,
+       coalesce(b.price, p.unit_price) as preco,
+       uv.ultima_venda
+  from core.stock_balance b
+  join core.location l on l.id = b.location_id
+  join core.product  p on p.id = b.product_id
+  left join lateral (
+        -- Venda deste produto NESTA loja: máquina da loja + good do produto.
+        select max(v.occurred_at) as ultima_venda
+          from core.location_link ll
+          join core.product_link pl on pl.integration_id = ll.integration_id
+                                   and pl.product_id = p.id
+          join vmpay.vend v on v.machine_id = ll.machine_id
+                           and v.good_id = cast(pl.external_id as bigint)
+         where ll.location_id = b.location_id
+  ) uv on true
+ where l.org_id = :org_id
+   and b.quantity > 0
+   and (cast(:loja as uuid) is null or l.id = cast(:loja as uuid))
+   and (uv.ultima_venda is null or uv.ultima_venda < now() - make_interval(days => :dias))
+ order by b.quantity * coalesce(b.price, p.unit_price, 0) desc, p.name
+"""
+
+
+@router.get("/encalhe")
+async def encalhe(
+    ctx: ViewerCtx, session: Session, dias: int = 30, loja: uuid.UUID | None = None
+) -> dict:
+    """Itens parados na prateleira: têm saldo e não vendem há `dias` dias."""
+    dias = max(7, min(dias, 365))
+    rows = (
+        await session.execute(
+            text(ENCALHE_SQL),
+            {"org_id": str(ctx.org_id), "dias": dias, "loja": str(loja) if loja else None},
+        )
+    ).mappings().all()
+    itens = []
+    for r in rows:
+        quantidade = float(r["quantity"])
+        preco = float(r["preco"]) if r["preco"] is not None else None
+        itens.append(
+            {
+                "location_id": str(r["location_id"]),
+                "local": r["location_name"],
+                "product_id": str(r["product_id"]),
+                "produto": r["product_name"],
+                "barcode": r["barcode"],
+                "quantidade": quantidade,
+                "preco": preco,
+                # A preço de venda: é o que a canaleta deixa de faturar, não o custo.
+                "valor_parado": round(quantidade * preco, 2) if preco is not None else None,
+                "ultima_venda": r["ultima_venda"].isoformat() if r["ultima_venda"] else None,
+            }
+        )
+    return {
+        "dias": dias,
+        "resumo": {
+            "itens": len(itens),
+            "unidades": sum(i["quantidade"] for i in itens),
+            "valor_parado": round(sum(i["valor_parado"] or 0 for i in itens), 2),
+            "nunca_venderam": sum(1 for i in itens if i["ultima_venda"] is None),
+        },
+        "itens": itens,
+    }
+
+
 @router.get("/quebras")
 async def stock_losses(ctx: ViewerCtx, session: Session, days: int = 30) -> dict:
     """Quebra por produto: quanto saiu sem venda registrada no período.
@@ -466,6 +553,59 @@ async def stock_history(
             "em": r["snapshot_at"].isoformat(),
             "local": r["location_name"],
             "quantidade": float(r["quantity"]),
+        }
+        for r in rows
+    ]
+
+
+# Um cupom pode trazer o mesmo produto em mais de uma linha (fardo e avulso,
+# fornecedor que repete o item): a carga é a soma do que entrou, por cupom.
+CARGAS_SQL = """
+select r.id, r.number, r.access_key, r.created_at, r.status,
+       l.name as location_name, u.email as aprovado_por,
+       a.status as vmpay_status, a.error as vmpay_erro,
+       sum(i.quantity * i.factor) as unidades
+  from core.purchase_receipt_item i
+  join core.purchase_receipt r on r.id = i.receipt_id
+  join core.location l on l.id = r.location_id
+  left join auth.users u on u.id = r.approved_by
+  left join core.action_log a on a.id = r.action_id
+ where r.org_id = :org_id
+   and i.product_id = :product_id
+   and not i.ignored
+ group by r.id, l.name, u.email, a.status, a.error
+ order by r.created_at desc
+ limit :limit
+"""
+
+
+@router.get("/cargas/{product_id}")
+async def product_loads(
+    product_id: uuid.UUID, ctx: AdminCtx, session: Session, limit: int = 5
+) -> list[dict]:
+    """Últimas cargas do produto pelo pick list. Admin, como o próprio pick
+    list: expõe quem aprovou e o que a VMpay respondeu."""
+    rows = (
+        await session.execute(
+            text(CARGAS_SQL),
+            {
+                "org_id": str(ctx.org_id),
+                "product_id": str(product_id),
+                "limit": max(1, min(limit, 50)),
+            },
+        )
+    ).mappings().all()
+    return [
+        {
+            "receipt_id": str(r["id"]),
+            "numero": r["number"],
+            "chave": r["access_key"],
+            "carregado_em": r["created_at"].isoformat(),
+            "loja": r["location_name"],
+            "unidades": float(r["unidades"]),
+            "aprovado_por": r["aprovado_por"] or "(conta removida)",
+            "status": r["status"],
+            "vmpay": {"status": r["vmpay_status"], "erro": r["vmpay_erro"]},
         }
         for r in rows
     ]

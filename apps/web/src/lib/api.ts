@@ -10,6 +10,8 @@ const BROWSER_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type Summary = {
   periodo: { inicio: string; fim: string };
+  /** Janela de mesmo tamanho logo antes — base do "vs período anterior". */
+  anterior?: { inicio: string; fim: string; faturamento: number; transacoes: number; ticket_medio: number };
   faturamento: number;
   transacoes: number;
   itens: number;
@@ -47,6 +49,8 @@ export type StockRow = {
   preco: number | null;
   quantidade: number;
   atualizado_em: string;
+  /** Como o produto vem escrito nos cupons de compra já carregados. */
+  nomes_fornecedor?: string[];
 };
 
 export type StockHistoryPoint = {
@@ -203,6 +207,15 @@ export type PicklistCarga = {
   itens: number;
 };
 
+/** Saldo e ritmo de um produto na loja (GET /picklist/saldos), para o cupom × lista. */
+export type PicklistSaldo = {
+  product_id: string;
+  quantidade: number;
+  por_dia: number;
+  /** null quando não houve venda no período: sem ritmo, sem previsão. */
+  dias_restantes: number | null;
+};
+
 export type LojaCard = {
   id: string;
   nome: string;
@@ -246,8 +259,75 @@ export type EventoAuditoria = {
 export type Auditoria = {
   periodo: { inicio: string; fim: string };
   eventos: EventoAuditoria[];
+  pagina: number;
+  por_pagina: number;
+  total: number;
   proxima: string | null;
   membros: { id: string; email: string; papel: string }[];
+};
+
+export type PicklistCupom = {
+  id: string;
+  chave: string;
+  numero: string | null;
+  serie: string | null;
+  emitido_em: string | null;
+  fornecedor: { cnpj: string; nome: string | null };
+  valor_total: number | null;
+  origem: "qrcode" | "manual";
+  status: "pending" | "approved" | "error";
+  carregado_em: string;
+  loja: string;
+  aprovado_por: string;
+  vmpay: { status: string | null; erro: string | null };
+  itens: {
+    linha: number;
+    codigo: string | null;
+    descricao: string;
+    quantidade: number | null;
+    unidade: string | null;
+    valor_unitario: number | null;
+    valor_total: number | null;
+    fator: number | null;
+    ignorado: boolean;
+    produto: { id: string; nome: string } | null;
+    entrou: number | null;
+  }[];
+};
+
+export type Heatmap = {
+  periodo: { inicio: string; fim: string };
+  celulas: { dia: number; hora: number; faturamento: number; transacoes: number }[];
+};
+
+export type CurvaAbc = {
+  periodo: { inicio: string; fim: string };
+  total: number;
+  resumo: Record<"A" | "B" | "C", { produtos: number; faturamento: number }>;
+  itens: {
+    posicao: number;
+    product_id: string | null;
+    produto: string;
+    faturamento: number;
+    unidades: number;
+    participacao: number;
+    acumulado: number;
+    classe: "A" | "B" | "C";
+  }[];
+};
+
+/** Uma carga do produto pelo pick list (GET /stock/cargas/{id}). */
+export type CargaProduto = {
+  receipt_id: string;
+  numero: string | null;
+  chave: string;
+  carregado_em: string;
+  loja: string;
+  /** Unidades de venda que entraram (quantidade do cupom × fator). */
+  unidades: number;
+  aprovado_por: string;
+  status: "pending" | "approved" | "error";
+  vmpay: { status: "pending" | "success" | "error" | null; erro: string | null };
 };
 
 export type Fetched<T> = { ok: true; data: T } | { ok: false; error: string };

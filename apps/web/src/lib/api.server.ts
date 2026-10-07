@@ -6,7 +6,10 @@
 import type {
   ActionRow,
   Auditoria,
+  CargaProduto,
   Central,
+  CurvaAbc,
+  Heatmap,
   ContaVmpay,
   DailyPoint,
   Fetched,
@@ -15,6 +18,7 @@ import type {
   Me,
   MemberRow,
   PicklistCarga,
+  PicklistCupom,
   PicklistOpcoes,
   ProductDetail,
   Reposicao,
@@ -49,6 +53,8 @@ export const serverApi = {
   daily: (org: string, qs = "") => serverGet<DailyPoint[]>(`/orgs/${org}/sales/daily${qs}`),
   byMachine: (org: string, qs = "") =>
     serverGet<MachineRow[]>(`/orgs/${org}/sales/by-machine${qs}`),
+  heatmap: (org: string, qs = "") => serverGet<Heatmap>(`/orgs/${org}/sales/heatmap${qs}`),
+  abc: (org: string, qs = "") => serverGet<CurvaAbc>(`/orgs/${org}/sales/abc${qs}`),
   syncStatus: (org: string) => serverGet<SyncRow[]>(`/orgs/${org}/sales/sync-status`),
   lost: (org: string, qs = "") => serverGet<LostSales>(`/orgs/${org}/sales/lost${qs}`),
   product: (org: string, id: string, qs = "") =>
@@ -58,6 +64,8 @@ export const serverApi = {
     serverGet<Reposicao>(`/orgs/${org}/stock/reposicao?days=${dias}`),
   stockHistory: (org: string, productId: string, dias = 30) =>
     serverGet<StockHistoryPoint[]>(`/orgs/${org}/stock/history/${productId}?days=${dias}`),
+  cargasProduto: (org: string, productId: string, limite = 5) =>
+    serverGet<CargaProduto[]>(`/orgs/${org}/stock/cargas/${productId}?limit=${limite}`),
   members: (org: string) => serverGet<MemberRow[]>(`/orgs/${org}/members`),
   actions: (org: string) => serverGet<ActionRow[]>(`/orgs/${org}/stock/actions`),
   lojas: (org: string) => serverGet<Central>(`/orgs/${org}/lojas`),
@@ -65,4 +73,5 @@ export const serverApi = {
   auditoria: (org: string, qs = "") => serverGet<Auditoria>(`/orgs/${org}/auditoria${qs}`),
   picklistOpcoes: (org: string) => serverGet<PicklistOpcoes>(`/orgs/${org}/picklist/opcoes`),
   picklistHistorico: (org: string) => serverGet<PicklistCarga[]>(`/orgs/${org}/picklist`),
+  picklistCupom: (org: string, id: string) => serverGet<PicklistCupom>(`/orgs/${org}/picklist/${id}`),
 };

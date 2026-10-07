@@ -2,18 +2,28 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/Header";
 import { Offline } from "@/components/Offline";
+import { PaginacaoLinks, paginaDaUrl } from "@/components/PaginacaoLinks";
+import { Botao } from "@/components/ui/Botao";
+import { Cartao } from "@/components/ui/Cartao";
+import { CabecalhoLista, Lista } from "@/components/ui/Lista";
+import { Pagina } from "@/components/ui/Pagina";
+import { Segmentado } from "@/components/ui/Segmentado";
+import { Selo } from "@/components/ui/Selo";
+import { Titulo } from "@/components/ui/Titulo";
 import type { EventoAuditoria } from "@/lib/api";
 import { serverApi } from "@/lib/api.server";
 import { orgSession } from "@/lib/org";
 
 const PERIODOS = [
-  { key: "1", label: "Hoje" },
-  { key: "7", label: "7 dias" },
-  { key: "30", label: "30 dias" },
-  { key: "90", label: "90 dias" },
+  { key: "1", label: "Hoje", titulo: "Hoje" },
+  { key: "7", label: "7 dias", titulo: "Últimos 7 dias" },
+  { key: "30", label: "30 dias", titulo: "Últimos 30 dias" },
+  { key: "90", label: "90 dias", titulo: "Últimos 90 dias" },
 ];
 
-type Params = { usuario?: string; sessao?: string; dias?: string; antes?: string };
+type Params = { usuario?: string; sessao?: string; dias?: string; pagina?: string };
+
+const POR_PAGINA = 50;
 
 function texto(v: unknown): string {
   return v === null || v === undefined ? "" : String(v);
@@ -33,7 +43,7 @@ function descrever(e: EventoAuditoria, nomes: Map<string, string>): string {
         ? `Consultou cupom só pela chave (lançamento manual) — ${texto(a.chave)}`
         : `Consultou cupom fiscal de ${texto(a.fornecedor) || "fornecedor"} — ${texto(a.itens)} itens`;
     case "picklist.approve":
-      return `Aprovou carga de cupom no estoque — ${(a.items as unknown[] | undefined)?.length ?? 0} produtos`;
+      return `Aprovou carga de cupom — ${(a.items as unknown[] | undefined)?.length ?? 0} produtos`;
     case "stock.restock":
       return `Lançou reabastecimento — ${(a.items as unknown[] | undefined)?.length ?? 0} produtos`;
     case "stock.price":
@@ -41,7 +51,7 @@ function descrever(e: EventoAuditoria, nomes: Map<string, string>): string {
     case "product.create":
       return `Cadastrou o produto "${texto(a.name)}"`;
     case "estoque.exportar":
-      return `Exportou o estoque (${texto(a.linhas)} linhas)`;
+      return `Exportou a prateleira (${texto(a.linhas)} linhas)`;
     case "reposicao.exportar":
       return `Exportou a lista de reposição (${texto(a.linhas)} itens)`;
     case "dados.atualizar":
@@ -65,7 +75,7 @@ function aparelho(ua: string | null): string | null {
   return so ? `${nav} · ${so}` : nav;
 }
 
-/** Fora do componente: o "agora" é estável dentro do request (ver estoque/page). */
+/** Fora do componente: o "agora" é estável dentro do request (ver prateleira/page). */
 function inicioDoPeriodo(dias: string): string {
   return new Date(Date.now() - (Number(dias) - 1) * 86_400_000).toISOString().slice(0, 10);
 }
@@ -85,10 +95,10 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
   const p = await searchParams;
   const dias = PERIODOS.some((x) => x.key === p.dias) ? p.dias! : "7";
   const desde = inicioDoPeriodo(dias);
-  const api = new URLSearchParams({ desde, limite: "150" });
+  const pagina = paginaDaUrl(p.pagina);
+  const api = new URLSearchParams({ desde, limite: String(POR_PAGINA), pagina: String(pagina) });
   if (p.usuario) api.set("usuario", p.usuario);
   if (p.sessao) api.set("sessao", p.sessao);
-  if (p.antes) api.set("antes", p.antes);
   const dados = await serverApi.auditoria(org.slug, `?${api}`);
 
   const nomes = new Map(dados.ok ? dados.data.membros.map((m) => [m.id, m.email]) : []);
@@ -103,26 +113,30 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
     }
   }
 
-  return (
-    <div className="viz-root min-h-screen bg-[var(--surface-0)]">
-      <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} lojas={org.lojas} loja={org.loja} />
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
-        <header className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Auditoria</h1>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            O que cada pessoa fez no painel, desde o login — inclusive o que foi enviado à VMpay.
-          </p>
-        </header>
+  const linkFiltro = "text-azul-texto no-underline hover:underline";
 
-        <form action="/auditoria" className="mb-5 flex flex-wrap items-end gap-3">
-          <label className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-            Pessoa
+  return (
+    <div className="min-h-screen">
+      <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} lojas={org.lojas} loja={org.loja} />
+      <Pagina largura="estreita">
+        <Titulo
+          sobretitulo={PERIODOS.find((x) => x.key === dias)?.titulo}
+          titulo="Auditoria"
+          subtitulo="O que cada pessoa fez no painel desde o login, inclusive o que foi enviado à VMpay."
+        />
+
+        <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
+          {/* Pessoa vai por formulário (funciona sem JS); o período, por link,
+              preservando a pessoa e a sessão que já estão na URL. */}
+          <form action="/auditoria" className="flex items-center gap-2">
+            <input type="hidden" name="dias" value={dias} />
             <select
               name="usuario"
+              aria-label="Pessoa"
               defaultValue={p.usuario ?? ""}
-              className="mt-1 block rounded-md border border-[var(--grid)] bg-[var(--surface-1)] px-2 py-1.5 text-base normal-case tracking-normal text-[var(--text-primary)] sm:text-sm"
+              className="h-11 min-w-0 flex-1 rounded-xl border border-campo-borda bg-campo px-3 text-[16px] text-texto md:h-[38px] md:max-w-[22rem] md:flex-none md:text-[14px]"
             >
-              <option value="">Todas</option>
+              <option value="">Todas as pessoas</option>
               {dados.ok
                 ? dados.data.membros.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -131,73 +145,84 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
                   ))
                 : null}
             </select>
-          </label>
-          <label className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-            Período
-            <select
-              name="dias"
-              defaultValue={dias}
-              className="mt-1 block rounded-md border border-[var(--grid)] bg-[var(--surface-1)] px-2 py-1.5 text-base normal-case tracking-normal text-[var(--text-primary)] sm:text-sm"
-            >
-              {PERIODOS.map((x) => (
-                <option key={x.key} value={x.key}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="submit"
-            className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-[var(--accent-contrast)]"
-          >
-            Filtrar
-          </button>
+            <Botao type="submit" tamanho="p">
+              Filtrar
+            </Botao>
+          </form>
+          <div className="w-full md:w-auto">
+            <Segmentado
+              rotulo="Período"
+              valor={dias}
+              largo
+              opcoes={PERIODOS.map((x) => ({
+                valor: x.key,
+                rotulo: x.label,
+                href: qs(p, { dias: x.key, pagina: undefined }),
+              }))}
+            />
+          </div>
           {p.sessao ? (
-            <Link href={qs(p, { sessao: undefined, antes: undefined })} className="text-sm text-[var(--text-secondary)] underline">
+            <Link href={qs(p, { sessao: undefined, pagina: undefined })} className={`text-[13px] ${linkFiltro}`}>
               mostrando uma sessão — ver todas
             </Link>
           ) : null}
-        </form>
+        </div>
 
         {!dados.ok ? (
           <Offline error={dados.error} />
         ) : dados.data.eventos.length === 0 ? (
-          <p className="rounded-md border border-dashed border-[var(--grid)] p-8 text-center text-sm text-[var(--text-secondary)]">
-            Nada registrado neste período.
-          </p>
+          <Cartao className="text-center">
+            <p className="m-0 py-4 text-[15px] text-sec">Nada registrado neste período.</p>
+          </Cartao>
         ) : (
-          <div className="space-y-6">
+          <>
             {[...grupos.entries()].map(([dia, eventos]) => (
-              <section key={dia}>
-                <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">{dia}</h2>
-                <ol className="divide-y divide-[var(--grid)] rounded-xl border border-[var(--grid)] bg-[var(--surface-1)]">
+              <section key={dia} className="flex flex-col gap-2">
+                <CabecalhoLista className="mt-2">{dia}</CabecalhoLista>
+                <Lista como="ol">
                   {eventos.map((e) => {
                     const falhou = e.status === "error";
+                    const sessao = [aparelho(e.navegador), e.ip].filter(Boolean);
                     return (
-                      <li key={`${e.fonte}-${e.id}`} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-4">
-                        <time className="shrink-0 text-xs tabular-nums text-[var(--text-secondary)] sm:w-12" dateTime={e.em}>
+                      // No celular a hora sobe para cima do texto: a coluna
+                      // de 48px roubaria espaço da descrição em 390px.
+                      <li
+                        key={`${e.fonte}-${e.id}`}
+                        className="flex flex-col gap-0.5 px-4 py-[13px] md:flex-row md:gap-4 md:px-[18px]"
+                      >
+                        <time
+                          className="shrink-0 text-[13px] tabular-nums text-sec md:w-12 md:pt-0.5"
+                          dateTime={e.em}
+                        >
                           {new Date(e.em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
                         </time>
                         <div className="min-w-0 flex-1">
-                          <p className={`text-sm ${e.acao === "login" ? "font-medium" : ""} text-[var(--text-primary)]`}>
+                          <p className={`m-0 break-words text-[16px] text-texto md:text-[15px] ${e.acao === "login" ? "font-semibold" : ""}`}>
                             {descrever(e, nomes)}
                             {e.fonte === "vmpay" ? (
-                              <span className={`ml-2 text-xs ${falhou ? "text-[var(--status-critical)]" : "text-[var(--text-secondary)]"}`}>
-                                {falhou ? "■ VMpay recusou" : e.status === "pending" ? "▲ sem resposta da VMpay" : "● enviado à VMpay"}
-                              </span>
+                              <>
+                                {" "}
+                                {falhou ? (
+                                  <Selo tom="vermelho">VMpay recusou</Selo>
+                                ) : e.status === "pending" ? (
+                                  <Selo tom="laranja">sem resposta da VMpay</Selo>
+                                ) : (
+                                  <Selo tom="verde">enviado à VMpay</Selo>
+                                )}
+                              </>
                             ) : null}
                           </p>
-                          <p className="text-xs text-[var(--text-secondary)]">
-                            <Link href={qs(p, { usuario: e.usuario_id, antes: undefined })} className="hover:underline">
+                          <p className="m-0 break-words text-[13px] text-sec">
+                            <Link href={qs(p, { usuario: e.usuario_id, pagina: undefined })} className={linkFiltro}>
                               {e.usuario}
                             </Link>
                             {e.acao === "login" ? (
                               <>
-                                {[aparelho(e.navegador), e.ip].filter(Boolean).length ? ` · ${[aparelho(e.navegador), e.ip].filter(Boolean).join(" · ")}` : ""}
+                                {sessao.length ? ` · ${sessao.join(" · ")}` : ""}
                                 {e.sessao && !p.sessao ? (
                                   <>
                                     {" · "}
-                                    <Link href={qs({ dias: "90" }, { sessao: e.sessao })} className="underline">
+                                    <Link href={qs({ dias: "90" }, { sessao: e.sessao })} className={linkFiltro}>
                                       ver tudo desta sessão
                                     </Link>
                                   </>
@@ -210,20 +235,22 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Pr
                       </li>
                     );
                   })}
-                </ol>
+                </Lista>
               </section>
             ))}
-            {dados.data.proxima ? (
-              <Link href={qs(p, { antes: dados.data.proxima })} className="inline-block text-sm text-[var(--text-secondary)] underline">
-                Ver mais antigos
-              </Link>
-            ) : null}
-          </div>
+            <PaginacaoLinks
+              pagina={pagina}
+              total={dados.data.total}
+              porPagina={POR_PAGINA}
+              href={(n) => qs(p, { pagina: String(n) })}
+              rotulo="eventos"
+            />
+          </>
         )}
-        <p className="mt-6 text-xs text-[var(--text-secondary)]">
+        <p className="m-0 px-1 text-[13px] text-sec">
           Horários de Brasília. O registro fica mesmo se a pessoa for removida da organização.
         </p>
-      </main>
+      </Pagina>
     </div>
   );
 }

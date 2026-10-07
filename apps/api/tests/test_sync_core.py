@@ -141,13 +141,13 @@ async def test_saldo_igual_nao_gera_foto_nova():
                 "core.location_link",
                 [SimpleNamespace(external_id="10:857", location_id=loc)],
             ),
-            # …já existe foto (não é a primeira rodada)…
-            ("core.stock_snapshot", ["2026-08-29T00:00:00Z"]),
-            # …e o saldo anterior é idêntico ao do relatório (3 un. a 6,99).
+            # …a última foto é idêntica ao relatório (3 un. a 6,99)…
             (
-                "FROM core.stock_balance",
+                "max(core.stock_snapshot.snapshot_at)",
                 [SimpleNamespace(location_id=loc, product_id=prod, quantity=3, price=6.99)],
             ),
+            # …e já existe foto (não é a primeira rodada).
+            ("core.stock_snapshot", ["2026-08-29T00:00:00Z"]),
         ]
     )
     client = VMpayClient("segredo", base_url=BASE, max_retries=0)
@@ -185,3 +185,44 @@ async def test_foto_vai_depois_do_saldo_e_antes_da_limpeza_de_stale():
         i for i, s in enumerate(sqls) if "core.stock_balance" in s and "DELETE" in s.upper()
     )
     assert pos_saldo < pos_foto < pos_limpeza
+
+
+@respx.mock
+async def test_carga_pelo_painel_entra_no_historico():
+    """A carga já somou no balance; a foto compara com a última FOTO.
+
+    Caso real (homologação, 06/10): pick list levou o saldo de 10 para 34 no
+    balance na hora da aprovação; a rodada seguinte comparava 34 com 34 e o
+    degrau da carga nunca entrava no histórico.
+    """
+    loc = uuid.UUID("00000000-0000-0000-0000-00000000eeee")
+    prod = uuid.UUID("00000000-0000-0000-0000-00000000ffff")
+    respx.get(f"{BASE}/installations").mock(
+        return_value=httpx.Response(200, json=[{"id": 857, "machine_id": 10}])
+    )
+    respx.get(f"{BASE}/installation_stock_balances").mock(
+        return_value=httpx.Response(200, json=[saldo(163, 34, 71.4)])
+    )
+    sessao = FakeSession(
+        routes=[
+            ("core.location_link", [SimpleNamespace(external_id="10:857", location_id=loc)]),
+            (
+                "max(core.stock_snapshot.snapshot_at)",
+                [SimpleNamespace(location_id=loc, product_id=prod, quantity=10, price=2.1)],
+            ),
+            ("core.stock_snapshot", ["2026-10-06T03:02:21Z"]),
+            # o balance já está em 34 — não pode ser a referência
+            (
+                "FROM core.stock_balance",
+                [SimpleNamespace(location_id=loc, product_id=prod, quantity=34, price=2.1)],
+            ),
+        ]
+    )
+    client = VMpayClient("segredo", base_url=BASE, max_retries=0)
+    await sync_core.sync_stock(client, sessao, INTEGRATION, {"163": prod})
+
+    stmt = next(
+        s for s in sessao.statements if "stock_snapshot" in str(s) and "INSERT" in str(s).upper()
+    )
+    params = stmt.compile(dialect=postgresql.dialect()).params
+    assert [v for k, v in params.items() if k.startswith("quantity")] == [34]

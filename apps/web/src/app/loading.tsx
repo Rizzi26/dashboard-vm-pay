@@ -2,28 +2,30 @@
  * Esqueleto de navegação: aparece na hora em que o usuário toca num link,
  * enquanto o servidor busca os dados da página de destino. Sem ele, a tela
  * anterior fica congelada e a navegação "parece" travada.
+ *
+ * Imita a forma das telas novas (barra flutuante no computador, título
+ * grande, tiles e um cartão) para a troca não dar salto de layout.
  */
 export default function Loading() {
+  const bloco = "animate-pulse rounded-lg bg-trilho";
   return (
-    <div className="viz-root min-h-screen bg-[var(--surface-0)]">
-      <div className="border-b border-[var(--grid)]">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
-          <div className="h-4 w-40 animate-pulse rounded bg-[var(--grid)]" />
-          <div className="h-4 w-24 animate-pulse rounded bg-[var(--grid)]" />
-        </div>
+    <div className="min-h-screen" aria-busy="true" aria-label="Carregando">
+      <div className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-3 px-4 pt-[max(12px,env(safe-area-inset-top))] md:mt-5 md:w-[calc(100%-48px)] md:rounded-[22px] md:py-3.5 md:pl-3.5 md:pr-3 md:[background:var(--vidro)]">
+        <div className={`${bloco} h-5 w-40`} />
+        <div className={`${bloco} h-5 w-24`} />
       </div>
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
-        <div className="h-7 w-44 animate-pulse rounded bg-[var(--grid)]" />
-        <div className="mt-2 h-4 w-64 animate-pulse rounded bg-[var(--grid)]" />
-        <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-28 animate-pulse rounded-xl border border-[var(--grid)] bg-[var(--surface-1)]"
-            />
+      <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-3.5 px-4 pt-3 md:gap-4 md:px-6 md:pt-10">
+        <div className={`${bloco} h-3.5 w-36`} />
+        <div className={`${bloco} h-9 w-56 md:h-11`} />
+        <div className="grid grid-cols-2 gap-3.5 md:grid-cols-3 md:gap-4">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className={`vidro h-28 rounded-[20px] ${i === 2 ? "hidden md:block" : ""}`}>
+              <div className={`${bloco} m-4 h-3 w-24`} />
+              <div className={`${bloco} mx-4 h-7 w-28`} />
+            </div>
           ))}
         </div>
-        <div className="mt-6 h-72 animate-pulse rounded-xl border border-[var(--grid)] bg-[var(--surface-1)]" />
+        <div className="vidro h-72 rounded-[22px]" />
       </main>
     </div>
   );

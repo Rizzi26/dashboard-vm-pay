@@ -63,27 +63,48 @@ async def summary(
     loja: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Totais do período: faturamento, transações, ticket médio."""
+    """Totais do período: faturamento, transações, ticket médio.
+
+    `anterior` é a janela de mesmo tamanho logo antes desta — base do "+12%
+    vs período anterior". Uma consulta só: as duas janelas são contíguas.
+    """
     start, end = _window(start, end)
+    anterior_inicio = start - (end - start + timedelta(days=1))
     row = (
         await session.execute(
             text(
                 """
-                select coalesce(sum(value), 0)                as revenue,
-                       count(*)                               as transactions,
-                       coalesce(sum(quantity), 0)             as items,
-                       coalesce(sum(discount_value), 0)       as discounts,
-                       count(distinct machine_id)             as machines
+                select coalesce(sum(value) filter (where occurred_at >= :start), 0)    as revenue,
+                       count(*) filter (where occurred_at >= :start)                  as transactions,
+                       coalesce(sum(quantity) filter (where occurred_at >= :start), 0) as items,
+                       coalesce(sum(discount_value) filter (where occurred_at >= :start), 0) as discounts,
+                       count(distinct machine_id) filter (where occurred_at >= :start) as machines,
+                       coalesce(sum(value) filter (where occurred_at < :start), 0)     as prev_revenue,
+                       count(*) filter (where occurred_at < :start)                   as prev_transactions
                   from vmpay.sale
-                 where occurred_at >= :start and occurred_at < :end
+                 where occurred_at >= :prev_start and occurred_at < :end
                    and """ + MAQUINAS_DA_ORG + """
                 """
             ),
-            {"start": start, "end": end + timedelta(days=1), **_escopo(ctx, loja)},
+            {
+                "start": start,
+                "end": end + timedelta(days=1),
+                "prev_start": anterior_inicio,
+                **_escopo(ctx, loja),
+            },
         )
     ).mappings().one()
     revenue, transactions = float(row["revenue"]), row["transactions"]
+    prev_revenue = float(row.get("prev_revenue") or 0)
+    prev_transactions = int(row.get("prev_transactions") or 0)
     return {
+        "anterior": {
+            "inicio": anterior_inicio.isoformat(),
+            "fim": (start - timedelta(days=1)).isoformat(),
+            "faturamento": prev_revenue,
+            "transacoes": prev_transactions,
+            "ticket_medio": prev_revenue / prev_transactions if prev_transactions else 0.0,
+        },
         "periodo": {"inicio": start.isoformat(), "fim": end.isoformat()},
         "faturamento": revenue,
         "transacoes": transactions,
@@ -268,3 +289,129 @@ async def sync_status(session: AsyncSession = Depends(get_session)) -> list[dict
         }
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------- C2 / C3
+
+#: Dia da semana × hora no relógio da LOJA (Brasília): a venda das 19h é das
+#: 19h para quem repõe, não das 22h UTC. isodow: 1 = segunda … 7 = domingo.
+HEATMAP_SQL = """
+select extract(isodow from occurred_at at time zone 'America/Sao_Paulo')::int as dia,
+       extract(hour   from occurred_at at time zone 'America/Sao_Paulo')::int as hora,
+       coalesce(sum(value), 0) as revenue,
+       count(*)                as transactions
+  from vmpay.sale
+ where occurred_at >= :start and occurred_at < :end
+   and """ + MAQUINAS_DA_ORG + """
+ group by 1, 2
+"""
+
+
+@router.get("/heatmap")
+async def heatmap(
+    ctx: ViewerCtx,
+    start: date | None = None,
+    end: date | None = None,
+    loja: uuid.UUID | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Quando a loja vende: faturamento e transações por dia da semana × hora."""
+    start, end = _window(start, end)
+    rows = (
+        await session.execute(
+            text(HEATMAP_SQL),
+            {"start": start, "end": end + timedelta(days=1), **_escopo(ctx, loja)},
+        )
+    ).mappings().all()
+    return {
+        "periodo": {"inicio": start.isoformat(), "fim": end.isoformat()},
+        "celulas": [
+            {
+                "dia": r["dia"],
+                "hora": r["hora"],
+                "faturamento": float(r["revenue"]),
+                "transacoes": r["transactions"],
+            }
+            for r in rows
+        ],
+    }
+
+
+#: Venda por produto (vmpay.vend: uma linha por item dispensado). O produto
+#: canônico vem do vínculo da integração da organização; good sem vínculo
+#: ainda aparece, pelo nome do catálogo da VMpay.
+ABC_SQL = """
+select pl.product_id,
+       coalesce(p.name, g.name, 'Produto ' || v.good_id) as nome,
+       v.good_id,
+       coalesce(sum(v.value), 0)              as revenue,
+       coalesce(sum(coalesce(v.quantity, 1)), 0) as units
+  from vmpay.vend v
+  left join vmpay.good g on g.id = v.good_id
+  left join (
+        select pl.external_id, pl.product_id
+          from core.product_link pl
+          join core.integration i on i.id = pl.integration_id
+         where i.org_id = :org_id
+  ) pl on pl.external_id = cast(v.good_id as text)
+  left join core.product p on p.id = pl.product_id
+ where v.occurred_at >= :start and v.occurred_at < :end
+   and v.""" + MAQUINAS_DA_ORG.strip() + """
+ group by 1, 2, 3
+ order by revenue desc
+"""
+
+#: Cortes da curva: A até 80% do faturamento acumulado, B até 95%, C o resto.
+ABC_CORTES = (("A", 0.80), ("B", 0.95))
+
+
+@router.get("/abc")
+async def curva_abc(
+    ctx: ViewerCtx,
+    start: date | None = None,
+    end: date | None = None,
+    loja: uuid.UUID | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Curva ABC por faturamento: os poucos produtos que fazem a maior parte."""
+    start, end = _window(start, end)
+    rows = (
+        await session.execute(
+            text(ABC_SQL),
+            {"start": start, "end": end + timedelta(days=1), **_escopo(ctx, loja)},
+        )
+    ).mappings().all()
+    total = sum(float(r["revenue"]) for r in rows) or 0.0
+    itens, acumulado = [], 0.0
+    for posicao, r in enumerate(rows, start=1):
+        faturamento = float(r["revenue"])
+        # A classe usa o acumulado ANTES do item: o produto que cruza 80% ainda
+        # é A — é ele que leva a curva até lá.
+        antes = acumulado / total if total else 1.0
+        classe = next((c for c, corte in ABC_CORTES if antes < corte), "C")
+        acumulado += faturamento
+        itens.append(
+            {
+                "posicao": posicao,
+                "product_id": str(r["product_id"]) if r["product_id"] else None,
+                "produto": r["nome"],
+                "faturamento": faturamento,
+                "unidades": float(r["units"]),
+                "participacao": faturamento / total if total else 0.0,
+                "acumulado": acumulado / total if total else 0.0,
+                "classe": classe,
+            }
+        )
+    resumo = {
+        c: {
+            "produtos": sum(1 for i in itens if i["classe"] == c),
+            "faturamento": sum(i["faturamento"] for i in itens if i["classe"] == c),
+        }
+        for c in ("A", "B", "C")
+    }
+    return {
+        "periodo": {"inicio": start.isoformat(), "fim": end.isoformat()},
+        "total": total,
+        "resumo": resumo,
+        "itens": itens,
+    }

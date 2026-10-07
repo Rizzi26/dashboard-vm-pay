@@ -163,6 +163,16 @@ async def test_viewer_le_o_estoque():
     body = (await call("GET", "/orgs/mercadinho/stock")).json()
     assert body[0]["produto"] == "Água Mineral"
     assert body[0]["quantidade"] == 18.0
+    assert body[0]["nomes_fornecedor"] == []  # produto nunca veio em cupom
+
+
+async def test_estoque_traz_o_nome_do_produto_no_cupom():
+    use_role("viewer")
+    use_session(
+        [("from core.stock_balance", [{**STOCK_ROW, "nomes_fornecedor": ["AGUA MIN 500ML"]}])]
+    )
+    body = (await call("GET", "/orgs/mercadinho/stock")).json()
+    assert body[0]["nomes_fornecedor"] == ["AGUA MIN 500ML"]
 
 
 async def test_csv_vem_como_anexo_com_separador_pt_br():
@@ -523,3 +533,22 @@ async def test_leitura_continua_com_escrita_desligada(monkeypatch):
     use_session([("from core.stock_balance", [STOCK_ROW])])
     resp = await call("GET", "/orgs/mercadinho/stock")
     assert resp.status_code == 200
+
+
+# ------------------------------------------------------------------ encalhe
+
+
+async def test_encalhe_soma_o_valor_parado_e_conta_quem_nunca_vendeu():
+    use_role("viewer")
+    sessao = use_session([("left join lateral", [
+        {"location_id": LOC_ID, "location_name": "Loja", "product_id": PROD_ID, "product_name": "Água",
+         "barcode": None, "quantity": 4, "preco": 3.5, "ultima_venda": None},
+        {"location_id": LOC_ID, "location_name": "Loja", "product_id": uuid.uuid4(), "product_name": "Sem preço",
+         "barcode": None, "quantity": 2, "preco": None, "ultima_venda": AGORA},
+    ])])
+    body = (await call("GET", "/orgs/mercadinho/stock/encalhe?dias=3")).json()
+    assert body["dias"] == 7  # janela mínima: menos que uma semana não é encalhe
+    assert body["resumo"] == {"itens": 2, "unidades": 6.0, "valor_parado": 14.0, "nunca_venderam": 1}
+    assert body["itens"][1]["valor_parado"] is None  # sem preço não inventa valor
+    _, params = next((q, p) for q, p in sessao.executed if "left join lateral" in q)
+    assert params["org_id"] == str(ORG_ID)

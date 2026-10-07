@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import and_, delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from vmpay import VMpayClient, VMpayError
@@ -261,8 +261,10 @@ async def sync_stock(
             "updated_at": now,
         }
 
-    # O saldo ANTERIOR é lido antes do upsert que o sobrescreve — é contra ele
-    # que a foto histórica decide o que mudou.
+    # A foto decide o que mudou contra a ÚLTIMA FOTO de cada par, não contra
+    # core.stock_balance: uma carga pelo painel (restock/pick list) já soma no
+    # balance na hora, e a rodada seguinte via "nada mudou" — a subida nunca
+    # entrava no histórico (o degrau da carga sumia do gráfico da ficha).
     location_ids = list({b["location_id"] for b in balances.values()})
     anterior: dict[tuple, tuple] = {}
     primeira_foto = True
@@ -274,12 +276,28 @@ async def sync_stock(
                 .limit(1)
             )
         ) is None
+        foto = core.StockSnapshot
+        ultima = (
+            select(
+                foto.location_id,
+                foto.product_id,
+                func.max(foto.snapshot_at).label("em"),
+            )
+            .where(foto.location_id.in_(location_ids))
+            .group_by(foto.location_id, foto.product_id)
+            .subquery()
+        )
         anterior = {
             (r.location_id, r.product_id): (r.quantity, r.price)
             for r in (
                 await session.execute(
-                    select(core.StockBalance).where(
-                        core.StockBalance.location_id.in_(location_ids)
+                    select(foto).join(
+                        ultima,
+                        and_(
+                            foto.location_id == ultima.c.location_id,
+                            foto.product_id == ultima.c.product_id,
+                            foto.snapshot_at == ultima.c.em,
+                        ),
                     )
                 )
             ).scalars()

@@ -481,3 +481,134 @@ async def historico(ctx: AdminCtx, session: Session, limit: int = 30) -> list[di
     return [
         {**dict(r), "id": str(r["id"]), "created_at": r["created_at"].isoformat()} for r in rows
     ]
+
+
+# ------------------------------------------------------- saldo para o confronto
+
+SALDOS_SQL = """
+with vendas as (
+    select pl.product_id, sum(coalesce(v.quantity, 1)) as unidades
+      from vmpay.vend v
+      join core.location_link ll on ll.machine_id = v.machine_id
+      join core.product_link  pl on pl.integration_id = ll.integration_id
+                                and cast(pl.external_id as bigint) = v.good_id
+     where ll.location_id = :loja
+       and v.occurred_at >= now() - make_interval(days => :days)
+     group by pl.product_id
+)
+select b.product_id, b.quantity, va.unidades
+  from core.stock_balance b
+  join core.location l on l.id = b.location_id
+  left join vendas va on va.product_id = b.product_id
+ where b.location_id = :loja
+   and l.org_id = :org_id
+"""
+
+
+# Declarada antes de /{receipt_id}: "saldos" não é uuid e cairia lá com 422.
+@router.get("/saldos")
+async def saldos(loja: uuid.UUID, ctx: AdminCtx, session: Session, days: int = 30) -> dict:
+    """Saldo e ritmo de venda de cada produto da loja, para o "Comprado sem
+    estar na lista" dizer quanto ainda havia. A /stock/reposicao só devolve o
+    que está abaixo do horizonte — justamente o que esse quadro NÃO mostra."""
+    days = max(7, min(days, 365))
+    rows = (
+        await session.execute(
+            text(SALDOS_SQL), {"loja": str(loja), "org_id": str(ctx.org_id), "days": days}
+        )
+    ).mappings().all()
+    itens = []
+    for r in rows:
+        quantidade = float(r["quantity"])
+        por_dia = float(r["unidades"]) / days if r["unidades"] else 0.0
+        itens.append(
+            {
+                "product_id": str(r["product_id"]),
+                # Negativo é oversell de planograma; para quem compra, é zero.
+                "quantidade": max(0.0, quantidade),
+                "por_dia": round(por_dia, 2),
+                # Sem venda no período não há ritmo — e "dava para ∞ dias" não ajuda.
+                "dias_restantes": round(max(0.0, quantidade) / por_dia, 1) if por_dia else None,
+            }
+        )
+    return {"dias": days, "itens": itens}
+
+
+@router.get("/{receipt_id}")
+async def detalhe(receipt_id: uuid.UUID, ctx: AdminCtx, session: Session) -> dict:
+    """Um cupom carregado: o que entrou, em qual produto, quem aprovou e o
+    que a VMpay respondeu — para conferir depois, sem abrir o banco."""
+    cab = (
+        await session.execute(
+            text(
+                """
+                select r.id, r.access_key, r.number, r.series, r.issued_at,
+                       r.supplier_tax_id, r.supplier_name, r.total, r.source,
+                       r.status, r.created_at, l.name as location_name,
+                       u.email as aprovado_por, a.status as vmpay_status, a.error as vmpay_erro
+                  from core.purchase_receipt r
+                  join core.location l on l.id = r.location_id
+                  left join auth.users u on u.id = r.approved_by
+                  left join core.action_log a on a.id = r.action_id
+                 where r.id = :id and r.org_id = :org_id
+                """
+            ),
+            {"id": str(receipt_id), "org_id": str(ctx.org_id)},
+        )
+    ).mappings().first()
+    if cab is None:
+        raise HTTPException(404, "cupom não encontrado nesta organização")
+    itens = (
+        await session.execute(
+            text(
+                """
+                select i.line, i.supplier_code, i.description, i.quantity, i.unit,
+                       i.unit_price, i.total, i.factor, i.ignored,
+                       p.id as product_id, p.name as product_name
+                  from core.purchase_receipt_item i
+                  left join core.product p on p.id = i.product_id
+                 where i.receipt_id = :id
+                 order by i.line
+                """
+            ),
+            {"id": str(receipt_id)},
+        )
+    ).mappings().all()
+
+    def num(v):
+        return float(v) if v is not None else None
+
+    return {
+        "id": str(cab["id"]),
+        "chave": cab["access_key"],
+        "numero": cab["number"],
+        "serie": cab["series"],
+        "emitido_em": cab["issued_at"].isoformat() if cab["issued_at"] else None,
+        "fornecedor": {"cnpj": cab["supplier_tax_id"], "nome": cab["supplier_name"]},
+        "valor_total": num(cab["total"]),
+        "origem": cab["source"],
+        "status": cab["status"],
+        "carregado_em": cab["created_at"].isoformat(),
+        "loja": cab["location_name"],
+        "aprovado_por": cab["aprovado_por"] or "(conta removida)",
+        "vmpay": {"status": cab["vmpay_status"], "erro": cab["vmpay_erro"]},
+        "itens": [
+            {
+                "linha": i["line"],
+                "codigo": i["supplier_code"],
+                "descricao": i["description"],
+                "quantidade": num(i["quantity"]),
+                "unidade": i["unit"],
+                "valor_unitario": num(i["unit_price"]),
+                "valor_total": num(i["total"]),
+                "fator": num(i["factor"]),
+                "ignorado": i["ignored"],
+                "produto": (
+                    {"id": str(i["product_id"]), "nome": i["product_name"]} if i["product_id"] else None
+                ),
+                # O que de fato entrou na prateleira: quantidade × fator.
+                "entrou": None if i["ignored"] else num(i["quantity"]) * num(i["factor"]),
+            }
+            for i in itens
+        ],
+    }

@@ -14,8 +14,9 @@ Supabase** (migration 0008), via `pg_net` → `POST /interno/ingestao` na API.
 A API se agenda sozinha ao subir: cria no Vault o token `vmpay_cron_token`
 (que autentica a chamada) e chama `core.agendar_rotinas(url, manter_acordado)`
 com o próprio `RENDER_EXTERNAL_URL`. Só o serviço `vmpay-api` (produção) agenda
-o "manter acordado" — ping a cada 10 min das 8h às 23h BRT; homologação dorme
-para não estourar as 750 h/mês da conta. Conferir: `select jobname, schedule
+algo: a ingestão horária e o "manter acordado" (ping a cada 10 min, 8h–23h
+BRT). A homologação remove os próprios jobs ao subir e se atualiza pelo botão
+— acordar de hora em hora gastaria ~180 h/mês das 750 h gratuitas da conta. Conferir: `select jobname, schedule
 from cron.job;` e `select status_code from net._http_response order by created
 desc limit 5;`.
 

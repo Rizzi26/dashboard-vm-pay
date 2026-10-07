@@ -1,6 +1,8 @@
 import { Header } from "@/components/Header";
 import { Offline } from "@/components/Offline";
 import { StockView } from "@/components/StockView";
+import { Pagina } from "@/components/ui/Pagina";
+import { Titulo } from "@/components/ui/Titulo";
 import { serverApi } from "@/lib/api.server";
 import { formatAtraso } from "@/lib/format";
 import { orgSession } from "@/lib/org";
@@ -18,7 +20,7 @@ function atrasoDoEstoque(rows: { atualizado_em: string }[]): number | null {
   return Math.max(0, Math.floor((Date.now() - maisRecente) / 1000));
 }
 
-export default async function EstoquePage({
+export default async function PrateleiraPage({
   searchParams,
 }: {
   searchParams: Promise<{ disp?: string; q?: string }>;
@@ -34,29 +36,19 @@ export default async function EstoquePage({
 
   const atrasoSeg = stock.ok ? atrasoDoEstoque(stock.data) : null;
 
+  // "Lida há X": o operador decide reposição sobre este saldo; velho demais
+  // (mais de 9 h, o dobro do pior intervalo do cron) vira alerta laranja.
+  const sobretitulo =
+    atrasoSeg === null ? undefined : atrasoSeg > 9 * 3600 ? (
+      <span className="text-laranja-texto">▲ Lida {formatAtraso(atrasoSeg)}</span>
+    ) : (
+      <>Lida {formatAtraso(atrasoSeg)}</>
+    );
+
   return (
-    <div className="viz-root min-h-screen bg-[var(--surface-0)]">
+    <div className="min-h-screen">
       <Header org={org.slug} orgName={org.name} role={org.role} email={me.email} lojas={org.lojas} loja={org.loja} />
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
-        <header className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Estoque</h1>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Saldo atual por local e produto
-            {atrasoSeg !== null ? (
-              atrasoSeg > 9 * 3600 ? (
-                <>
-                  {" — "}
-                  <span className="text-[var(--status-warning)]">
-                    ▲ sincronizado {formatAtraso(atrasoSeg)}
-                  </span>
-                </>
-              ) : (
-                <> — sincronizado {formatAtraso(atrasoSeg)}</>
-              )
-            ) : null}
-            .
-          </p>
-        </header>
+      <Pagina>
         {stock.ok ? (
           <StockView
             rows={stock.data}
@@ -65,11 +57,16 @@ export default async function EstoquePage({
             initialDisp={initialDisp}
             initialBusca={q}
             loja={org.loja}
+            outrasLojas={org.loja && todos.ok ? todos.data.filter((r) => r.location_id !== org.loja) : []}
+            sobretitulo={sobretitulo}
           />
         ) : (
-          <Offline error={stock.error} />
+          <>
+            <Titulo titulo="Prateleira" subtitulo="O que está exposto em cada loja agora." />
+            <Offline error={stock.error} />
+          </>
         )}
-      </main>
+      </Pagina>
     </div>
   );
 }
