@@ -57,6 +57,7 @@ export default async function PrateleiraPage({
             initialDisp={initialDisp}
             initialBusca={q}
             loja={org.loja}
+            outrasLojas={org.loja && todos.ok ? todos.data.filter((r) => r.location_id !== org.loja) : []}
             sobretitulo={sobretitulo}
           />
         ) : (

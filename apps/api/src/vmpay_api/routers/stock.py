@@ -77,10 +77,20 @@ select l.id   as location_id,
        p.barcode,
        coalesce(b.price, p.unit_price) as unit_price,
        b.quantity,
-       b.updated_at
+       b.updated_at,
+       f.nomes as nomes_fornecedor
   from core.stock_balance b
   join core.location l on l.id = b.location_id
   join core.product  p on p.id = b.product_id
+  -- Como o produto vem escrito nos cupons de compra ("CHOC ARCOR TORTUGUIT"):
+  -- quem acabou de carregar um cupom busca a prateleira pelo nome do papel.
+  left join (
+        select i.product_id, array_agg(distinct i.description order by i.description) as nomes
+          from core.purchase_receipt_item i
+          join core.purchase_receipt r on r.id = i.receipt_id
+         where r.org_id = :org_id and not i.ignored and i.product_id is not null
+         group by i.product_id
+       ) f on f.product_id = p.id
  where l.org_id = :org_id
  order by l.name, p.name
 """
@@ -101,6 +111,7 @@ async def list_stock(ctx: ViewerCtx, session: Session) -> list[dict]:
             "preco": float(r["unit_price"]) if r["unit_price"] is not None else None,
             "quantidade": float(r["quantity"]),
             "atualizado_em": r["updated_at"].isoformat(),
+            "nomes_fornecedor": list(r.get("nomes_fornecedor") or []),
         }
         for r in rows
     ]

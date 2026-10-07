@@ -49,6 +49,8 @@ export type StockRow = {
   preco: number | null;
   quantidade: number;
   atualizado_em: string;
+  /** Como o produto vem escrito nos cupons de compra já carregados. */
+  nomes_fornecedor?: string[];
 };
 
 export type StockHistoryPoint = {
