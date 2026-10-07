@@ -3,6 +3,7 @@ import { Offline } from "@/components/Offline";
 import { PeriodoNav } from "@/components/PeriodoNav";
 import { RevenueChart } from "@/components/RevenueChart";
 import { SyncStatus } from "@/components/SyncStatus";
+import { TopProdutosChart } from "@/components/TopProdutosChart";
 
 import { CurvaAbc } from "@/components/CurvaAbc";
 import { Header } from "@/components/Header";
@@ -47,13 +48,14 @@ export default async function VendasPage({
 
   // Em paralelo: um bloco lento não segura os outros, e um que falha não
   // derruba a página.
-  const [summary, daily, machines, sync, heat, abc] = await Promise.all([
+  const [summary, daily, machines, sync, heat, abc, top] = await Promise.all([
     serverApi.summary(org.slug, qs),
     serverApi.daily(org.slug, qs),
     serverApi.byMachine(org.slug, `${qs}&limit=10`),
     serverApi.syncStatus(org.slug),
     serverApi.heatmap(org.slug, qs),
     serverApi.abc(org.slug, qs),
+    serverApi.topProdutos(org.slug, `${qs}&n=5`),
   ]);
   // "Tudo" não tem período anterior que faça sentido.
   const anterior = periodo !== "tudo" && summary.ok ? summary.data.anterior : undefined;
@@ -63,6 +65,11 @@ export default async function VendasPage({
     abc.ok && abc.data.itens.length > 0
       ? `${formatInt(abc.data.resumo.A.produtos)} de ${formatInt(abc.data.itens.length)} produtos vendidos fazem 80% do faturamento.`
       : "Produtos por faturamento no período: A faz 80%, B os 15% seguintes, C o resto.";
+
+  const subtituloTop =
+    (top.ok && top.data.produtos.length > 0
+      ? `Por ${{ dia: "dia", semana: "semana", mes: "mês" }[top.data.granularidade]}. `
+      : "") + "O ranking é sempre por faturamento — em Unidades muda só a escala.";
 
   return (
     <div className="min-h-screen">
@@ -118,20 +125,24 @@ export default async function VendasPage({
           </SuperficieGrafico>
         </Cartao>
 
-        <div className="grid items-start gap-3.5 md:gap-4 lg:grid-cols-2">
-          <Cartao
-            titulo="Quando a loja vende"
-            subtitulo="Dia da semana × hora, horário de Brasília — bom para escolher a hora da reposição."
-          >
-            <SuperficieGrafico>
-              {heat.ok ? <VendasHeatmap celulas={heat.data.celulas} /> : <Offline error={heat.error} />}
-            </SuperficieGrafico>
-          </Cartao>
+        <Cartao titulo="Os 5 mais vendidos" subtitulo={subtituloTop}>
+          <SuperficieGrafico>
+            {top.ok ? <TopProdutosChart dados={top.data} /> : <Offline error={top.error} />}
+          </SuperficieGrafico>
+        </Cartao>
 
-          <Cartao titulo="Curva ABC" subtitulo={subtituloAbc}>
-            {abc.ok ? <CurvaAbc dados={abc.data} /> : <Offline error={abc.error} />}
-          </Cartao>
-        </div>
+        <Cartao
+          titulo="Quando a loja vende"
+          subtitulo="Dia da semana × hora, horário de Brasília — bom para escolher a hora da reposição."
+        >
+          <SuperficieGrafico>
+            {heat.ok ? <VendasHeatmap celulas={heat.data.celulas} /> : <Offline error={heat.error} />}
+          </SuperficieGrafico>
+        </Cartao>
+
+        <Cartao titulo="Curva ABC" subtitulo={subtituloAbc}>
+          {abc.ok ? <CurvaAbc dados={abc.data} /> : <Offline error={abc.error} />}
+        </Cartao>
 
         <Cartao titulo="Máquinas" subtitulo="Top 10 por faturamento no período">
           {machines.ok ? <MachineTable rows={machines.data} /> : <Offline error={machines.error} />}

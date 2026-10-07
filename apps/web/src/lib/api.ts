@@ -316,6 +316,23 @@ export type CurvaAbc = {
   }[];
 };
 
+/** Os N mais vendidos (GET /sales/top-produtos): ranking por faturamento e a
+ * série de cada um, com todos os baldes da janela (zero onde não vendeu). */
+export type TopProdutos = {
+  granularidade: "dia" | "semana" | "mes";
+  periodo: { inicio: string; fim: string };
+  produtos: {
+    posicao: number;
+    /** Chave de `pontos[].valores`: product_id, ou o good da VMpay sem vínculo. */
+    chave: string;
+    product_id: string | null;
+    produto: string;
+    faturamento: number;
+    unidades: number;
+  }[];
+  pontos: { inicio: string; valores: Record<string, { faturamento: number; unidades: number }> }[];
+};
+
 /** Uma carga do produto pelo pick list (GET /stock/cargas/{id}). */
 export type CargaProduto = {
   receipt_id: string;
