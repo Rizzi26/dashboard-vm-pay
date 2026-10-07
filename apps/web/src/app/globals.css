@@ -121,6 +121,16 @@
   --seq-3: #2a78d6;
   --seq-4: #1c5cab;
   --seq-5: #104281;
+  /* Categórica dos "5 mais vendidos": uma cor por POSIÇÃO (1º–5º), ordem
+     fixa da paleta de referência. Aqua/amarelo/magenta usam os passos mais
+     escuros da própria rampa: os de referência ficavam abaixo de 3:1 no
+     branco. validate_palette.js --mode light --surface #ffffff: tudo PASS
+     (pior CVD adjacente ΔE 8,4; visão normal 19,3; contraste ≥ 3:1). */
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #199e70;
+  --cat-4: #c98500;
+  --cat-5: #d55181;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -198,6 +208,13 @@
     --seq-3: #3987e5;
     --seq-4: #6da7ec;
     --seq-5: #9ec5f4;
+    /* validate_palette.js --mode dark --surface #1c1c1e: tudo PASS (pior CVD
+       adjacente ΔE 8,4; visão normal 19,3; contraste ≥ 3:1). */
+    --cat-1: #3987e5;
+    --cat-2: #d95926;
+    --cat-3: #199e70;
+    --cat-4: #c98500;
+    --cat-5: #d55181;
   }
 }
 
