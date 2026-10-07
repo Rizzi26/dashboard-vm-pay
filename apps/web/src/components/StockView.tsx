@@ -43,6 +43,7 @@ export function StockView({
   initialDisp,
   initialBusca,
   loja = null,
+  outrasLojas = [],
   sobretitulo,
 }: {
   rows: StockRow[];
@@ -52,6 +53,8 @@ export function StockView({
   initialBusca?: string;
   /** Loja escolhida na barra: decide em qual conta VMpay o produto é cadastrado. */
   loja?: string | null;
+  /** Saldos das demais lojas, quando há uma escolhida: a busca vazia aponta onde o item está. */
+  outrasLojas?: StockRow[];
   /** "Lida há X" — calculado no servidor, onde o "agora" é estável. */
   sobretitulo?: React.ReactNode;
 }) {
@@ -86,13 +89,16 @@ export function StockView({
   const porTexto = useMemo(() => {
     const termo = filtro.trim().toLowerCase();
     if (!termo) return rows;
-    return rows.filter(
-      (r) =>
-        r.produto.toLowerCase().includes(termo) ||
-        r.local.toLowerCase().includes(termo) ||
-        (r.barcode ?? "").includes(termo),
-    );
+    return rows.filter((r) => casaBusca(r, termo));
   }, [rows, filtro]);
+
+  // Nada nesta loja? Procura nas outras — a carga pode ter entrado em outra
+  // loja que não a escolhida na barra.
+  const emOutrasLojas = useMemo(() => {
+    const termo = filtro.trim().toLowerCase();
+    if (!termo || outrasLojas.length === 0) return [];
+    return outrasLojas.filter((r) => casaBusca(r, termo)).slice(0, 5);
+  }, [outrasLojas, filtro]);
 
   const contagens = useMemo(
     () => ({
@@ -263,7 +269,7 @@ export function StockView({
             <span className="sr-only">Buscar</span>
             <input
               type="search"
-              placeholder="Buscar produto ou código de barras"
+              placeholder="Buscar produto, código ou nome no cupom"
               value={filtro}
               onChange={(e) => {
                 setFiltro(e.target.value);
@@ -318,7 +324,24 @@ export function StockView({
         </div>
 
         {filtrados.length === 0 ? (
-          <p className="mt-4 text-[15px] text-sec">Nenhum item encontrado</p>
+          <div className="mt-4 text-[15px] text-sec">
+            <p>Nenhum item encontrado{loja && emOutrasLojas.length > 0 ? " nesta loja" : ""}</p>
+            {loja && emOutrasLojas.length > 0 ? (
+              <>
+                <p className="mt-2">Está em outra loja — troque a loja na barra para ver:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {emOutrasLojas.map((r) => (
+                    <li key={`${r.location_id}:${r.product_id}`}>
+                      <Link href={`/produto/${r.product_id}`} className="text-azul-texto no-underline hover:underline">
+                        {r.produto}
+                      </Link>{" "}
+                      · {r.local} · {formatInt(r.quantidade)} un.
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </div>
         ) : (
           <>
             {/* Celular: Lista de LinhaLista. Quem opera toca e abre as ações;
@@ -330,6 +353,7 @@ export function StockView({
                   principal={r.produto}
                   secundario={
                     <>
+                      {apelido(r, filtro) ? <span className="block">no cupom: {apelido(r, filtro)}</span> : null}
                       {preco(r)} · {r.barcode ?? "sem código"}
                       {variosLocais ? <> · {r.local}</> : null}
                     </>
@@ -367,6 +391,9 @@ export function StockView({
                         >
                           {r.produto}
                         </Link>
+                        {apelido(r, filtro) ? (
+                          <span className="block text-[13px] text-sec">no cupom: {apelido(r, filtro)}</span>
+                        ) : null}
                         {variosLocais ? <span className="block text-[13px] text-sec">{r.local}</span> : null}
                       </td>
                       <td className="px-3 py-3 text-[13px] tabular-nums text-sec">{r.barcode ?? "—"}</td>
@@ -561,4 +588,21 @@ function ActionModal({
       </RodapeFolha>
     </Folha>
   );
+}
+
+/** Nome, loja, código de barras ou como o produto vem escrito nos cupons de compra. */
+function casaBusca(r: StockRow, termo: string): boolean {
+  return (
+    r.produto.toLowerCase().includes(termo) ||
+    r.local.toLowerCase().includes(termo) ||
+    (r.barcode ?? "").includes(termo) ||
+    (r.nomes_fornecedor ?? []).some((n) => n.toLowerCase().includes(termo))
+  );
+}
+
+/** O nome do cupom que casou com a busca — mostrado só quando o nome do sistema não casou. */
+function apelido(r: StockRow, filtro: string): string | null {
+  const termo = filtro.trim().toLowerCase();
+  if (!termo || r.produto.toLowerCase().includes(termo)) return null;
+  return (r.nomes_fornecedor ?? []).find((n) => n.toLowerCase().includes(termo)) ?? null;
 }

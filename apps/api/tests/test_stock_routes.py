@@ -163,6 +163,16 @@ async def test_viewer_le_o_estoque():
     body = (await call("GET", "/orgs/mercadinho/stock")).json()
     assert body[0]["produto"] == "Água Mineral"
     assert body[0]["quantidade"] == 18.0
+    assert body[0]["nomes_fornecedor"] == []  # produto nunca veio em cupom
+
+
+async def test_estoque_traz_o_nome_do_produto_no_cupom():
+    use_role("viewer")
+    use_session(
+        [("from core.stock_balance", [{**STOCK_ROW, "nomes_fornecedor": ["AGUA MIN 500ML"]}])]
+    )
+    body = (await call("GET", "/orgs/mercadinho/stock")).json()
+    assert body[0]["nomes_fornecedor"] == ["AGUA MIN 500ML"]
 
 
 async def test_csv_vem_como_anexo_com_separador_pt_br():
