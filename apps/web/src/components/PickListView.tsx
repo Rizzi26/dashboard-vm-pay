@@ -1,18 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type {
   PicklistCarga,
   PicklistConsulta,
   PicklistItem,
   PicklistOpcoes,
-  PicklistSaldo,
   ProductRefs,
-  ReposicaoItem,
 } from "@/lib/api";
 import { browserApi } from "@/lib/api";
+import { CargaManual } from "@/components/CargaManual";
+import { Aviso, CAMPO, ConfrontoReposicao, detalheDoErro, num, token, valido } from "@/components/picklist-comum";
 import { NewProductModal } from "@/components/NewProductModal";
 import { Paginacao, usePaginacao } from "@/components/Paginacao";
 import { ProductPicker } from "@/components/ProductPicker";
@@ -24,13 +23,6 @@ import { Selo } from "@/components/ui/Selo";
 import type { TomSelo } from "@/components/ui/Selo";
 import { Titulo } from "@/components/ui/Titulo";
 import { formatDayTime, formatInt, formatMoney } from "@/lib/format";
-import { supabaseBrowser } from "@/lib/supabase/browser";
-
-async function token(): Promise<string> {
-  const { data } = await supabaseBrowser().auth.getSession();
-  if (!data.session) throw new Error("sessão expirada — entre de novo");
-  return data.session.access_token;
-}
 
 /** Campos numéricos ficam como texto enquanto o operador digita ("3," é válido no meio). */
 type Linha = Omit<PicklistItem, "quantidade" | "fator" | "product_id"> & {
@@ -40,9 +32,6 @@ type Linha = Omit<PicklistItem, "quantidade" | "fator" | "product_id"> & {
   // Cadastrado agora, pelo pick list: ainda fora do planograma da instalação.
   novo?: boolean;
 };
-
-const num = (s: string) => Number(s.replace(",", "."));
-const valido = (s: string) => Number.isFinite(num(s)) && num(s) > 0;
 
 function paraLinha(i: PicklistItem): Linha {
   return {
@@ -80,8 +69,6 @@ const STATUS: Record<PicklistCarga["status"], { rotulo: string; tom: TomSelo }> 
 
 const POR_PAGINA = 20;
 
-const CAMPO =
-  "block h-11 w-full rounded-xl border border-campo-borda bg-campo px-3 text-base text-texto placeholder:text-terc disabled:opacity-60 md:text-[15px]";
 const CAMPO_NUM =
   "mt-[3px] block h-11 w-full rounded-[10px] border border-campo-borda bg-campo px-2.5 text-base tabular-nums text-texto disabled:opacity-60 md:h-10 md:text-[15px]";
 const DICA_FATOR =
@@ -97,37 +84,6 @@ function linhaDeCompra(l: Linha, comCodigo: boolean): string {
     partes.push("preço de compra");
   }
   return partes.join(" · ");
-}
-
-/** O que a linha do "Comprado sem estar na lista" diz sobre o saldo de antes da compra. */
-function textoSaldo(s: PicklistSaldo | undefined): string {
-  if (!s) return "sem saldo registrado nesta loja";
-  const q = formatInt(s.quantidade);
-  if (s.dias_restantes !== null) return `ainda tinha ${q} un., dava para ~${formatInt(s.dias_restantes)} dias`;
-  // Sem venda no período a Reposição não pede nada — nem zerado.
-  if (s.quantidade <= 0) return "estava zerado, mas sem venda nos últimos 30 dias";
-  return `ainda tinha ${q} un.`;
-}
-
-function Aviso({ tom, children }: { tom: "laranja" | "vermelho" | "verde" | "cinza"; children: ReactNode }) {
-  const cls = {
-    laranja: "border-laranja-borda bg-laranja-fundo",
-    vermelho: "border-vermelho-borda bg-vermelho-fundo",
-    verde: "border-transparent bg-verde-fundo",
-    cinza: "border-borda bg-vidro-fraco",
-  }[tom];
-  const simbolo = { laranja: "▲", vermelho: "■", verde: "●", cinza: null }[tom];
-  const cor = { laranja: "text-laranja-texto", vermelho: "text-vermelho-texto", verde: "text-verde-texto", cinza: "" }[tom];
-  return (
-    <div className={`flex gap-2 rounded-2xl border px-4 py-3 text-[14px] text-texto ${cls}`}>
-      {simbolo ? (
-        <span aria-hidden="true" className={cor}>
-          {simbolo}
-        </span>
-      ) : null}
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>
-  );
 }
 
 export function PickListView({
@@ -150,6 +106,8 @@ export function PickListView({
   const [lendoQR, setLendoQR] = useState(false);
   const [produtos, setProdutos] = useState(opcoes.produtos);
   const [cadastrando, setCadastrando] = useState<number | null>(null);
+  // Carga manual: compra sem cupom legível, montada com produtos do sistema.
+  const [montando, setMontando] = useState(false);
   // Qualquer navegador com câmera: o leitor nativo (Chrome/Android) ou o jsQR
   // (Safari/iPhone, que não tem BarcodeDetector). No servidor: false.
   const temCamera = useSyncExternalStore(
@@ -233,53 +191,17 @@ export function PickListView({
     setErro(null);
   }
 
-  // Lista de Reposição da loja escolhida (o que ela pedia antes desta compra)
-  // e o saldo/ritmo de cada produto, para explicar o que veio fora da lista.
-  const [reposicao, setReposicao] = useState<{ loja: string; itens: ReposicaoItem[] } | null>(null);
-  const [saldos, setSaldos] = useState<{ loja: string; porProduto: Map<string, PicklistSaldo> } | null>(null);
-  useEffect(() => {
-    if (!consulta || !localId) return;
-    let vivo = true;
-    (async () => {
-      const t = await token();
-      const [rResp, sResp] = await Promise.all([
-        browserApi.request(`/orgs/${org}/stock/reposicao`, t),
-        browserApi.request(`/orgs/${org}/picklist/saldos?loja=${localId}`, t),
-      ]);
-      if (rResp.ok) {
-        const dados = (await rResp.json()) as { itens: ReposicaoItem[] };
-        if (vivo) setReposicao({ loja: localId, itens: dados.itens.filter((i) => i.location_id === localId) });
-      }
-      // Sem o saldo o quadro ainda funciona — só não diz quanto havia.
-      if (sResp.ok) {
-        const dados = (await sResp.json()) as { itens: PicklistSaldo[] };
-        if (vivo) setSaldos({ loja: localId, porProduto: new Map(dados.itens.map((i) => [i.product_id, i])) });
-      }
-    })().catch(() => undefined);
-    return () => {
-      vivo = false;
-    };
-  }, [org, consulta, localId]);
-
-  // Cupom × Reposição: o que a lista pedia e não veio, e o que veio sem a lista pedir.
-  const confronto = useMemo(() => {
-    // Lista de outra loja (troca no meio da conferência) não vale para esta.
-    if (!reposicao || reposicao.loja !== localId) return null;
-    const noCupom = new Set(linhas.filter((l) => !l.ignorar && l.product_id).map((l) => l.product_id));
-    const naLista = new Set(reposicao.itens.map((i) => i.product_id));
-    // O mesmo produto em duas linhas do cupom aparece uma vez só.
-    const fora = new Map<string, Linha>();
+  // Cupom × Reposição: cada produto que entra, uma vez só (o mesmo produto
+  // pode vir em duas linhas do cupom).
+  const entram = useMemo(() => {
+    const vistos = new Map<string, { product_id: string; nome: string }>();
     for (const l of linhas) {
-      if (!l.ignorar && l.product_id && !naLista.has(l.product_id) && !fora.has(l.product_id)) {
-        fora.set(l.product_id, l);
+      if (!l.ignorar && l.product_id && !vistos.has(l.product_id)) {
+        vistos.set(l.product_id, { product_id: l.product_id, nome: nomeProduto.get(l.product_id) ?? l.descricao });
       }
     }
-    return {
-      faltou: reposicao.itens.filter((i) => !noCupom.has(i.product_id)),
-      fora: [...fora.values()],
-    };
-  }, [reposicao, linhas, localId]);
-  const saldoDaLoja = saldos && saldos.loja === localId ? saldos.porProduto : null;
+    return [...vistos.values()];
+  }, [linhas, nomeProduto]);
 
   // Cupom grande (atacado) passa de 50 linhas: a conferência pagina, mas a
   // edição e a aprovação valem para TODAS as linhas — só a vista é fatiada.
@@ -338,12 +260,7 @@ export function PickListView({
         }),
       });
       const payload = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        const detalhe = Array.isArray(payload.detail)
-          ? payload.detail.map((d: { msg: string }) => d.msg).join("; ")
-          : payload.detail;
-        throw new Error(detalhe ?? `backend respondeu ${resp.status}`);
-      }
+      if (!resp.ok) throw new Error(detalheDoErro(payload, resp.status));
       recomecar();
       setFeedback(`Cupom carregado: ${totalUnidades} unidades entraram na prateleira.`);
       router.refresh();
@@ -427,6 +344,29 @@ export function PickListView({
         aria-label={`Descrição da linha ${l.linha}`}
         disabled={l.ignorar}
         className={CAMPO}
+      />
+    );
+  }
+
+  function abrirCargaManual() {
+    recomecar();
+    setFeedback(null);
+    setMontando(true);
+  }
+
+  if (montando) {
+    return (
+      <CargaManual
+        org={org}
+        opcoes={{ ...opcoes, produtos }}
+        localInicial={localId}
+        onProdutoCadastrado={(p) => setProdutos((ps) => [...ps, p])}
+        onCancelar={() => setMontando(false)}
+        onLancada={(unidades) => {
+          setMontando(false);
+          setFeedback(`Carga manual lançada: ${formatInt(unidades)} unidades entraram na prateleira.`);
+          router.refresh();
+        }}
       />
     );
   }
@@ -527,10 +467,13 @@ export function PickListView({
                   {busy ? "Consultando a SEFAZ…" : "Buscar cupom"}
                 </Botao>
                 {temCamera ? <Botao onClick={() => setLendoQR(true)}>Ler QR Code</Botao> : null}
+                <Botao onClick={abrirCargaManual}>
+                  Criar carga manual
+                </Botao>
               </div>
               <p className="m-0 mt-3 text-[13px] text-sec">
                 Pelo QR Code os itens vêm sozinhos. Só com a chave, a SEFAZ pede CAPTCHA — os itens são
-                lançados à mão.
+                lançados à mão. Sem cupom legível, crie uma carga manual com os produtos que vieram.
               </p>
             </form>
           </Cartao>
@@ -540,7 +483,7 @@ export function PickListView({
               {/* QR recusado pela SEFAZ (ex.: cupom de contingência): a chave
                   continua valendo — um toque leva ao lançamento manual. */}
               {erro.includes("pela chave") && chaveDoQR(entrada) ? (
-                <div>
+                <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap">
                   <Botao
                     variante="tingido"
                     disabled={busy}
@@ -552,6 +495,10 @@ export function PickListView({
                   >
                     Lançar à mão pela chave
                   </Botao>
+                  {/* Nem a chave serve quando não há nota para abrir na SEFAZ. */}
+                  <Botao variante="tingido" disabled={busy} onClick={abrirCargaManual}>
+                    Criar carga manual
+                  </Botao>
                 </div>
               ) : null}
             </div>
@@ -559,17 +506,26 @@ export function PickListView({
 
           {historico.length > 0 ? (
             <section className="flex flex-col gap-2">
-              <CabecalhoLista>Cupons carregados</CabecalhoLista>
+              <CabecalhoLista>Cupons e cargas carregados</CabecalhoLista>
               <Lista>
                 {pagHistorico.visiveis.map((h) => (
                   <LinhaLista
                     key={h.id}
                     href={`/picklist/cupom/${h.id}`}
                     principal={
-                      <>
-                        {h.supplier_name || "Fornecedor"}
-                        {h.number ? ` · NFC-e ${h.number}` : ""}
-                      </>
+                      h.source === "avulsa" ? (
+                        <>
+                          Carga manual · {h.supplier_name || "sem fornecedor"}
+                          <Selo tom="cinza" simbolo={null} className="ml-2 align-[1px]">
+                            manual
+                          </Selo>
+                        </>
+                      ) : (
+                        <>
+                          {h.supplier_name || "Fornecedor"}
+                          {h.number ? ` · NFC-e ${h.number}` : ""}
+                        </>
+                      )
                     }
                     secundario={
                       <>
@@ -783,74 +739,7 @@ export function PickListView({
             </div>
           ) : null}
 
-          {confronto ? (
-            <section aria-labelledby="cupom-x-lista" className="flex flex-col gap-3.5 md:gap-4">
-              <h2 id="cupom-x-lista" className="m-0 mt-3 text-[20px] font-bold tracking-[-0.015em] text-texto">
-                Cupom × lista de Reposição
-              </h2>
-              <div className="grid gap-3.5 md:grid-cols-2 md:gap-4">
-                <Cartao
-                  titulo={`Estava na lista e não veio · ${confronto.faltou.length}`}
-                  subtitulo="A Reposição desta loja pedia estes itens, e eles não estão no cupom. Ficam para a próxima compra."
-                >
-                  {confronto.faltou.length === 0 ? (
-                    <p className="m-0 text-[14px] text-sec">Tudo o que a lista pedia veio.</p>
-                  ) : (
-                    <Lista className="rounded-[14px]">
-                      {confronto.faltou.slice(0, 12).map((i) => (
-                        <LinhaLista
-                          key={i.product_id}
-                          esquerda={
-                            i.status === "ruptura" ? (
-                              <span className="text-vermelho-texto">
-                                <span aria-hidden="true">■</span>
-                                <span className="sr-only">Zerado:</span>
-                              </span>
-                            ) : (
-                              <span className="text-laranja-texto">
-                                <span aria-hidden="true">▲</span>
-                                <span className="sr-only">Acabando:</span>
-                              </span>
-                            )
-                          }
-                          principal={i.produto}
-                          secundario={
-                            i.status === "ruptura"
-                              ? `zerado · a lista pedia levar ${formatInt(i.sugestao)}`
-                              : `restam ${formatInt(i.quantidade)} · a lista pedia levar ${formatInt(i.sugestao)}`
-                          }
-                        />
-                      ))}
-                      {confronto.faltou.length > 12 ? (
-                        <LinhaLista
-                          href="/reposicao"
-                          principal={`e mais ${confronto.faltou.length - 12} na Reposição`}
-                        />
-                      ) : null}
-                    </Lista>
-                  )}
-                </Cartao>
-                <Cartao
-                  titulo={`Comprado sem estar na lista · ${confronto.fora.length}`}
-                  subtitulo="Veio no cupom, mas ainda havia saldo para mais de 5 dias. Não é erro — só confira se não está comprando antes da hora."
-                >
-                  {confronto.fora.length === 0 ? (
-                    <p className="m-0 text-[14px] text-sec">Nada além do que a lista pedia.</p>
-                  ) : (
-                    <Lista className="rounded-[14px]">
-                      {confronto.fora.map((l) => (
-                        <LinhaLista
-                          key={l.product_id}
-                          principal={nomeProduto.get(l.product_id) ?? l.descricao}
-                          secundario={saldoDaLoja ? textoSaldo(saldoDaLoja.get(l.product_id)) : undefined}
-                        />
-                      ))}
-                    </Lista>
-                  )}
-                </Cartao>
-              </div>
-            </section>
-          ) : null}
+          {localId ? <ConfrontoReposicao org={org} localId={localId} itens={entram} rotulo="cupom" /> : null}
 
           {erro ? (
             <div role="alert">

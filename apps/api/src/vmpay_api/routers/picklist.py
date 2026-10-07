@@ -454,6 +454,125 @@ async def aprovar(body: AprovarBody, ctx: AdminCtx, session: Session) -> dict:
     return {"receipt_id": str(receipt_id), **resultado}
 
 
+# ------------------------------------------------------------- carga manual
+#
+# Compra sem cupom legível (contingência recusada pela SEFAZ, nota de papel,
+# sem nota): o operador monta a carga com produtos do sistema. Fica gravada
+# como um cupom de source 'avulsa' — sem chave, portanto sem a trava de
+# duplicidade; o que protege do duplo clique é a tela desabilitar o envio.
+
+
+class ItemManual(BaseModel):
+    product_id: uuid.UUID
+    quantidade: Decimal = Field(gt=0)
+
+
+class ManualBody(BaseModel):
+    location_id: uuid.UUID
+    itens: list[ItemManual] = Field(min_length=1, max_length=500)
+    fornecedor: str | None = Field(default=None, max_length=120)
+    valor_total: Decimal | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def _limpar(self) -> ManualBody:
+        self.fornecedor = (self.fornecedor or "").strip() or None
+        return self
+
+
+async def _nomes_na_org(
+    session: AsyncSession, org_id: uuid.UUID, product_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    rows = (
+        await session.execute(
+            text(
+                """
+                select id, name
+                  from core.product
+                 where org_id = :org_id and id = any(:ids)
+                """
+            ),
+            {"org_id": str(org_id), "ids": [str(p) for p in product_ids]},
+        )
+    ).mappings().all()
+    return {uuid.UUID(str(r["id"])): r["name"] for r in rows}
+
+
+@router.post("/manual", status_code=201)
+async def carga_manual(body: ManualBody, ctx: AdminCtx, session: Session) -> dict:
+    """Mesmo caminho do /aprovar: recibo no commit do action_log pendente,
+    restock na VMpay, recibo marcado com o resultado."""
+    por_produto: dict[uuid.UUID, Decimal] = defaultdict(Decimal)
+    for i in body.itens:
+        por_produto[i.product_id] += i.quantidade
+    plano = await preparar_restock(
+        session,
+        ctx,
+        RestockBody(
+            location_id=body.location_id,
+            items=[RestockItem(product_id=p, quantity=q) for p, q in por_produto.items()],
+        ),
+    )
+    # O vínculo com a conta da loja o preparar_restock já conferiu; aqui é a
+    # organização — e o nome, que vira a "descrição" da linha do recibo.
+    nomes = await _nomes_na_org(session, ctx.org_id, list(por_produto))
+    fora = [str(p) for p in por_produto if p not in nomes]
+    if fora:
+        raise HTTPException(422, f"produtos fora desta organização: {', '.join(fora)}")
+
+    receipt_id = (
+        await session.execute(
+            text(
+                """
+                insert into core.purchase_receipt
+                    (org_id, location_id, supplier_name, total, source, approved_by)
+                values (:org_id, :location_id, :nome, :total,
+                        cast('avulsa' as core.receipt_source), :actor)
+                returning id
+                """
+            ),
+            {
+                "org_id": str(ctx.org_id),
+                "location_id": str(body.location_id),
+                "nome": body.fornecedor,
+                "total": body.valor_total,
+                "actor": str(ctx.principal.user_id),
+            },
+        )
+    ).first()[0]
+    for linha, (product_id, quantidade) in enumerate(por_produto.items(), start=1):
+        await session.execute(
+            text(
+                """
+                insert into core.purchase_receipt_item
+                    (receipt_id, line, description, quantity, unit, product_id, factor)
+                values (:receipt_id, :linha, :descricao, :quantidade, 'UN', :product_id, 1)
+                """
+            ),
+            {
+                "receipt_id": str(receipt_id),
+                "linha": linha,
+                "descricao": nomes[product_id][:200],
+                "quantidade": quantidade,
+                "product_id": str(product_id),
+            },
+        )
+
+    try:
+        resultado = await executar_restock(
+            session,
+            ctx,
+            plano,
+            action="picklist.manual",
+            extra_params={"receipt_id": str(receipt_id), "fornecedor": body.fornecedor},
+        )
+    except RestockRecusado as exc:
+        await _marcar(session, receipt_id, "error", exc.action_id)
+        raise
+
+    await _marcar(session, receipt_id, "approved", resultado["action_id"])
+    return {"receipt_id": str(receipt_id), **resultado}
+
+
 # ------------------------------------------------------------------ histórico
 
 

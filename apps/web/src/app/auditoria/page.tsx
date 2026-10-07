@@ -44,6 +44,8 @@ function descrever(e: EventoAuditoria, nomes: Map<string, string>): string {
         : `Consultou cupom fiscal de ${texto(a.fornecedor) || "fornecedor"} — ${texto(a.itens)} itens`;
     case "picklist.approve":
       return `Aprovou carga de cupom — ${(a.items as unknown[] | undefined)?.length ?? 0} produtos`;
+    case "picklist.manual":
+      return `Lançou carga manual${a.fornecedor ? ` de ${texto(a.fornecedor)}` : ""} — ${(a.items as unknown[] | undefined)?.length ?? 0} produtos`;
     case "stock.restock":
       return `Lançou reabastecimento — ${(a.items as unknown[] | undefined)?.length ?? 0} produtos`;
     case "stock.price":
