@@ -535,8 +535,25 @@ export function PickListView({
             </form>
           </Cartao>
           {erro ? (
-            <div role="alert">
+            <div role="alert" className="flex flex-col gap-2">
               <Aviso tom="vermelho">{erro}</Aviso>
+              {/* QR recusado pela SEFAZ (ex.: cupom de contingência): a chave
+                  continua valendo — um toque leva ao lançamento manual. */}
+              {erro.includes("pela chave") && chaveDoQR(entrada) ? (
+                <div>
+                  <Botao
+                    variante="tingido"
+                    disabled={busy}
+                    onClick={() => {
+                      const chave = chaveDoQR(entrada)!;
+                      setEntrada(chave);
+                      void buscar(chave);
+                    }}
+                  >
+                    Lançar à mão pela chave
+                  </Botao>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -985,4 +1002,16 @@ function LeitorQR({ onLido, onClose }: { onLido: (texto: string) => void; onClos
       </RodapeFolha>
     </Folha>
   );
+}
+
+/** A chave de 44 dígitos no começo do `p` do QR (o link ou o próprio conteúdo). */
+function chaveDoQR(texto: string): string | null {
+  let t = texto;
+  try {
+    t = decodeURIComponent(texto);
+  } catch {
+    // "%" solto no texto colado: procura no texto como veio.
+  }
+  const m = t.match(/(?:p=)?(\d{44})\|/);
+  return m ? m[1] : null;
 }
