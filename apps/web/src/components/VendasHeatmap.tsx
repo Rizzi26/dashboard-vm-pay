@@ -48,9 +48,14 @@ export function VendasHeatmap({ celulas }: { celulas: Celula[] }) {
         {ativa ? rotulo(ativa) : <span className="text-sec">Passe o cursor ou toque numa hora.</span>}
       </p>
 
-      {/* Só a grade rola de lado no celular; a linha do tooltip e a legenda ficam paradas. */}
-      <div className="overflow-x-auto pb-1">
-        <div className="grid min-w-[520px] gap-[2px]" style={{ gridTemplateColumns: "2.25rem repeat(24, minmax(0, 1fr))" }}>
+      {/* Só a grade rola de lado, e só no celular; do tablet para cima as
+          células crescem até a largura do cartão. A linha do tooltip e a
+          legenda ficam paradas. */}
+      <div className="overflow-x-auto pb-1 md:overflow-visible">
+        <div
+          className="grid min-w-[520px] gap-[2px] md:min-w-0 md:gap-[3px]"
+          style={{ gridTemplateColumns: "2.25rem repeat(24, minmax(0, 1fr))" }}
+        >
           {/* Coluna dos dias fixa: no celular a grade rola de lado e o dia não some. */}
           <span className="sticky left-0 z-10 bg-[var(--surface-1)]" />
           {Array.from({ length: 24 }, (_, h) => (
@@ -60,7 +65,7 @@ export function VendasHeatmap({ celulas }: { celulas: Celula[] }) {
           ))}
           {DIAS.map((nome, i) => (
             <div key={nome} className="contents">
-              <span className="sticky left-0 z-10 bg-[var(--surface-1)] pr-1 text-right text-[11px] leading-[18px] text-[var(--text-secondary)]">
+              <span className="sticky left-0 z-10 flex items-center justify-end bg-[var(--surface-1)] pr-1 text-[11px] text-[var(--text-secondary)]">
                 {nome}
               </span>
               {Array.from({ length: 24 }, (_, h) => {
@@ -74,7 +79,7 @@ export function VendasHeatmap({ celulas }: { celulas: Celula[] }) {
                     onPointerEnter={() => setAtiva(c)}
                     onFocus={() => setAtiva(c)}
                     onClick={() => setAtiva(c)}
-                    className="h-[18px] rounded-[2px] border"
+                    className="h-[18px] rounded-[2px] border md:h-6 lg:h-7"
                     style={
                       f
                         ? { background: `var(--seq-${f})`, borderColor: "transparent" }

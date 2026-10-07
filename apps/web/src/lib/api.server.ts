@@ -26,6 +26,7 @@ import type {
   StockRow,
   Summary,
   SyncRow,
+  TopProdutos,
 } from "@/lib/api";
 import { accessToken } from "@/lib/supabase/server";
 
@@ -55,6 +56,8 @@ export const serverApi = {
     serverGet<MachineRow[]>(`/orgs/${org}/sales/by-machine${qs}`),
   heatmap: (org: string, qs = "") => serverGet<Heatmap>(`/orgs/${org}/sales/heatmap${qs}`),
   abc: (org: string, qs = "") => serverGet<CurvaAbc>(`/orgs/${org}/sales/abc${qs}`),
+  topProdutos: (org: string, qs = "") =>
+    serverGet<TopProdutos>(`/orgs/${org}/sales/top-produtos${qs}`),
   syncStatus: (org: string) => serverGet<SyncRow[]>(`/orgs/${org}/sales/sync-status`),
   lost: (org: string, qs = "") => serverGet<LostSales>(`/orgs/${org}/sales/lost${qs}`),
   product: (org: string, id: string, qs = "") =>

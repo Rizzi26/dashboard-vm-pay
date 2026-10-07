@@ -339,13 +339,10 @@ async def heatmap(
 
 #: Venda por produto (vmpay.vend: uma linha por item dispensado). O produto
 #: canônico vem do vínculo da integração da organização; good sem vínculo
-#: ainda aparece, pelo nome do catálogo da VMpay.
-ABC_SQL = """
-select pl.product_id,
-       coalesce(p.name, g.name, 'Produto ' || v.good_id) as nome,
-       v.good_id,
-       coalesce(sum(v.value), 0)              as revenue,
-       coalesce(sum(coalesce(v.quantity, 1)), 0) as units
+#: ainda aparece, pelo nome do catálogo da VMpay. Fragmento FROM/WHERE
+#: compartilhado pela curva ABC e pelos "mais vendidos" — a regra de escopo
+#: mora num lugar só.
+VEND_DA_ORG = """
   from vmpay.vend v
   left join vmpay.good g on g.id = v.good_id
   left join (
@@ -356,7 +353,15 @@ select pl.product_id,
   ) pl on pl.external_id = cast(v.good_id as text)
   left join core.product p on p.id = pl.product_id
  where v.occurred_at >= :start and v.occurred_at < :end
-   and v.""" + MAQUINAS_DA_ORG.strip() + """
+   and v.""" + MAQUINAS_DA_ORG.strip()
+
+ABC_SQL = """
+select pl.product_id,
+       coalesce(p.name, g.name, 'Produto ' || v.good_id) as nome,
+       v.good_id,
+       coalesce(sum(v.value), 0)              as revenue,
+       coalesce(sum(coalesce(v.quantity, 1)), 0) as units
+""" + VEND_DA_ORG + """
  group by 1, 2, 3
  order by revenue desc
 """
@@ -414,4 +419,140 @@ async def curva_abc(
         "total": total,
         "resumo": resumo,
         "itens": itens,
+    }
+
+
+# ---------------------------------------------------------------- top produtos
+
+#: Granularidade pelo tamanho da janela: ~30 pontos por linha no máximo útil
+#: antes de virar serrilhado. Semana começa na segunda (date_trunc do Postgres).
+GRANULARIDADES = (("dia", 31), ("semana", 120))
+_TRUNC = {"dia": "day", "semana": "week", "mes": "month"}
+
+
+def _granularidade(start: date, end: date) -> str:
+    dias = (end - start).days + 1
+    return next((g for g, teto in GRANULARIDADES if dias <= teto), "mes")
+
+
+def _balde(d: date, granularidade: str) -> date:
+    if granularidade == "semana":
+        return d - timedelta(days=d.weekday())
+    if granularidade == "mes":
+        return d.replace(day=1)
+    return d
+
+
+def _proximo(d: date, granularidade: str) -> date:
+    if granularidade == "semana":
+        return d + timedelta(days=7)
+    if granularidade == "mes":
+        return (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return d + timedelta(days=1)
+
+
+def _serie_sql(granularidade: str) -> str:
+    # O balde é no relógio da loja (como o heatmap), mas a JANELA segue a
+    # mesma das outras consultas: assim a soma da série bate com o ranking e
+    # com a curva ABC. O que cai fora dos baldes pela diferença de fuso (as
+    # últimas horas da véspera do início) é preso ao primeiro/último balde,
+    # em vez de criar um ponto fora do período.
+    trunc = _TRUNC[granularidade]  # valor fixo do dicionário, nunca da URL
+    return (
+        """
+select coalesce(v.good_id, -1) as good_id,
+       greatest(cast(:primeiro as date), least(cast(:ultimo as date),
+           date_trunc('""" + trunc + """', v.occurred_at at time zone 'America/Sao_Paulo')::date)) as inicio,
+       coalesce(sum(v.value), 0)                 as revenue,
+       coalesce(sum(coalesce(v.quantity, 1)), 0) as units
+"""
+        + VEND_DA_ORG
+        + """
+   and coalesce(v.good_id, -1) = any(cast(:goods as bigint[]))
+ group by 1, 2
+"""
+    )
+
+
+@router.get("/top-produtos")
+async def top_produtos(
+    ctx: ViewerCtx,
+    start: date | None = None,
+    end: date | None = None,
+    loja: uuid.UUID | None = None,
+    n: int = Query(default=5, ge=1, le=10),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Os N produtos de maior faturamento e a série de cada um no período.
+
+    O ranking é o topo da curva ABC (mesma consulta), então os dois cartões da
+    tela nunca discordam sobre quem é o 1º. A série traz TODOS os baldes, com
+    zero onde não houve venda — senão a linha liga dois pontos por cima do
+    buraco e esconde a falta.
+    """
+    start, end = _window(start, end)
+    granularidade = _granularidade(start, end)
+    escopo = {"start": start, "end": end + timedelta(days=1), **_escopo(ctx, loja)}
+    ranking = (
+        await session.execute(text(ABC_SQL + " limit :n"), {**escopo, "n": n})
+    ).mappings().all()
+
+    produtos, chave_do_good = [], {}
+    for posicao, r in enumerate(ranking, start=1):
+        good = r["good_id"] if r["good_id"] is not None else -1
+        chave = str(r["product_id"]) if r["product_id"] else str(good)
+        chave_do_good[good] = chave
+        produtos.append(
+            {
+                "posicao": posicao,
+                "chave": chave,
+                "product_id": str(r["product_id"]) if r["product_id"] else None,
+                "produto": r["nome"] or f"Produto {good}",
+                "faturamento": float(r["revenue"]),
+                "unidades": float(r["units"]),
+            }
+        )
+
+    primeiro, ultimo = _balde(start, granularidade), _balde(end, granularidade)
+    pontos: list[dict] = []
+    if produtos:
+        linhas = (
+            await session.execute(
+                text(_serie_sql(granularidade)),
+                {**escopo, "goods": list(chave_do_good), "primeiro": primeiro, "ultimo": ultimo},
+            )
+        ).mappings().all()
+        valores: dict[date, dict[str, dict]] = {}
+        for linha in linhas:
+            chave = chave_do_good.get(linha["good_id"])
+            if chave is None:
+                continue
+            valores.setdefault(linha["inicio"], {})[chave] = {
+                "faturamento": float(linha["revenue"]),
+                "unidades": float(linha["units"]),
+            }
+        # "Tudo" começa em 2000: sem este corte seriam 25 anos de zeros antes
+        # da primeira venda. Só os baldes INICIAIS vazios saem; buraco no meio
+        # fica, com zero.
+        if valores:
+            primeiro = max(primeiro, min(valores))
+        balde = primeiro
+        while balde <= ultimo:
+            do_balde = valores.get(balde, {})
+            pontos.append(
+                {
+                    "inicio": balde.isoformat(),
+                    "valores": {
+                        p["chave"]: do_balde.get(p["chave"], {"faturamento": 0.0, "unidades": 0.0})
+                        for p in produtos
+                    },
+                }
+            )
+            balde = _proximo(balde, granularidade)
+
+    return {
+        "granularidade": granularidade,
+        "periodo": {"inicio": start.isoformat(), "fim": end.isoformat()},
+        "produtos": produtos,
+        "pontos": pontos,
     }
