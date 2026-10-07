@@ -34,6 +34,8 @@ export default async function CupomPage({
   const pagina = paginaDaUrl((await searchParams).pagina);
   const cupom = await serverApi.picklistCupom(org.slug, id);
   const voltar = { href: "/picklist", rotulo: "Pick list" };
+  // Carga manual: sem chave nem NFC-e — o título é o fornecedor digitado.
+  const avulsa = cupom.ok && cupom.data.origem === "avulsa";
 
   return (
     <div className="min-h-screen">
@@ -55,12 +57,23 @@ export default async function CupomPage({
               ]
                 .filter(Boolean)
                 .join(" · ")}
-              titulo={cupom.data.fornecedor.nome || "Fornecedor"}
-              subtitulo={`Carregado em ${formatDayTime(cupom.data.carregado_em)} por ${cupom.data.aprovado_por}`}
+              titulo={
+                avulsa
+                  ? `Carga manual · ${cupom.data.fornecedor.nome || "sem fornecedor"}`
+                  : cupom.data.fornecedor.nome || "Fornecedor"
+              }
+              subtitulo={`${avulsa ? "Lançada" : "Carregado"} em ${formatDayTime(cupom.data.carregado_em)} por ${cupom.data.aprovado_por}`}
               acoes={
-                <Selo tom={STATUS[cupom.data.status]?.tom ?? "cinza"}>
-                  {STATUS[cupom.data.status]?.rotulo ?? cupom.data.status}
-                </Selo>
+                <>
+                  {avulsa ? (
+                    <Selo tom="cinza" simbolo={null}>
+                      manual
+                    </Selo>
+                  ) : null}
+                  <Selo tom={STATUS[cupom.data.status]?.tom ?? "cinza"}>
+                    {STATUS[cupom.data.status]?.rotulo ?? cupom.data.status}
+                  </Selo>
+                </>
               }
             />
             {cupom.data.vmpay.erro ? (
@@ -75,7 +88,7 @@ export default async function CupomPage({
               </div>
             ) : null}
 
-            <Lista rotulo="Itens do cupom">
+            <Lista rotulo={avulsa ? "Itens da carga" : "Itens do cupom"}>
               {cupom.data.itens.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA).map((i) => (
                 <LinhaLista
                   key={i.linha}
@@ -122,7 +135,11 @@ export default async function CupomPage({
               href={(n) => `/picklist/cupom/${id}?pagina=${n}`}
               rotulo="linhas"
             />
-            <p className="m-0 break-all text-xs text-sec">Chave de acesso {cupom.data.chave}</p>
+            {cupom.data.chave ? (
+              <p className="m-0 break-all text-xs text-sec">Chave de acesso {cupom.data.chave}</p>
+            ) : (
+              <p className="m-0 text-xs text-sec">Montada à mão no pick list, sem cupom fiscal lido.</p>
+            )}
           </>
         )}
       </Pagina>

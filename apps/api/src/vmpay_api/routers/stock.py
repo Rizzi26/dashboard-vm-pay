@@ -561,7 +561,7 @@ async def stock_history(
 # Um cupom pode trazer o mesmo produto em mais de uma linha (fardo e avulso,
 # fornecedor que repete o item): a carga é a soma do que entrou, por cupom.
 CARGAS_SQL = """
-select r.id, r.number, r.access_key, r.created_at, r.status,
+select r.id, r.number, r.access_key, r.source, r.supplier_name, r.created_at, r.status,
        l.name as location_name, u.email as aprovado_por,
        a.status as vmpay_status, a.error as vmpay_erro,
        sum(i.quantity * i.factor) as unidades
@@ -599,7 +599,10 @@ async def product_loads(
         {
             "receipt_id": str(r["id"]),
             "numero": r["number"],
+            # Carga manual ('avulsa') não tem chave: a tela mostra o fornecedor.
             "chave": r["access_key"],
+            "origem": r["source"],
+            "fornecedor": r["supplier_name"],
             "carregado_em": r["created_at"].isoformat(),
             "loja": r["location_name"],
             "unidades": float(r["unidades"]),

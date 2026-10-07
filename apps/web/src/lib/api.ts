@@ -196,12 +196,13 @@ export type ContaVmpay = {
 
 export type PicklistCarga = {
   id: string;
-  access_key: string;
+  /** null na carga manual ("avulsa"): não há cupom, logo não há chave. */
+  access_key: string | null;
   number: string | null;
   supplier_name: string | null;
   total: number | null;
   status: "pending" | "approved" | "error";
-  source: "qrcode" | "manual";
+  source: "qrcode" | "manual" | "avulsa";
   created_at: string;
   location_name: string;
   itens: number;
@@ -268,13 +269,13 @@ export type Auditoria = {
 
 export type PicklistCupom = {
   id: string;
-  chave: string;
+  chave: string | null;
   numero: string | null;
   serie: string | null;
   emitido_em: string | null;
-  fornecedor: { cnpj: string; nome: string | null };
+  fornecedor: { cnpj: string | null; nome: string | null };
   valor_total: number | null;
-  origem: "qrcode" | "manual";
+  origem: "qrcode" | "manual" | "avulsa";
   status: "pending" | "approved" | "error";
   carregado_em: string;
   loja: string;
@@ -337,7 +338,9 @@ export type TopProdutos = {
 export type CargaProduto = {
   receipt_id: string;
   numero: string | null;
-  chave: string;
+  chave: string | null;
+  origem: "qrcode" | "manual" | "avulsa";
+  fornecedor: string | null;
   carregado_em: string;
   loja: string;
   /** Unidades de venda que entraram (quantidade do cupom × fator). */
