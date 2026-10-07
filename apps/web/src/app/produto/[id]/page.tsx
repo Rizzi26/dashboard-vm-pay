@@ -36,13 +36,23 @@ function CargasRecentes({ cargas }: { cargas: Awaited<ReturnType<typeof serverAp
         <Lista rotulo="Cargas recentes">
           {cargas.data.map((c) => {
             const s = statusCarga(c);
-            const cupom = c.numero ? `NFC-e ${c.numero}` : `chave …${c.chave.slice(-6)}`;
+            const origem =
+              c.origem === "avulsa" || !c.chave
+                ? "pela carga manual"
+                : `pelo cupom ${c.numero ? `NFC-e ${c.numero}` : `chave …${c.chave.slice(-6)}`}`;
             return (
               <LinhaLista
                 key={c.receipt_id}
                 href={`/picklist/cupom/${c.receipt_id}`}
-                principal={`+${formatInt(c.unidades)} un. pelo cupom ${cupom}`}
-                secundario={`${formatDayTime(c.carregado_em)} · ${c.loja} · aprovado por ${c.aprovado_por}`}
+                principal={`+${formatInt(c.unidades)} un. ${origem}`}
+                secundario={[
+                  formatDayTime(c.carregado_em),
+                  c.origem === "avulsa" ? c.fornecedor : null,
+                  c.loja,
+                  `aprovado por ${c.aprovado_por}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
                 direita={<Selo tom={s.tom}>{s.texto}</Selo>}
               />
             );
