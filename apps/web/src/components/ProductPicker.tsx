@@ -69,6 +69,9 @@ export function ProductPicker({
     // Só número: a canaleta exata vem primeiro — é o que o operador digitou.
     const soNumero = /^\s*\d+\s*$/.test(busca);
     const naCanaleta = soNumero ? indice.filter((p) => canaletasDe(p).includes(digitos)) : [];
+    // Canaleta achada: é ela. Misturar código de barras parecido só confunde
+    // quem está conferindo se é o produto certo.
+    if (naCanaleta.length > 0) return naCanaleta.slice(0, MAX_RESULTADOS);
     const resto = indice.filter(
       (p) =>
         !naCanaleta.includes(p) &&
