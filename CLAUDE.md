@@ -181,9 +181,9 @@ O kiosk é 100% cashless, um item por transação.
    core.product + product_link. Mesmo action_log e mesma trava
    VMPAY_ALLOW_WRITES das outras ações. Cadastro ≠ prateleira: entrar no
    planograma continua manual na VMpay — a UI avisa.
-3. Preço unitário de item com saldo zero — a fonte exata é o
-   `current_planogram` da instalação (uma chamada por instalação no snapshot);
-   hoje deriva do valor total do relatório de saldos e fica nulo com saldo 0.
+3. ~~Preço unitário de item com saldo zero~~ — FEITO (2026-10-14): o
+   snapshot lê o `current_planogram` de cada loja (uma chamada por loja) e usa
+   o `desired_price`; se o planograma falhar, fica o derivado do saldo.
 4. Rotação da `sb_secret` vazada no primeiro deploy da Vercel — CONFERIR se o
    Revoke + chave nova no Render foi concluído.
 5. ~~**Histórico de estoque + quebras**~~ — FEITO (2026-08-29):
@@ -229,6 +229,17 @@ O kiosk é 100% cashless, um item por transação.
    (a principal mantém a chave antiga). Escrita usa o token da conta DA LOJA;
    cadastro de produto exige a loja quando há mais de uma conta. Produtos não
    são unificados entre contas (a mesma Coca em duas contas = 2 produtos).
+14. **Preço em lote** (EM HOMOLOGAÇÃO, 2026-10-14): Prateleira → "Atualizar
+   preços" baixa `precos.csv` da loja (`preco_novo` em branco), a prévia
+   (`POST /stock/precos/previa`) lê o planograma ao vivo e não escreve, e
+   `/aplicar` manda UM PATCH por loja (tudo ou nada) com action_log
+   `stock.price_batch`. Linha em branco ou ausente não mexe em nada. Preço é
+   da LOJA: nenhuma rota de preço grava mais em `core.product.unit_price`.
+   `use_default_price_product` vai sempre false — ligado, a VMpay ignora o
+   preço enviado. Próximas fases: carga do pick list por planilha, cadastro
+   em lote JÁ no planograma (PATCH aceita item novo — provado no demo em
+   2026-10-14), contagem de inventário, tirar de linha em lote (só
+   inativar/suspender: a VMpay não apaga item de planograma).
 8. Migrations são **automáticas** (migrate.yml): push na `homolog` aplica no
    banco de homologação, push na `main` no de produção — só os arquivos que
    faltam em `core.schema_migration`, cada um numa transação com o próprio

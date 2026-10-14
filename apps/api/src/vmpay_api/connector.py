@@ -34,6 +34,10 @@ def _quantidade(valor: float | int | Decimal) -> str:
     return format(d.normalize(), "f")
 
 
+#: Teto de itens por PATCH de planograma, segundo a doc da VMpay.
+LIMITE_ITENS_PLANOGRAMA = 2000
+
+
 class ConnectorError(VMpayError):
     """Erro de tradução nossa (produto fora do planograma etc.) — não da API."""
 
@@ -42,24 +46,27 @@ class ConnectorError(VMpayError):
 class PlanogramView:
     planogram_id: int
     items_by_good: dict[int, dict[str, Any]]
+    #: Todos os itens: o mesmo produto pode ocupar mais de uma posição, e
+    #: preço mudado numa só deixaria a outra cobrando o antigo.
+    items: list[dict[str, Any]]
 
 
 class VMpayConnector:
     def __init__(self, client: VMpayClient):
         self.client = client
 
-    async def _current_planogram(
+    async def current_planogram(
         self, machine_id: int, installation_id: int
     ) -> PlanogramView:
         data = await self.client.get(
             f"machines/{machine_id}/installations/{installation_id}/current_planogram"
         )
-        items = {
-            item["good_id"]: item
-            for item in data.get("items", [])
-            if item.get("good_id") is not None
-        }
-        return PlanogramView(planogram_id=data["id"], items_by_good=items)
+        todos = [i for i in data.get("items", []) if i.get("good_id") is not None]
+        return PlanogramView(
+            planogram_id=data["id"],
+            items_by_good={item["good_id"]: item for item in todos},
+            items=todos,
+        )
 
     def _resolve(self, view: PlanogramView, good_id: int) -> dict[str, Any]:
         item = view.items_by_good.get(good_id)
@@ -79,7 +86,7 @@ class VMpayConnector:
         saldo corrente do planograma — é o que a API espera para calcular o novo
         saldo do item.
         """
-        view = await self._current_planogram(machine_id, installation_id)
+        view = await self.current_planogram(machine_id, installation_id)
         attrs = []
         for good_id, quantity in items:
             item = self._resolve(view, good_id)
@@ -132,19 +139,37 @@ class VMpayConnector:
         return await self.client.post("products", json={"product": fields})
 
     async def set_price(
-        self, machine_id: int, installation_id: int, changes: list[tuple[int, float]]
+        self,
+        machine_id: int,
+        installation_id: int,
+        changes: list[tuple[int, float]],
+        view: PlanogramView | None = None,
     ) -> Any:
         """Alteração de preço no planograma atual, agrupada numa requisição.
 
         A doc pede explicitamente para agrupar alterações de planograma em vez
         de mandar item a item — e avisa que só micromarket aceita PATCH e que
-        pick list pendente bloqueia (422 da API nos dois casos).
+        pick list pendente bloqueia (422 da API nos dois casos). `view` evita
+        reler o planograma quando quem chama acabou de lê-lo.
+
+        `use_default_price_product` vai sempre false: com ele ligado a VMpay
+        aceita o desired_price e continua cobrando o preço padrão do produto —
+        a alteração "funcionava" e nada mudava no caixa.
         """
-        view = await self._current_planogram(machine_id, installation_id)
-        attrs = [
-            {"id": self._resolve(view, good_id)["id"], "desired_price": price}
-            for good_id, price in changes
-        ]
+        view = view or await self.current_planogram(machine_id, installation_id)
+        attrs = []
+        for good_id, price in changes:
+            self._resolve(view, good_id)
+            attrs.extend(
+                {"id": item["id"], "desired_price": price, "use_default_price_product": False}
+                for item in view.items
+                if item["good_id"] == good_id
+            )
+        if len(attrs) > LIMITE_ITENS_PLANOGRAMA:
+            raise ConnectorError(
+                f"{len(attrs)} itens numa alteração só; a VMpay aceita até "
+                f"{LIMITE_ITENS_PLANOGRAMA} por requisição"
+            )
         body = {"planogram": {"items_attributes": attrs}}
         return await self.client.patch(
             f"machines/{machine_id}/installations/{installation_id}/current_planogram",
