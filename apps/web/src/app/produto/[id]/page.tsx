@@ -13,6 +13,7 @@ import { Tile } from "@/components/ui/Tile";
 import { Titulo } from "@/components/ui/Titulo";
 import type { CargaProduto } from "@/lib/api";
 import { serverApi } from "@/lib/api.server";
+import { ExcluirProduto } from "@/components/ExcluirProduto";
 import { formatDay, formatDayTime, formatInt, formatMoney } from "@/lib/format";
 import { orgSession } from "@/lib/org";
 import { PERIODOS, startFor } from "@/lib/periodos";
@@ -172,6 +173,14 @@ export default async function ProdutoPage({
             </div>
 
             {cargas ? <CargasRecentes cargas={cargas} /> : null}
+
+            {/* Só aparece para quem opera e para produto sem estoque nem venda;
+                o servidor confere o resto (prateleira, cargas, histórico). */}
+            {(org.role === "admin" || org.role === "master") &&
+            detail.data.produto.estoque === 0 &&
+            !detail.data.resumo.ultima_venda ? (
+              <ExcluirProduto org={org.slug} productId={id} nome={detail.data.produto.nome} />
+            ) : null}
           </>
         ) : (
           <>

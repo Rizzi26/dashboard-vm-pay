@@ -118,6 +118,8 @@ export type ProductRefs = {
   fabricantes: { id: number; nome: string }[];
   categorias: { id: number; nome: string }[];
   categorias_abastecimento: { id: number; nome: string }[];
+  /** Níveis mais comuns na prateleira da loja (só com ?loja=); null se o planograma não respondeu. */
+  padroes?: { capacidade: number; nivel_ideal: number; nivel_alerta: number } | null;
 };
 
 export type MemberRow = {

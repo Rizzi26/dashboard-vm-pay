@@ -22,8 +22,9 @@ from vmpay.redact import redact
 from ..auth import OrgContext, require_role
 from ..db import get_session
 from ..sync_core import token_da_conta
+from .cadastro_lote import _padroes
 from .sales import MAQUINAS_DA_ORG
-from .stock import _close_action, _open_action, get_connector, require_writes_enabled
+from .stock import _close_action, _load_target, _open_action, get_connector, require_writes_enabled
 
 router = APIRouter(
     prefix="/orgs/{org}/products",
@@ -95,13 +96,30 @@ async def product_refs(ctx: AdminCtx, session: Session, loja: uuid.UUID | None =
     formulário precisa do estado atual, não do último snapshot.
     """
     integration = await _load_integration(session, ctx.org_id, loja)
+    target = await _load_target(session, ctx.org_id, loja) if loja else None
     await session.commit()  # fecha a leitura do cofre antes da rede
     try:
         connector = get_connector(integration["config"], integration["token"])
         async with connector.client:
-            return await connector.product_refs()
+            refs = await connector.product_refs()
+            # Os níveis que a loja já usa: o formulário nasce preenchido com
+            # eles para o produto entrar na prateleira sem ninguém adivinhar.
+            refs["padroes"] = None
+            if target is not None:
+                try:
+                    view = await connector.current_planogram(target["machine_id"], target["installation_id"])
+                    refs["padroes"] = _padroes(view)
+                except VMpayError:
+                    refs["padroes"] = None
+            return refs
     except VMpayError as exc:
         raise HTTPException(502, f"a VMpay não respondeu os cadastros: {redact(str(exc))}") from None
+
+
+class Prateleira(BaseModel):
+    capacidade: float = Field(ge=0)
+    nivel_ideal: float = Field(ge=0)
+    nivel_alerta: float = Field(ge=0)
 
 
 class NewProductBody(BaseModel):
@@ -114,6 +132,8 @@ class NewProductBody(BaseModel):
     preco: Decimal | None = Field(default=None, gt=0)
     # Loja onde o produto vai ser usado: decide a conta VMpay (várias contas).
     loja: uuid.UUID | None = None
+    # Presente = o produto já entra na prateleira (planograma) da loja.
+    prateleira: Prateleira | None = None
 
 
 @router.post("", status_code=201)
@@ -124,6 +144,11 @@ async def create_product(body: NewProductBody, ctx: AdminCtx, session: Session) 
     prateleira) continua sendo passo manual na VMpay — a resposta avisa.
     """
     require_writes_enabled()
+    if body.prateleira is not None:
+        if body.loja is None or body.preco is None:
+            raise HTTPException(422, "para entrar na prateleira, informe a loja e o preço de venda")
+        if body.prateleira.nivel_ideal > body.prateleira.capacidade or body.prateleira.nivel_alerta > body.prateleira.nivel_ideal:
+            raise HTTPException(422, "níveis inválidos: alerta ≤ ideal ≤ capacidade")
     integration = await _load_integration(session, ctx.org_id, body.loja)
 
     fields: dict = {
@@ -189,13 +214,144 @@ async def create_product(body: NewProductBody, ctx: AdminCtx, session: Session) 
                 "raw": json.dumps(created),
             },
         )
-    await _close_action(session, action_id)
+    await session.commit()  # o produto existe na VMpay: o espelho não pode depender da prateleira
+
+    prateleira = None
+    erro_prateleira = None
+    if body.prateleira is not None and external_id is not None:
+        # Antes o cadastro parava no catálogo e o produto não aparecia em loja
+        # nenhuma (nem na Prateleira, nem na carga) até alguém mexer na VMpay.
+        target = await _load_target(session, ctx.org_id, body.loja)
+        try:
+            connector = get_connector(integration["config"], integration["token"])
+            async with connector.client:
+                await connector.incluir_no_planograma(
+                    target["machine_id"],
+                    target["installation_id"],
+                    [
+                        {
+                            "good_id": int(external_id),
+                            "preco": float(body.preco),
+                            "capacidade": body.prateleira.capacidade,
+                            "nivel_ideal": body.prateleira.nivel_ideal,
+                            "nivel_alerta": body.prateleira.nivel_alerta,
+                        }
+                    ],
+                )
+            await session.execute(
+                text(
+                    """
+                    insert into core.stock_balance (location_id, product_id, quantity, price, updated_at)
+                    values (:location_id, :product_id, 0, :price, now())
+                    on conflict (location_id, product_id) do nothing
+                    """
+                ),
+                {"location_id": str(body.loja), "product_id": str(product_row[0]), "price": body.preco},
+            )
+            prateleira = "incluido"
+        except VMpayError as exc:
+            erro_prateleira = redact(str(exc))
+            prateleira = "erro"
+
+    await _close_action(
+        session, action_id, error=f"cadastrado, mas a prateleira recusou: {erro_prateleira}" if erro_prateleira else None
+    )
     return {
         "action_id": action_id,
         "status": "success",
         "product_id": str(product_row[0]),
         "vmpay_id": external_id,
+        "prateleira": prateleira,
+        "erro_prateleira": erro_prateleira,
     }
+
+
+# ------------------------------------------------------------------- exclusão
+
+
+@router.delete("/{product_id}")
+async def delete_product(
+    product_id: uuid.UUID, confirmar: str, ctx: AdminCtx, session: Session
+) -> dict:
+    """Exclui do cadastro um produto que NUNCA foi para loja.
+
+    Produto com prateleira ou histórico (venda, carga, foto de estoque) não se
+    exclui: apagar quebraria relatórios — esse se tira de linha. `confirmar`
+    é o nome do produto, digitado: exclusão não se desfaz.
+    """
+    require_writes_enabled()
+    produto = (
+        await session.execute(
+            text("select name from core.product where id = :id and org_id = :org_id"),
+            {"id": str(product_id), "org_id": str(ctx.org_id)},
+        )
+    ).first()
+    if produto is None:
+        raise HTTPException(404, "produto não encontrado nesta organização")
+    if confirmar.strip().casefold() != produto[0].strip().casefold():
+        raise HTTPException(422, "para excluir, digite o nome do produto exatamente como está")
+
+    uso = (
+        await session.execute(
+            text(
+                """
+                select
+                  (select count(*) from core.stock_balance where product_id = :id)          as prateleiras,
+                  (select count(*) from core.stock_snapshot where product_id = :id)         as fotos,
+                  (select count(*) from core.stock_movement where product_id = :id)         as movimentos,
+                  (select count(*) from core.purchase_receipt_item where product_id = :id)  as cargas,
+                  (select count(*) from vmpay.vend v
+                     join core.product_link pl on cast(pl.external_id as bigint) = v.good_id
+                    where pl.product_id = :id)                                              as vendas
+                """
+            ),
+            {"id": str(product_id)},
+        )
+    ).mappings().first()
+    if uso["prateleiras"]:
+        raise HTTPException(409, "o produto está na prateleira de uma loja — tire de linha em vez de excluir")
+    if uso["vendas"] or uso["fotos"] or uso["movimentos"] or uso["cargas"]:
+        raise HTTPException(409, "o produto tem histórico (vendas, cargas ou estoque) — tire de linha em vez de excluir")
+
+    links = (
+        await session.execute(
+            text(
+                """
+                select pl.external_id, i.id as integration_id, i.config
+                  from core.product_link pl
+                  join core.integration i on i.id = pl.integration_id
+                 where pl.product_id = :id
+                """
+            ),
+            {"id": str(product_id)},
+        )
+    ).mappings().all()
+    tokens = {}
+    for link in links:
+        try:
+            tokens[link["integration_id"]] = await token_da_conta(session, link["config"] or {})
+        except VMpayError as exc:
+            raise HTTPException(502, f"conta VMpay sem token utilizável: {redact(str(exc))}") from None
+    await session.commit()
+
+    action_id = await _open_action(
+        session, ctx, "product.delete", {"product_id": str(product_id)},
+        {"nome": produto[0], "vmpay_ids": [link["external_id"] for link in links]},
+    )
+    try:
+        for link in links:
+            connector = get_connector(link["config"], tokens[link["integration_id"]])
+            async with connector.client:
+                await connector.delete_product(int(link["external_id"]))
+    except VMpayError as exc:
+        detail = redact(str(exc))
+        await _close_action(session, action_id, error=detail)
+        raise HTTPException(502, f"a VMpay recusou a exclusão: {detail}") from None
+
+    await session.execute(text("delete from core.product_link where product_id = :id"), {"id": str(product_id)})
+    await session.execute(text("delete from core.product where id = :id"), {"id": str(product_id)})
+    await _close_action(session, action_id)
+    return {"action_id": action_id, "status": "success"}
 
 
 # ---------------------------------------------------------------------- ficha

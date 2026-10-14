@@ -184,9 +184,13 @@ export function StockView({
     setPagina(0);
   }
 
+  // A loja do cadastro: a da barra ou, com uma loja só, ela — é onde o
+  // produto novo entra na prateleira.
+  const lojaDoCadastro = loja ?? lojaDosPrecos?.locationId ?? null;
+
   const carregarRefs = useCallback(async (): Promise<ProductRefs> => {
     const resp = await browserApi.request(
-      `/orgs/${org}/products/refs${loja ? `?loja=${loja}` : ""}`,
+      `/orgs/${org}/products/refs${lojaDoCadastro ? `?loja=${lojaDoCadastro}` : ""}`,
       await token(),
     );
     const payload = await resp.json().catch(() => ({}));
@@ -194,7 +198,7 @@ export function StockView({
       throw new Error(payload.detail ?? `backend respondeu ${resp.status}`);
     }
     return payload as ProductRefs;
-  }, [org, loja]);
+  }, [org, lojaDoCadastro]);
 
   async function executar(path: string, body: unknown, sucesso: string) {
     const resp = await browserApi.request(`/orgs/${org}${path}`, await token(), {
@@ -580,12 +584,24 @@ export function StockView({
         <NewProductModal
           onClose={() => setModal(null)}
           loadRefs={carregarRefs}
+          naPrateleira={!!lojaDoCadastro}
           onSubmit={async (body) => {
-            await executar(
-              "/products",
-              { ...body, loja },
-              `Produto "${body.nome}" criado no cadastro da VMpay. Para ele aparecer na máquina e na prateleira, inclua-o no planograma da instalação.`,
+            const resp = await browserApi.request(`/orgs/${org}/products`, await token(), {
+              method: "POST",
+              body: JSON.stringify({ ...body, loja: lojaDoCadastro }),
+            });
+            const r = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(r.detail ?? `backend respondeu ${resp.status}`);
+            const nomeLoja = lojaDosPrecos?.loja ?? "da loja";
+            setFeedback(
+              r.prateleira === "incluido"
+                ? `Produto "${body.nome}" cadastrado e incluído na prateleira de ${nomeLoja}, zerado — pronto para a carga.`
+                : r.prateleira === "erro"
+                  ? `Produto "${body.nome}" cadastrado, mas a VMpay recusou a prateleira (${r.erro_prateleira}). Inclua-o depois pela planilha de cadastro — ela reconhece o produto e só põe na prateleira.`
+                  : `Produto "${body.nome}" cadastrado só no catálogo da VMpay — ele não aparece em loja nenhuma até entrar numa prateleira.`,
             );
+            setModal(null);
+            router.refresh();
           }}
         />
       ) : modal?.kind === "acoes" ? (
