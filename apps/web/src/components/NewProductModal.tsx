@@ -14,6 +14,8 @@ export type NewProductBody = {
   categoria_abastecimento_id: number | null;
   barcode: string | null;
   preco: number | null;
+  /** Presente = já entra na prateleira (planograma) da loja, zerado. */
+  prateleira?: { capacidade: number; nivel_ideal: number; nivel_alerta: number } | null;
 };
 
 export function NewProductModal({
@@ -22,12 +24,15 @@ export function NewProductModal({
   onSubmit,
   initialNome = "",
   aviso,
+  naPrateleira = false,
 }: {
   onClose: () => void;
   loadRefs: () => Promise<ProductRefs>;
   onSubmit: (body: NewProductBody) => Promise<void>;
   initialNome?: string;
   aviso?: string;
+  /** Há uma loja escolhida: oferece já pôr o produto na prateleira dela (marcado). */
+  naPrateleira?: boolean;
 }) {
   const [refs, setRefs] = useState<ProductRefs | null>(null);
   const [refsErro, setRefsErro] = useState<string | null>(null);
@@ -37,12 +42,23 @@ export function NewProductModal({
   const [fabricante, setFabricante] = useState("");
   const [categoria, setCategoria] = useState("");
   const [abastecimento, setAbastecimento] = useState("");
+  const [prateleira, setPrateleira] = useState(naPrateleira);
+  const [niveis, setNiveis] = useState({ capacidade: "", nivel_ideal: "", nivel_alerta: "" });
   const [erro, setErro] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     loadRefs()
-      .then(setRefs)
+      .then((r) => {
+        setRefs(r);
+        // Os níveis que a loja já usa, para ninguém precisar adivinhar.
+        const p = r.padroes ?? { capacidade: 100, nivel_ideal: 20, nivel_alerta: 3 };
+        setNiveis({
+          capacidade: String(p.capacidade),
+          nivel_ideal: String(p.nivel_ideal),
+          nivel_alerta: String(p.nivel_alerta),
+        });
+      })
       .catch((e) =>
         setRefsErro(e instanceof Error ? e.message : "falha ao carregar os cadastros"),
       );
@@ -61,6 +77,25 @@ export function NewProductModal({
       setErro("Preço, se informado, precisa ser maior que zero.");
       return;
     }
+    let naLoja: NewProductBody["prateleira"] = null;
+    if (prateleira) {
+      if (precoNum === null) {
+        setErro("Para entrar na prateleira, informe o preço de venda.");
+        return;
+      }
+      const [capacidade, nivel_ideal, nivel_alerta] = [niveis.capacidade, niveis.nivel_ideal, niveis.nivel_alerta].map(
+        (v) => Number(v.replace(",", ".")),
+      );
+      if ([capacidade, nivel_ideal, nivel_alerta].some((n) => !Number.isFinite(n) || n < 0)) {
+        setErro("Capacidade e níveis precisam ser números de zero para cima.");
+        return;
+      }
+      if (nivel_ideal > capacidade || nivel_alerta > nivel_ideal) {
+        setErro("Os níveis precisam seguir: alerta ≤ ideal ≤ capacidade.");
+        return;
+      }
+      naLoja = { capacidade, nivel_ideal, nivel_alerta };
+    }
     setBusy(true);
     setErro(null);
     try {
@@ -75,6 +110,7 @@ export function NewProductModal({
             : null,
         barcode: barcode.trim() || null,
         preco: precoNum,
+        prateleira: naLoja,
       });
     } catch (err) {
       setErro(err instanceof Error ? err.message : "falha ao criar o produto");
@@ -104,7 +140,9 @@ export function NewProductModal({
       titulo="Adicionar produto"
       subtitulo={
         aviso ??
-        "O produto entra no cadastro da VMpay. Para aparecer na máquina e na prateleira, inclua-o depois no planograma da instalação."
+        (prateleira
+          ? "O produto entra no cadastro da VMpay e na prateleira desta loja, zerado — pronto para a carga."
+          : "O produto entra só no cadastro da VMpay: não aparece em loja nenhuma até entrar numa prateleira.")
       }
       onFechar={onClose}
       onSubmit={confirmar}
@@ -126,7 +164,7 @@ export function NewProductModal({
           />
         </label>
         <label className={ROTULO_CAMPO}>
-          Preço sugerido (R$)
+          {prateleira ? "Preço de venda (R$)" : "Preço sugerido (R$)"}
           <input
             inputMode="decimal"
             value={preco}
@@ -159,6 +197,36 @@ export function NewProductModal({
           </label>
         ))
       )}
+
+      {naPrateleira ? (
+        <div className="mt-4 rounded-2xl border border-borda bg-lista px-3.5 py-3">
+          <label className="flex items-center gap-2 text-[15px] text-texto">
+            <input type="checkbox" checked={prateleira} onChange={(e) => setPrateleira(e.target.checked)} />
+            Colocar na prateleira desta loja
+          </label>
+          {prateleira ? (
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {(
+                [
+                  ["capacidade", "Capacidade"],
+                  ["nivel_ideal", "Nível ideal"],
+                  ["nivel_alerta", "Alerta"],
+                ] as const
+              ).map(([chave, rotulo]) => (
+                <label key={chave} className={ROTULO_CAMPO}>
+                  {rotulo}
+                  <input
+                    inputMode="numeric"
+                    value={niveis[chave]}
+                    onChange={(e) => setNiveis((n) => ({ ...n, [chave]: e.target.value }))}
+                    className={CAMPO}
+                  />
+                </label>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {erro ? (
         <p role="alert" className="mt-3 text-[14px] text-vermelho-texto">

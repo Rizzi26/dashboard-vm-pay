@@ -457,7 +457,8 @@ export function CargaManual({
 
       {cadastrando ? (
         <NewProductModal
-          aviso="O produto entra no cadastro da VMpay e já vai para esta carga. Para a carga ser aceita, inclua-o também no planograma da máquina."
+          aviso="O produto entra no cadastro da VMpay, na prateleira desta loja e já vai para esta carga."
+          naPrateleira={!!localId}
           onClose={() => setCadastrando(false)}
           loadRefs={carregarRefs}
           onSubmit={async (body) => {
@@ -469,7 +470,9 @@ export function CargaManual({
             if (!resp.ok) throw new Error(payload.detail ?? `backend respondeu ${resp.status}`);
             const id = payload.product_id as string;
             onProdutoCadastrado({ id, name: body.nome, barcode: body.barcode, conta: contaDaLoja ?? undefined });
-            setLinhas((ls) => [{ product_id: id, quantidade: "1", novo: true }, ...ls]);
+            // Fora da prateleira a VMpay recusa a carga inteira: só aí o aviso.
+            const fora = payload.prateleira !== "incluido";
+            setLinhas((ls) => [{ product_id: id, quantidade: "1", novo: fora }, ...ls]);
             setUltimo(`${body.nome} cadastrado e adicionado.`);
             setCadastrando(false);
           }}
