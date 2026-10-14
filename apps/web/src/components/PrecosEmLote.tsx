@@ -8,26 +8,13 @@ import { Botao } from "@/components/ui/Botao";
 import { Folha, RodapeFolha } from "@/components/ui/Folha";
 import { Selo } from "@/components/ui/Selo";
 import { formatInt, formatMoney } from "@/lib/format";
+import { lerTextoDoArquivo } from "@/lib/planilha";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 async function token(): Promise<string> {
   const { data } = await supabaseBrowser().auth.getSession();
   if (!data.session) throw new Error("sessão expirada — entre de novo");
   return data.session.access_token;
-}
-
-/**
- * O Excel em português salva "CSV" em Windows-1252 e só o "CSV UTF-8" em
- * UTF-8. Tenta UTF-8 estrito primeiro; se não for, é o do Windows — sem isso
- * "Água" chega ao servidor como "�gua" e o nome da loja não confere.
- */
-async function lerTexto(arquivo: File): Promise<string> {
-  const bytes = await arquivo.arrayBuffer();
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    return new TextDecoder("windows-1252").decode(bytes);
-  }
 }
 
 /**
@@ -72,7 +59,7 @@ export function PrecosEmLote({
     setArquivo(f.name);
     setOcupado("lendo");
     try {
-      setPrevia(await chamar("previa", { location_id: locationId, conteudo: await lerTexto(f) }));
+      setPrevia(await chamar("previa", { location_id: locationId, conteudo: await lerTextoDoArquivo(f) }));
     } catch (err) {
       setErro(err instanceof Error ? err.message : "falha ao ler a planilha");
     } finally {

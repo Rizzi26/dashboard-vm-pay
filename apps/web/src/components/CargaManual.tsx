@@ -3,15 +3,25 @@
 import { useCallback, useMemo, useState } from "react";
 import type { PicklistOpcoes, ProductRefs } from "@/lib/api";
 import { browserApi } from "@/lib/api";
+import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { NewProductModal } from "@/components/NewProductModal";
 import { ProductPicker } from "@/components/ProductPicker";
 import { Aviso, CAMPO, ConfrontoReposicao, detalheDoErro, num, token, valido } from "@/components/picklist-comum";
 import { Botao } from "@/components/ui/Botao";
 import { Cartao } from "@/components/ui/Cartao";
 import { Titulo } from "@/components/ui/Titulo";
-import { formatInt } from "@/lib/format";
+import { formatDayTime, formatInt } from "@/lib/format";
+import { lerTextoDoArquivo } from "@/lib/planilha";
 
 type Produto = PicklistOpcoes["produtos"][number];
+
+/** Resposta de POST /picklist/planilha/ler: o que casou com a prateleira da loja. */
+type LeituraPlanilha = {
+  itens: { product_id: string; produto: string; quantidade: number; linhas: number[] }[];
+  erros: { linha: number; produto: string | null; motivo: string }[];
+  resumo: { produtos: number; em_branco: number; erros: number };
+  carga_igual: { receipt_id: string; lancada_em: string } | null;
+};
 
 /** Quantidade como texto enquanto o operador digita ("1," é válido no meio). */
 type Linha = { product_id: string; quantidade: string; novo?: boolean };
@@ -55,6 +65,8 @@ export function CargaManual({
   const [erro, setErro] = useState<string | null>(null);
   const [ultimo, setUltimo] = useState<string | null>(null);
   const [cadastrando, setCadastrando] = useState(false);
+  const [planilha, setPlanilha] = useState<(LeituraPlanilha & { arquivo: string }) | null>(null);
+  const [lendo, setLendo] = useState(false);
 
   // Várias contas VMpay: só os produtos da conta da loja — produto de outra
   // conta a VMpay recusaria na carga.
@@ -81,6 +93,43 @@ export function CargaManual({
       // O mais recente no topo: é onde o olho está, logo abaixo da busca.
       setLinhas((ls) => [{ product_id: id, quantidade: "1", novo }, ...ls]);
       setUltimo(`${nome} adicionado.`);
+    }
+  }
+
+  // A planilha só enche o carrinho: o operador revisa e lança como sempre.
+  async function importar(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // permite subir o mesmo arquivo de novo depois de corrigir
+    if (!f || !localId) return;
+    setErro(null);
+    setLendo(true);
+    try {
+      const resp = await browserApi.request(`/orgs/${org}/picklist/planilha/ler`, await token(), {
+        method: "POST",
+        body: JSON.stringify({ location_id: localId, conteudo: await lerTextoDoArquivo(f) }),
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(detalheDoErro(payload, resp.status));
+      const leitura = payload as LeituraPlanilha;
+      setPlanilha({ ...leitura, arquivo: f.name });
+      setLinhas((ls) => {
+        const atual = new Map(ls.map((l) => [l.product_id, l]));
+        for (const i of leitura.itens) {
+          const ja = atual.get(i.product_id);
+          const soma = (ja && valido(ja.quantidade) ? num(ja.quantidade) : 0) + i.quantidade;
+          atual.set(i.product_id, { product_id: i.product_id, quantidade: String(soma), novo: ja?.novo });
+        }
+        return [...atual.values()];
+      });
+      setUltimo(
+        leitura.itens.length > 0
+          ? `${formatInt(leitura.itens.length)} produto(s) da planilha adicionados à carga.`
+          : "Nenhum produto da planilha entrou na carga.",
+      );
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "falha ao ler a planilha");
+    } finally {
+      setLendo(false);
     }
   }
 
@@ -224,6 +273,57 @@ export function CargaManual({
           </label>
         </div>
         <p className="m-0 mt-2.5 text-[13px] text-sec">Os produtos oferecidos são só os da conta VMpay desta loja.</p>
+      </Cartao>
+
+      <Cartao
+        compacto
+        titulo="Importar planilha"
+        subtitulo="Nota de atacado ou planilha do fornecedor: baixe o modelo da loja, preencha a quantidade e suba. Os produtos entram nesta carga para você revisar antes de lançar."
+      >
+        {!localId ? (
+          <p className="m-0 text-[14px] text-sec">Escolha a loja que recebeu para baixar o modelo.</p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <ExportCsvButton
+              path={`/orgs/${org}/picklist/planilha/modelo.csv?location_id=${localId}`}
+              filename="carga.csv"
+              rotulo="Baixar modelo"
+              tamanho="p"
+            />
+            <label className="inline-flex h-11 cursor-pointer items-center rounded-full bg-azul-tinta px-4 text-[14px] font-medium text-azul-texto hover:brightness-95 md:h-[34px] md:px-3.5">
+              {lendo ? "Lendo…" : "Subir planilha"}
+              <input type="file" accept=".csv,text/csv" className="sr-only" onChange={importar} disabled={lendo} />
+            </label>
+            <span className="text-[13px] text-sec">
+              Também serve planilha só com <code>codigo_barras</code> e <code>quantidade</code>.
+            </span>
+          </div>
+        )}
+        {planilha ? (
+          <div className="mt-3 flex flex-col gap-2 text-[14px]">
+            <p className="m-0 text-sec">
+              {planilha.arquivo}: {formatInt(planilha.resumo.produtos)} produto(s) na carga ·{" "}
+              {formatInt(planilha.resumo.em_branco)} em branco
+              {planilha.resumo.erros > 0 ? <> · {formatInt(planilha.resumo.erros)} com erro</> : null}
+            </p>
+            {planilha.carga_igual ? (
+              <Aviso tom="laranja">
+                Uma carga com exatamente estes produtos e quantidades já foi lançada nesta loja em{" "}
+                {formatDayTime(planilha.carga_igual.lancada_em)}. Lançar de novo soma tudo outra vez no estoque.
+              </Aviso>
+            ) : null}
+            {planilha.erros.length > 0 ? (
+              <ul className="m-0 max-h-[30dvh] list-none overflow-y-auto p-0">
+                {planilha.erros.map((e) => (
+                  <li key={e.linha} className="py-0.5 text-vermelho-texto">
+                    ■ Linha {e.linha}
+                    {e.produto ? ` (${e.produto})` : ""}: {e.motivo}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
       </Cartao>
 
       <Cartao compacto titulo="Adicionar produto" subtitulo="Busque pelo nome ou código de barras. Escolher de novo soma mais uma unidade.">

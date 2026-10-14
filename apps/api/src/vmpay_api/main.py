@@ -13,6 +13,7 @@ from . import rotinas
 from .config import settings
 from .routers import (
     auditoria,
+    carga_planilha,
     contas,
     health,
     interno,
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(precos.router)
     app.include_router(stock.router)
     app.include_router(products.router)
+    app.include_router(carga_planilha.router)
     app.include_router(picklist.router)
     app.include_router(sync.router)
     app.include_router(auditoria.router)
