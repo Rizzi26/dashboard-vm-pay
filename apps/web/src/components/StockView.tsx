@@ -8,6 +8,7 @@ import { browserApi } from "@/lib/api";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { NewProductModal } from "@/components/NewProductModal";
 import { Paginacao } from "@/components/Paginacao";
+import { PrecosEmLote } from "@/components/PrecosEmLote";
 import { Botao } from "@/components/ui/Botao";
 import { Cartao } from "@/components/ui/Cartao";
 import { CAMPO, Folha, ROTULO_CAMPO, RodapeFolha } from "@/components/ui/Folha";
@@ -34,7 +35,12 @@ type RowModal =
 
 // "acoes" é a folha do celular: a linha da lista não tem espaço para os
 // botões Repor/Preço, então o toque abre as ações (e o link da ficha).
-type Modal = RowModal | { kind: "acoes"; row: StockRow } | { kind: "new" } | null;
+type Modal =
+  | RowModal
+  | { kind: "acoes"; row: StockRow }
+  | { kind: "new" }
+  | { kind: "precos"; locationId: string; loja: string }
+  | null;
 
 export function StockView({
   rows,
@@ -69,6 +75,15 @@ export function StockView({
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const canOperate = CAN_OPERATE.has(role);
+
+  // Preço em lote é por loja (um planograma por loja na VMpay): com "todas as
+  // lojas" na barra, só dá quando o lojista tem uma loja só.
+  const lojaDosPrecos = useMemo(() => {
+    const ids = new Set(rows.map((r) => r.location_id));
+    const id = loja ?? (ids.size === 1 ? [...ids][0] : null);
+    const nome = rows.find((r) => r.location_id === id)?.local;
+    return id && nome ? { locationId: id, loja: nome } : null;
+  }, [rows, loja]);
 
   // Tiles calculados dos dados que a página já carrega — sem endpoint novo.
   // Na ordem do repositor: primeiro o problema, depois o resto.
@@ -173,6 +188,17 @@ export function StockView({
               display na mesma classe dependem da ordem do CSS. */}
           <span className="hidden items-start gap-2.5 md:flex">
             <ExportCsvButton path={`/orgs/${org}/stock/export.csv`} filename="prateleira.csv" />
+            {canOperate ? (
+              <Botao
+                onClick={() =>
+                  lojaDosPrecos
+                    ? setModal({ kind: "precos", ...lojaDosPrecos })
+                    : setFeedback("Escolha a loja na barra para atualizar preços por planilha.")
+                }
+              >
+                Atualizar preços
+              </Botao>
+            ) : null}
             {canOperate ? (
               <Botao variante="cheio" onClick={() => setModal({ kind: "new" })}>
                 Adicionar produto
@@ -447,7 +473,19 @@ export function StockView({
         </div>
       </Cartao>
 
-      {modal?.kind === "new" ? (
+      {modal?.kind === "precos" ? (
+        <PrecosEmLote
+          org={org}
+          locationId={modal.locationId}
+          loja={modal.loja}
+          onFechar={() => setModal(null)}
+          onAplicado={(mensagem) => {
+            setFeedback(mensagem);
+            setModal(null);
+            router.refresh();
+          }}
+        />
+      ) : modal?.kind === "new" ? (
         <NewProductModal
           onClose={() => setModal(null)}
           loadRefs={carregarRefs}

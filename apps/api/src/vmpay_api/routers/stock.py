@@ -877,15 +877,8 @@ async def set_price(body: PriceBody, ctx: AdminCtx, session: Session) -> dict:
         await _close_action(session, action_id, error=detail)
         raise HTTPException(502, f"a VMpay recusou o preço: {detail}") from None
 
-    await session.execute(
-        text(
-            """
-            update core.product set unit_price = :price, updated_at = now()
-             where id = :product_id and org_id = :org_id
-            """
-        ),
-        {"price": body.price, "product_id": str(body.product_id), "org_id": str(ctx.org_id)},
-    )
+    # Só o preço DESTA loja. Gravar em core.product mudava o preço de reserva
+    # de todas as lojas do lojista — e a loja B mostrava o preço novo da A.
     await session.execute(
         text(
             """

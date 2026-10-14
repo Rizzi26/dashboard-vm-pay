@@ -195,6 +195,37 @@ def _saldo_mudou(anterior: tuple | None, novo: dict) -> bool:
     return de != para
 
 
+async def _precos_do_planograma(
+    client: VMpayClient,
+    links: Any,
+    product_by_external: dict[str, uuid.UUID],
+) -> dict[tuple[uuid.UUID, uuid.UUID], float]:
+    """Preço unitário de cada item, direto do planograma de cada loja.
+
+    O relatório de saldos só dá o valor TOTAL (qtd × preço): com saldo zero o
+    unitário não sai da conta, e a prateleira mostrava "—" justo no item que
+    precisa de reposição. O planograma tem o preço de todo item, zerado ou
+    não. Uma requisição por loja; se falhar, fica o preço derivado — preço
+    melhor não pode derrubar o retrato do estoque.
+    """
+    precos: dict[tuple[uuid.UUID, uuid.UUID], float] = {}
+    for link in links:
+        caminho = f"machines/{link['machine_id']}/installations/{link['installation_id']}/current_planogram"
+        try:
+            planograma = await client.get(caminho)
+        except Exception as exc:  # noqa: BLE001 — qualquer falha cai no derivado
+            log.warning("planograma da loja %s indisponível: %s", link["location_id"], redact(str(exc)))
+            continue
+        for item in planograma.get("items", []):
+            product_id = product_by_external.get(str(item.get("good_id")))
+            # Item com "usar preço padrão" ligado cobra o padrão do produto, não
+            # o desired_price — esse fica com o derivado do saldo.
+            if product_id is None or item.get("desired_price") is None or item.get("use_default_price_product"):
+                continue
+            precos[(link["location_id"], product_id)] = round(float(item["desired_price"]), 2)
+    return precos
+
+
 async def sync_stock(
     client: VMpayClient,
     session: AsyncSession,
@@ -260,6 +291,11 @@ async def sync_stock(
             "price": row["unit_price"],
             "updated_at": now,
         }
+
+    precos = await _precos_do_planograma(client, links.values(), product_by_external)
+    for chave, saldo in balances.items():
+        if precos.get(chave) is not None:
+            saldo["price"] = precos[chave]
 
     # A foto decide o que mudou contra a ÚLTIMA FOTO de cada par, não contra
     # core.stock_balance: uma carga pelo painel (restock/pick list) já soma no

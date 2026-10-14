@@ -84,6 +84,22 @@ async def test_precos_sao_agrupados_num_patch_so():
     assert rota.call_count == 1  # um PATCH para as duas mudanças
     corpo = json.loads(rota.calls.last.request.content)
     assert corpo["planogram"]["items_attributes"] == [
-        {"id": 86717, "desired_price": 3.0},
-        {"id": 86718, "desired_price": 2.8},
+        {"id": 86717, "desired_price": 3.0, "use_default_price_product": False},
+        {"id": 86718, "desired_price": 2.8, "use_default_price_product": False},
     ]
+
+
+@respx.mock
+async def test_preco_vale_para_todas_as_posicoes_do_mesmo_produto():
+    """Produto em duas posições: mudar só uma deixaria a outra cobrando o antigo."""
+    duplicado = {
+        **PLANOGRAMA,
+        "items": PLANOGRAMA["items"] + [{**PLANOGRAMA["items"][0], "id": 99999}],
+    }
+    respx.get(PLANOGRAM_URL).mock(return_value=httpx.Response(200, json=duplicado))
+    rota = respx.patch(PLANOGRAM_URL).mock(return_value=httpx.Response(200, json={"ok": True}))
+
+    await connector().set_price(49, 857, [(PLANOGRAMA["items"][0]["good_id"], 3.0)])
+
+    ids = [a["id"] for a in json.loads(rota.calls.last.request.content)["planogram"]["items_attributes"]]
+    assert ids == [PLANOGRAMA["items"][0]["id"], 99999]
