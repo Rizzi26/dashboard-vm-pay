@@ -261,6 +261,11 @@ async def sync_resource(
 
         if buffer or (backfill and highest > cursor):
             await _flush(session, key, table, buffer, dims, highest, report)
+        if not report.batches:
+            # Rodada limpa sem venda nova também é dado fresco. Sem isto o
+            # last_success parava na última venda e a madrugada da loja (zero
+            # vendas) aparecia no painel como "atualizado há 8 h".
+            await _record_success(session, key)
     except VMpayError as exc:
         # O que já foi confirmado fica; o cursor aponta para o último lote bom.
         await session.rollback()
@@ -269,6 +274,16 @@ async def sync_resource(
         log.error("ingestão de %s falhou: %s", key, report.error)
 
     return report
+
+
+async def _record_success(session: AsyncSession, resource: str) -> None:
+    agora = datetime.now(timezone.utc)
+    await session.execute(
+        update(models.SyncCursor)
+        .where(models.SyncCursor.resource == resource)
+        .values(last_run_at=agora, last_success=agora, last_error=None)
+    )
+    await session.commit()
 
 
 async def _record_failure(session: AsyncSession, resource: str, message: str) -> None:

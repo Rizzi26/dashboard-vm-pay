@@ -187,6 +187,29 @@ async def test_retoma_do_cursor_salvo(cliente):
 
 
 @respx.mock
+async def test_rodada_sem_novidade_marca_sucesso(cliente):
+    """Sem venda nova o cursor fica, mas o last_success anda — é o que o painel lê."""
+    respx.get(f"{BASE}/cashless_facts").mock(return_value=httpx.Response(200, json=[]))
+    sessao = FakeSession(cursor_inicial=5000)
+    rel = await ingest.sync_resource("cashless_facts", cliente, sessao)
+
+    assert rel.rows == 0 and rel.cursor_after == 5000
+    sql = [s for s in sessao.sql() if s.startswith("UPDATE")]
+    assert len(sql) == 1 and "last_success" in sql[0] and "cursor_value" not in sql[0]
+    assert sessao.eventos[-1] == "COMMIT"
+
+
+@respx.mock
+async def test_falha_sem_novidade_nao_marca_sucesso(cliente):
+    respx.get(f"{BASE}/cashless_facts").mock(return_value=httpx.Response(500))
+    sessao = FakeSession(cursor_inicial=5000)
+    rel = await ingest.sync_resource("cashless_facts", cliente, sessao)
+
+    assert rel.error
+    assert not any("last_success" in s for s in sessao.sql())
+
+
+@respx.mock
 async def test_vends_tambem_extrai_dimensoes(cliente):
     """Venda de produto que nunca apareceu no cashless não pode quebrar a FK.
 
