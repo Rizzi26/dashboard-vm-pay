@@ -161,8 +161,9 @@ no centavo:
   sozinha ao subir (`rotinas.py`, token interno no Vault); em produção também
   agenda o "manter acordado" (8h–23h BRT). Histórico completo desde o go-live
   do mercadinho (06/11/2025)
-- **Escrita na VMpay TRAVADA** em produção (`VMPAY_ALLOW_WRITES=0` no Render)
-  até ser provada em homologação
+- **Escrita na VMpay LIGADA** em produção desde 2026-10-14
+  (`VMPAY_ALLOW_WRITES=1` no `render.yaml`), depois de provada em homologação.
+  Travar de novo: `0` no painel do Render E no `render.yaml`
 - **Homologação** (desde 2026-10-05): Supabase `vmpay-hml`, Render
   `vmpay-api-hml` (branch `homolog`, escrita ligada, VMpay demo), Preview da
   Vercel na `homolog`. Detalhes e armadilhas em docs/deploy.md
@@ -229,7 +230,7 @@ O kiosk é 100% cashless, um item por transação.
    (a principal mantém a chave antiga). Escrita usa o token da conta DA LOJA;
    cadastro de produto exige a loja quando há mais de uma conta. Produtos não
    são unificados entre contas (a mesma Coca em duas contas = 2 produtos).
-14. **Planilhas na Prateleira** (EM HOMOLOGAÇÃO, 2026-10-14) — botão
+14. **Planilhas na Prateleira** (EM PRODUÇÃO, 2026-10-14) — botão
    "Planilhas", sempre por loja, sempre baixar → preencher → prévia (lê o
    planograma ao vivo, não escreve) → aplicar. Leitura de CSV comum em
    `planilha.py` (`;`/`,`, BOM, Windows-1252 no front, "1.299" ambíguo é erro).
