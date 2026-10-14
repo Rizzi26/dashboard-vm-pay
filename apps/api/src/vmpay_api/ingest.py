@@ -409,6 +409,45 @@ async def sincronizar_conta(conta_id: Any) -> list[dict[str, Any]]:
     return relatorios
 
 
+async def vendas_em_dia(integration_id: Any, token: str) -> bool:
+    """Traz agora as vendas novas de UMA conta — sem esperar o cron.
+
+    Para quem precisa do minuto atual (a contagem desconta o que vendeu
+    depois de contar). Mesmo cursor da ingestão: o cron seguinte continua de
+    onde esta parou, nada duplica. Devolve False se a VMpay não respondeu —
+    quem chama decide se segue com o dado da última rodada.
+    """
+    from .models_core import Integration
+    from .sync_core import eh_conta_original
+
+    async with session_factory()() as session:
+        integracoes = (
+            await session.execute(
+                select(Integration)
+                .where(Integration.active, Integration.kind == "vmpay")
+                .order_by(Integration.created_at)
+            )
+        ).scalars().all()
+        # A mesma regra de _contas_de_vendas: só a primeira conta original usa
+        # a chave de cursor de sempre.
+        chave: Any = integration_id
+        original_usada = False
+        for integ in integracoes:
+            original = eh_conta_original(integ.config) and not original_usada
+            original_usada = original_usada or original
+            if str(integ.id) == str(integration_id):
+                chave = None if original else integ.id
+                break
+        await session.commit()
+
+        cfg = settings()
+        async with VMpayClient(token, base_url=cfg.vmpay_base or PRODUCTION) as client:
+            relatorio = await sync_resource("vends", client, session, key=cursor_key("vends", chave))
+    if relatorio.error:
+        log.warning("vendas da conta %s não atualizaram: %s", integration_id, relatorio.error)
+    return relatorio.error is None
+
+
 def cli() -> None:
     """Entrada do `vmpay-ingest`, usada pelo cron job do Render."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")

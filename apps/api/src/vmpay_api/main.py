@@ -15,6 +15,7 @@ from .routers import (
     auditoria,
     cadastro_lote,
     carga_planilha,
+    contagem,
     contas,
     health,
     interno,
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(members.router)
     app.include_router(sales.router)
     app.include_router(precos.router)
+    app.include_router(contagem.router)
     app.include_router(stock.router)
     app.include_router(cadastro_lote.router)
     app.include_router(products.router)
