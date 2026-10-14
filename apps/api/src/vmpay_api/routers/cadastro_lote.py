@@ -303,6 +303,14 @@ def _linha(
     resolvidos: dict[str, dict] = {}
     for coluna, chave in REFS:
         valor = campos.get(coluna, "")
+        if chave == "categorias_abastecimento" and len(refs[chave]) <= 1:
+            # A VMpay só exige quando a conta usa mais de uma: com uma, é ela;
+            # sem nenhuma (ou sem permissão de ler a lista), vai sem o campo.
+            if not valor and refs[chave]:
+                resolvidos[coluna] = {"id": refs[chave][0]["id"], "nome": refs[chave][0]["nome"]}
+                continue
+            if not valor:
+                continue
         if not valor:
             raise ValueError(f"coluna {coluna} vazia — a VMpay exige")
         achado = por_nome[chave].get(_normalizado(valor))
@@ -357,8 +365,8 @@ async def aplicar(body: AplicarBody, ctx: AdminCtx, session: Session) -> dict:
     """Cria o que é novo (um por um) e põe tudo na prateleira (um PATCH só)."""
     estoque.require_writes_enabled()
     for item in body.itens:
-        if item.acao == "criar" and not (item.fabricante and item.categoria and item.categoria_abastecimento):
-            raise HTTPException(422, f"linha {item.linha}: faltam fabricante/categorias")
+        if item.acao == "criar" and not (item.fabricante and item.categoria):
+            raise HTTPException(422, f"linha {item.linha}: faltam fabricante/categoria")
         if item.acao == "incluir" and item.product_id is None:
             raise HTTPException(422, f"linha {item.linha}: falta o produto a incluir")
 
@@ -468,9 +476,10 @@ def _campos_vmpay(item: ItemLote) -> dict[str, Any]:
         "name": item.nome,
         "manufacturer_id": item.fabricante.id,
         "category_id": item.categoria.id,
-        "supply_category_id": item.categoria_abastecimento.id,
         "default_price": float(item.preco),
     }
+    if item.categoria_abastecimento is not None:
+        campos["supply_category_id"] = item.categoria_abastecimento.id
     if item.codigo_barras:
         campos["barcode"] = item.codigo_barras
     return campos

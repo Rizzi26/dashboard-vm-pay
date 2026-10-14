@@ -191,10 +191,18 @@ class VMpayConnector:
             ("categorias", "categories"),
             ("categorias_abastecimento", "supply_categories"),
         ):
-            out[key] = [
-                {"id": item["id"], "nome": item.get("name") or ""}
-                async for item in self.client.paginate(path)
-            ]
+            try:
+                out[key] = [
+                    {"id": item["id"], "nome": item.get("name") or ""}
+                    async for item in self.client.paginate(path)
+                ]
+            except VMpayError as exc:
+                # Categoria de abastecimento só é obrigatória para quem usa mais
+                # de uma (doc da VMpay), e há conta cujo token nem enxerga a lista
+                # (401 na demo). Sem ela o cadastro segue sem o campo.
+                if path != "supply_categories" or exc.status not in (401, 403):
+                    raise
+                out[key] = []
         return out
 
     async def create_product(self, fields: dict[str, Any]) -> Any:
