@@ -112,6 +112,45 @@ class VMpayConnector:
             json=body,
         )
 
+    async def contar(
+        self,
+        machine_id: int,
+        installation_id: int,
+        contagens: list[tuple[int, float]],
+        view: PlanogramView | None = None,
+    ) -> Any:
+        """Contagem de inventário: o saldo do item passa a ser o que foi contado.
+
+        `contagens` é [(good_id, quantidade_observada)]. Vai como `observed`
+        num ajuste imediato — a VMpay calcula a diferença (balance_after =
+        observed), para cima ou para baixo, sem a gente mandar added/removed.
+        """
+        view = view or await self.current_planogram(machine_id, installation_id)
+        attrs = []
+        for good_id, observado in contagens:
+            item = self._resolve(view, good_id)
+            attrs.append(
+                {
+                    "planogram_item_id": item["id"],
+                    "balance_before": item.get("current_balance") or 0,
+                    "added": "",
+                    "removed": "",
+                    "observed": _quantidade(observado),
+                }
+            )
+        body = {
+            "inventory_adjustment": {
+                "planogram_id": view.planogram_id,
+                "kind": "now",
+                "occurred_at": datetime.now(timezone.utc).isoformat(),
+                "items_attributes": attrs,
+            }
+        }
+        return await self.client.post(
+            f"machines/{machine_id}/installations/{installation_id}/inventory_adjustments",
+            json=body,
+        )
+
     async def product_refs(self) -> dict[str, list[dict[str, Any]]]:
         """Registries que o cadastro de produto exige: id + nome de cada um.
 

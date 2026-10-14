@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ProductRefs, StockRow } from "@/lib/api";
 import { browserApi } from "@/lib/api";
 import { CadastroEmLote } from "@/components/CadastroEmLote";
+import { ContagemEstoque } from "@/components/ContagemEstoque";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { NewProductModal } from "@/components/NewProductModal";
 import { Paginacao } from "@/components/Paginacao";
@@ -34,14 +35,33 @@ type RowModal =
   | { kind: "restock"; row: StockRow }
   | { kind: "price"; row: StockRow };
 
+type Planilha = "precos" | "cadastro" | "contagem";
+
+/** O menu "Planilhas": cada opção é um fluxo baixar → preencher → conferir → aplicar. */
+const PLANILHAS: { kind: Planilha; titulo: string; descricao: string }[] = [
+  { kind: "precos", titulo: "Atualizar preços", descricao: "Preencha o preço novo só do que muda." },
+  {
+    kind: "cadastro",
+    titulo: "Cadastrar produtos",
+    descricao: "Cria na VMpay e já põe na prateleira, com preço e níveis.",
+  },
+  {
+    kind: "contagem",
+    titulo: "Contagem de estoque",
+    descricao: "Conte a loja: o saldo vira o contado e a diferença fica como perda ou sobra.",
+  },
+];
+
 // "acoes" é a folha do celular: a linha da lista não tem espaço para os
 // botões Repor/Preço, então o toque abre as ações (e o link da ficha).
 type Modal =
   | RowModal
   | { kind: "acoes"; row: StockRow }
   | { kind: "new" }
+  | { kind: "planilhas" }
   | { kind: "precos"; locationId: string; loja: string }
   | { kind: "cadastro"; locationId: string; loja: string }
+  | { kind: "contagem"; locationId: string; loja: string }
   | null;
 
 export function StockView({
@@ -190,28 +210,7 @@ export function StockView({
               display na mesma classe dependem da ordem do CSS. */}
           <span className="hidden items-start gap-2.5 md:flex">
             <ExportCsvButton path={`/orgs/${org}/stock/export.csv`} filename="prateleira.csv" />
-            {canOperate ? (
-              <Botao
-                onClick={() =>
-                  lojaDosPrecos
-                    ? setModal({ kind: "precos", ...lojaDosPrecos })
-                    : setFeedback("Escolha a loja na barra para atualizar preços por planilha.")
-                }
-              >
-                Atualizar preços
-              </Botao>
-            ) : null}
-            {canOperate ? (
-              <Botao
-                onClick={() =>
-                  lojaDosPrecos
-                    ? setModal({ kind: "cadastro", ...lojaDosPrecos })
-                    : setFeedback("Escolha a loja na barra para cadastrar produtos por planilha.")
-                }
-              >
-                Cadastrar por planilha
-              </Botao>
-            ) : null}
+            {canOperate ? <Botao onClick={() => setModal({ kind: "planilhas" })}>Planilhas</Botao> : null}
             {canOperate ? (
               <Botao variante="cheio" onClick={() => setModal({ kind: "new" })}>
                 Adicionar produto
@@ -486,7 +485,45 @@ export function StockView({
         </div>
       </Cartao>
 
-      {modal?.kind === "cadastro" ? (
+      {modal?.kind === "planilhas" ? (
+        <Folha
+          titulo="Planilhas"
+          subtitulo={lojaDosPrecos ? lojaDosPrecos.loja : "escolha a loja na barra antes"}
+          onFechar={() => setModal(null)}
+        >
+          <div className="flex flex-col gap-2.5">
+            {PLANILHAS.map((p) => (
+              <button
+                key={p.kind}
+                type="button"
+                disabled={!lojaDosPrecos}
+                onClick={() => lojaDosPrecos && setModal({ kind: p.kind, ...lojaDosPrecos })}
+                className="rounded-2xl border border-borda bg-lista px-4 py-3 text-left hover:bg-[var(--row-hover)] disabled:opacity-50"
+              >
+                <span className="block text-[16px] font-semibold text-texto">{p.titulo}</span>
+                <span className="block text-[14px] text-sec">{p.descricao}</span>
+              </button>
+            ))}
+            {!lojaDosPrecos ? (
+              <p className="m-0 text-[14px] text-laranja-texto">
+                ▲ Cada planilha é de uma loja: escolha a loja na barra do topo.
+              </p>
+            ) : null}
+          </div>
+        </Folha>
+      ) : modal?.kind === "contagem" ? (
+        <ContagemEstoque
+          org={org}
+          locationId={modal.locationId}
+          loja={modal.loja}
+          onFechar={() => setModal(null)}
+          onAplicado={(mensagem) => {
+            setFeedback(mensagem);
+            setModal(null);
+            router.refresh();
+          }}
+        />
+      ) : modal?.kind === "cadastro" ? (
         <CadastroEmLote
           org={org}
           locationId={modal.locationId}
