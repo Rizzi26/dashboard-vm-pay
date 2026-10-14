@@ -665,7 +665,7 @@ async def _load_target(session: AsyncSession, org_id: uuid.UUID, location_id: uu
         await session.execute(
             text(
                 """
-                select l.id as location_id, l.name,
+                select l.id as location_id, l.name, l.carga_como_carregamento,
                        ll.machine_id, ll.installation_id,
                        i.id as integration_id, i.config
                   from core.location l
@@ -775,6 +775,19 @@ async def preparar_restock(session: AsyncSession, ctx: OrgContext, body: Restock
     return {"body": body, "target": target, "externals": externals, "token": token}
 
 
+def _notas_da_carga(action: str, extra: dict | None, action_id: int) -> str:
+    """O que aparece na pick list da VMpay: de onde veio a carga."""
+    origem = {
+        "picklist.approve": "cupom",
+        "picklist.manual": "carga manual",
+    }.get(action, "reposição")
+    fornecedor = (extra or {}).get("fornecedor")
+    partes = [f"Carga pelo painel ({origem})", f"ação nº {action_id}"]
+    if fornecedor:
+        partes.append(f"fornecedor {fornecedor}")
+    return " — ".join(partes)
+
+
 async def executar_restock(
     session: AsyncSession,
     ctx: OrgContext,
@@ -786,6 +799,9 @@ async def executar_restock(
     """action_log pendente → ajuste na VMpay → reflexo local → log fechado."""
     body: RestockBody = plano["body"]
     target, externals = plano["target"], plano["externals"]
+    # Loja ligada: a carga aparece como CARREGAMENTO na VMpay (pick list +
+    # reabastecimento); desligada, como ajuste de inventário (o de sempre).
+    carregamento = bool(target.get("carga_como_carregamento"))
     action_id = await _open_action(
         session,
         ctx,
@@ -793,17 +809,23 @@ async def executar_restock(
         {"location_id": str(body.location_id), "machine_id": target["machine_id"]},
         {
             "items": [{"product_id": str(i.product_id), "quantity": float(i.quantity)} for i in body.items],
+            "modo": "carregamento" if carregamento else "ajuste",
             **(extra_params or {}),
         },
     )
+    itens_vmpay = [(externals[i.product_id], float(i.quantity)) for i in body.items]
     try:
         connector = get_connector(target["config"], plano.get("token"))
         async with connector.client:
-            result = await connector.restock(
-                target["machine_id"],
-                target["installation_id"],
-                [(externals[i.product_id], float(i.quantity)) for i in body.items],
-            )
+            if carregamento:
+                result = await connector.carregar(
+                    target["machine_id"],
+                    target["installation_id"],
+                    itens_vmpay,
+                    _notas_da_carga(action, extra_params, action_id),
+                )
+            else:
+                result = await connector.restock(target["machine_id"], target["installation_id"], itens_vmpay)
     except VMpayError as exc:
         detail = redact(str(exc))
         await _close_action(session, action_id, error=detail)

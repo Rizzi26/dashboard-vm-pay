@@ -247,6 +247,8 @@ export type PicklistSaldo = {
 export type LojaCard = {
   id: string;
   nome: string;
+  /** true = carga do painel vira pick list + reabastecimento (carregamento) na VMpay. */
+  carga_como_carregamento?: boolean;
   vendas: {
     hoje: number;
     d7: number;

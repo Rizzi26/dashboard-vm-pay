@@ -112,6 +112,58 @@ class VMpayConnector:
             json=body,
         )
 
+    async def carregar(
+        self,
+        machine_id: int,
+        installation_id: int,
+        items: list[tuple[int, float]],
+        notas: str,
+    ) -> dict[str, Any]:
+        """Carga como CARREGAMENTO na VMpay: pick list + reabastecimento.
+
+        É o que aparece como carregamento para o operador (o ajuste de
+        inventário de restock() aparece como "ajuste"). Três cuidados:
+        - pick list já pendente na loja (criada na VMpay) seria a executada
+          pelo /restock — recusa antes, sem criar nada;
+        - reabastecimento recusado deixaria a NOSSA pick list pendente, e
+          pick list pendente trava alteração de planograma (preço, cadastro):
+          ela é apagada antes de levantar o erro;
+        - restock_only: o painel carrega, não faz coleta de dinheiro.
+        """
+        base = f"machines/{machine_id}/installations/{installation_id}"
+        pendentes = [p for p in (await self.client.get(f"{base}/pick_lists") or []) if p.get("pending")]
+        if pendentes:
+            raise ConnectorError(
+                f"já há pick list pendente na VMpay para esta loja (nº {pendentes[0].get('id')}) — "
+                "conclua ou apague-a na VMpay antes de lançar pelo painel"
+            )
+        view = await self.current_planogram(machine_id, installation_id)
+        itens = []
+        for good_id, quantidade in items:
+            q = Decimal(str(quantidade))
+            itens.append(
+                {
+                    "planogram_item_id": self._resolve(view, good_id)["id"],
+                    "quantity": int(q) if q == q.to_integral_value() else float(q),
+                    # Sem as regras da instalação: a quantidade é a que chegou,
+                    # não a que a regra de abastecimento acharia certa.
+                    "skip_rules": True,
+                }
+            )
+        pick_list = await self.client.post(
+            f"{base}/pick_lists",
+            json={"pick_list": {"planogram_id": view.planogram_id, "notes": notas[:250], "items_attributes": itens}},
+        )
+        try:
+            restock = await self.client.post(f"{base}/restock", json={"restock_mode": "restock_only"})
+        except VMpayError:
+            try:
+                await self.client.delete(f"{base}/pick_lists/{pick_list['id']}")
+            except VMpayError:
+                pass  # o erro que importa é o do reabastecimento
+            raise
+        return {"pick_list_id": pick_list.get("id"), "restock": restock}
+
     async def contar(
         self,
         machine_id: int,

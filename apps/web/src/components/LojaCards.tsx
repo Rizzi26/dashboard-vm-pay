@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { LojaCard } from "@/lib/api";
+import { browserApi } from "@/lib/api";
+import { supabaseBrowser } from "@/lib/supabase/browser";
 import { escolherLoja } from "@/components/LojaSelector";
 import { Botao, classesBotao } from "@/components/ui/Botao";
 import { Selo, type TomSelo } from "@/components/ui/Selo";
@@ -57,10 +59,13 @@ export function LojaCards({
   lojas,
   contaDe = {},
   extra,
+  orgMaster = null,
 }: {
   lojas: LojaCard[];
   contaDe?: Record<string, string>;
   extra?: ReactNode;
+  /** Slug da organização quando quem vê é master: mostra o modo da carga. */
+  orgMaster?: string | null;
 }) {
   const entrar = useEntrar();
 
@@ -120,6 +125,7 @@ export function LojaCards({
                 </Botao>
               </div>
             </div>
+            {orgMaster ? <ModoCarga org={orgMaster} loja={l} /> : null}
           </li>
         );
       })}
@@ -183,5 +189,54 @@ export function BotaoReporHoje() {
     >
       O que repor hoje
     </button>
+  );
+}
+
+/**
+ * Como a carga do painel chega à VMpay nesta loja. Ligado: pick list +
+ * reabastecimento — aparece como CARREGAMENTO, como quem lança na VMpay.
+ * Desligado: ajuste de inventário (o saldo fica certo, mas aparece como
+ * ajuste). Só master: muda toda carga da loja, e vai para a auditoria.
+ */
+function ModoCarga({ org, loja }: { org: string; loja: LojaCard }) {
+  const router = useRouter();
+  const [ligado, setLigado] = useState(!!loja.carga_como_carregamento);
+  const [erro, setErro] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function mudar(valor: boolean) {
+    setBusy(true);
+    setErro(null);
+    try {
+      const { data } = await supabaseBrowser().auth.getSession();
+      if (!data.session) throw new Error("sessão expirada — entre de novo");
+      const resp = await browserApi.request(`/orgs/${org}/lojas/${loja.id}/modo-carga`, data.session.access_token, {
+        method: "PATCH",
+        body: JSON.stringify({ carga_como_carregamento: valor }),
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(payload.detail ?? `backend respondeu ${resp.status}`);
+      setLigado(valor);
+      router.refresh();
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "falha ao mudar");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3.5 rounded-xl bg-lista px-3 py-2.5 text-[13px]">
+      <label className="flex items-center gap-2 text-texto">
+        <input type="checkbox" checked={ligado} disabled={busy} onChange={(e) => mudar(e.target.checked)} />
+        Carga entra na VMpay como <strong>carregamento</strong> (pick list)
+      </label>
+      <p className="m-0 mt-1 text-sec">
+        {ligado
+          ? "Repor, cupom e carga manual criam uma pick list e reabastecem — aparece como carregamento na VMpay."
+          : "Hoje entra como ajuste de inventário: o saldo fica certo, mas na VMpay aparece como ajuste."}
+      </p>
+      {erro ? <p className="m-0 mt-1 text-vermelho-texto">■ {erro}</p> : null}
+    </div>
   );
 }

@@ -92,7 +92,13 @@ export function ProductPicker({
   if (selecionado) {
     return (
       <div className="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-campo-borda bg-campo px-3 md:min-h-10">
-        <span className="min-w-0 flex-1 truncate text-[15px] text-texto md:text-[14px]">{selecionado.name}</span>
+        <span className="min-w-0 flex-1 truncate text-[15px] text-texto md:text-[14px]">
+          {selecionado.name}
+          {/* Descrição + canaleta + código: os três que o operador confere. */}
+          {selecionado.barcode ? (
+            <span className="ml-2 text-xs tabular-nums text-sec">{selecionado.barcode}</span>
+          ) : null}
+        </span>
         {selecionado.canaleta ? (
           <Selo tom="cinza" simbolo={null}>
             canaleta {selecionado.canaleta}
