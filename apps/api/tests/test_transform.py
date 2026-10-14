@@ -324,3 +324,34 @@ def test_conta_do_cofre_nao_cai_no_token_da_env(monkeypatch):
     monkeypatch.setenv(sync_core.DEFAULT_TOKEN_ENV, "token-da-conta-original")
     with pytest.raises(VMpayError, match="cofre"):
         sync_core.resolve_token({"secret_id": "00000000-0000-0000-0000-000000000001"})
+
+
+@respx.mock
+async def test_rodada_completa_usa_o_preco_do_planograma_baixado_antes(monkeypatch):
+    """O planograma vem na fase de rede, com o resto: a fase de banco só lê o
+    que já foi baixado. Buscar lá dentro quebrou em homologação (14/10)."""
+    monkeypatch.setenv(sync_core.DEFAULT_TOKEN_ENV, "tok")
+    monkeypatch.setenv("VMPAY_BASE", BASE)
+    respx.get(f"{BASE}/products").mock(return_value=httpx.Response(200, json=[PRODUTO]))
+    respx.get(f"{BASE}/installations").mock(return_value=httpx.Response(200, json=INSTALACOES))
+    respx.get(f"{BASE}/installation_stock_balances").mock(
+        return_value=httpx.Response(200, json=[{**SALDO, "inventory_balance": 0, "desired_price": 0}])
+    )
+    maquina = SALDO["machine"]["id"]
+    instalacao = next(i for i in INSTALACOES if i["machine_id"] == maquina)["id"]
+    planograma = respx.get(f"{BASE}/machines/{maquina}/installations/{instalacao}/current_planogram").mock(
+        return_value=httpx.Response(
+            200, json={"id": 1, "items": [{"id": 9, "good_id": PRODUTO["id"], "desired_price": 7.49}]}
+        )
+    )
+
+    sessao = FakeSession(scalar_lists=[[], []])
+    report = await sync_core.sync_integration(sessao, integration(), client_factory=fast_client)
+
+    assert report.error is None and report.balances == 1
+    assert planograma.called
+    saldo = next(s for s in sessao.statements if s != "COMMIT" and "stock_balance" in str(s) and "INSERT" in str(s).upper())
+    from sqlalchemy.dialects import postgresql
+
+    params = saldo.compile(dialect=postgresql.dialect()).params
+    assert [v for k, v in params.items() if k.startswith("price")] == [7.49]

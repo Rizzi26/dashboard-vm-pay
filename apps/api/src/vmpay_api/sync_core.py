@@ -402,6 +402,8 @@ class _Baixado:
 
     def __init__(self, dados: dict[str, list[dict[str, Any]]]):
         self._dados = dados
+        #: Leituras avulsas (planogramas), pelo caminho — servidas por get().
+        self._avulsos: dict[str, Any] = {}
 
     @classmethod
     async def de(cls, client: VMpayClient, recursos: tuple[str, ...]) -> _Baixado:
@@ -410,6 +412,34 @@ class _Baixado:
     async def paginate(self, path: str, **_: Any):
         for item in self._dados[path]:
             yield item
+
+    async def get(self, path: str, **_: Any) -> Any:
+        if path not in self._avulsos:
+            raise LookupError(f"{path} não foi baixado nesta rodada")
+        return self._avulsos[path]
+
+    async def baixar_planogramas(self, client: VMpayClient) -> None:
+        """Um planograma por loja com saldo — ainda na fase de rede.
+
+        Falha numa loja não para a rodada: a loja fica sem o preço do
+        planograma e o snapshot usa o derivado do saldo (ver
+        _precos_do_planograma).
+        """
+        por_maquina = installations_map(self._dados["installations"])
+        maquinas = {
+            linha["machine_id"]
+            for linha in map(map_balance, self._dados["installation_stock_balances"])
+            if linha is not None
+        }
+        for maquina in sorted(maquinas):
+            instalacao = por_maquina.get(maquina)
+            if instalacao is None:
+                continue
+            caminho = f"machines/{maquina}/installations/{instalacao['id']}/current_planogram"
+            try:
+                self._avulsos[caminho] = await client.get(caminho)
+            except Exception as exc:  # noqa: BLE001 — rede, 5xx, timeout: tudo cai no derivado
+                log.warning("planograma da máquina %s não veio: %s", maquina, redact(str(exc)))
 
 
 async def sync_integration(
@@ -463,6 +493,7 @@ async def sync_integration(
                 else:
                     baixado._dados["products"] = []
                     report.catalogo = "pulado"
+            await baixado.baixar_planogramas(client)
         report.products, by_external = await sync_products(baixado, session, integration)
         report.locations, report.balances, report.stale_balances_removed = (
             await sync_stock(baixado, session, integration, by_external)
