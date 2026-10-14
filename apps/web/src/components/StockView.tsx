@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ProductRefs, StockRow } from "@/lib/api";
 import { browserApi } from "@/lib/api";
+import { CadastroEmLote } from "@/components/CadastroEmLote";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { NewProductModal } from "@/components/NewProductModal";
 import { Paginacao } from "@/components/Paginacao";
@@ -40,6 +41,7 @@ type Modal =
   | { kind: "acoes"; row: StockRow }
   | { kind: "new" }
   | { kind: "precos"; locationId: string; loja: string }
+  | { kind: "cadastro"; locationId: string; loja: string }
   | null;
 
 export function StockView({
@@ -76,8 +78,8 @@ export function StockView({
 
   const canOperate = CAN_OPERATE.has(role);
 
-  // Preço em lote é por loja (um planograma por loja na VMpay): com "todas as
-  // lojas" na barra, só dá quando o lojista tem uma loja só.
+  // Planilhas (preço, cadastro) são por loja — um planograma por loja na
+  // VMpay: com "todas as lojas" na barra, só dá quando há uma loja só.
   const lojaDosPrecos = useMemo(() => {
     const ids = new Set(rows.map((r) => r.location_id));
     const id = loja ?? (ids.size === 1 ? [...ids][0] : null);
@@ -197,6 +199,17 @@ export function StockView({
                 }
               >
                 Atualizar preços
+              </Botao>
+            ) : null}
+            {canOperate ? (
+              <Botao
+                onClick={() =>
+                  lojaDosPrecos
+                    ? setModal({ kind: "cadastro", ...lojaDosPrecos })
+                    : setFeedback("Escolha a loja na barra para cadastrar produtos por planilha.")
+                }
+              >
+                Cadastrar por planilha
               </Botao>
             ) : null}
             {canOperate ? (
@@ -473,7 +486,19 @@ export function StockView({
         </div>
       </Cartao>
 
-      {modal?.kind === "precos" ? (
+      {modal?.kind === "cadastro" ? (
+        <CadastroEmLote
+          org={org}
+          locationId={modal.locationId}
+          loja={modal.loja}
+          onFechar={() => setModal(null)}
+          onConcluido={(mensagem) => {
+            setFeedback(mensagem);
+            setModal(null);
+            router.refresh();
+          }}
+        />
+      ) : modal?.kind === "precos" ? (
         <PrecosEmLote
           org={org}
           locationId={modal.locationId}
