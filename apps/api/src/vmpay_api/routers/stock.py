@@ -823,6 +823,7 @@ async def executar_restock(
                     target["installation_id"],
                     itens_vmpay,
                     _notas_da_carga(action, extra_params, action_id),
+                    marcador=f"ação nº {action_id}",
                 )
             else:
                 result = await connector.restock(target["machine_id"], target["installation_id"], itens_vmpay)
@@ -830,9 +831,23 @@ async def executar_restock(
         detail = redact(str(exc))
         await _close_action(session, action_id, error=detail)
         raise RestockRecusado(action_id, detail) from None
+    except Exception as exc:
+        # Rede de segurança da regra do action_log: nada fica 'pending' para
+        # sempre por um erro inesperado (resposta em formato estranho etc.).
+        await _close_action(session, action_id, error=f"erro inesperado: {type(exc).__name__}")
+        raise
+
+    # No carregamento, reflete o que a VMpay de fato carregou (item ignorado
+    # por falta de estoque no CD não entra); no ajuste, o que foi pedido.
+    carregados = result.get("carregados") if carregamento and isinstance(result, dict) else None
+    ignorados = result.get("ignorados", []) if carregamento and isinstance(result, dict) else []
 
     # Write-back aceito: refletir localmente e fechar o log.
     for item in body.items:
+        if carregados is not None:
+            item = item.model_copy(update={"quantity": Decimal(str(carregados.get(externals[item.product_id], 0)))})
+            if item.quantity == 0:
+                continue
         await session.execute(
             text(
                 """
@@ -863,8 +878,12 @@ async def executar_restock(
                 "actor": str(ctx.principal.user_id),
             },
         )
-    await _close_action(session, action_id)
-    return {"action_id": action_id, "status": "success", "vmpay": result}
+    await _close_action(
+        session,
+        action_id,
+        error=f"carregado em parte: a VMpay ignorou {len(ignorados)} item(ns): {ignorados}" if ignorados else None,
+    )
+    return {"action_id": action_id, "status": "parcial" if ignorados else "success", "vmpay": result}
 
 
 class RestockRecusado(HTTPException):

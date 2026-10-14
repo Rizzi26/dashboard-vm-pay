@@ -31,50 +31,154 @@ def conector():
     return VMpayConnector(VMpayClient("tok", base_url=BASE, max_retries=0))
 
 
+def instalacao(estrategia="require_pending_pick_list"):
+    respx.get(INST).mock(return_value=httpx.Response(200, json={"id": 857, "restock_strategy": estrategia}))
+
+
+def lista(*pick_lists):
+    respx.get(f"{INST}/pick_lists").mock(return_value=httpx.Response(200, json=list(pick_lists)))
+
+
+def detalhe(pick_id, itens, pending=False):
+    respx.get(f"{INST}/pick_lists/{pick_id}").mock(
+        return_value=httpx.Response(200, json={"id": pick_id, "pending": pending, "items": itens})
+    )
+
+
 @respx.mock
-async def test_carregar_cria_pick_list_e_reabastece():
-    respx.get(f"{INST}/pick_lists").mock(return_value=httpx.Response(200, json=[{"id": 1, "pending": False}]))
+async def test_carregar_cria_pick_list_reabastece_e_diz_o_que_entrou():
+    instalacao()
+    lista({"id": 1, "pending": False})
     respx.get(f"{INST}/current_planogram").mock(return_value=httpx.Response(200, json=PLANOGRAMA))
     pl = respx.post(f"{INST}/pick_lists").mock(return_value=httpx.Response(201, json={"id": 9001}))
     rs = respx.post(f"{INST}/restock").mock(return_value=httpx.Response(200, json={"ok": True}))
+    detalhe(9001, [{"good_id": 163, "quantity": 6, "ignored": False}])
 
-    r = await conector().carregar(49, 857, [(163, 6.0)], "Carga pelo painel (cupom)")
+    r = await conector().carregar(49, 857, [(163, 4.0), (163, 2.0)], "Carga pelo painel (cupom) — ação nº 7", "ação nº 7")
 
-    assert r["pick_list_id"] == 9001
+    assert r == {"pick_list_id": 9001, "carregados": {163: 6.0}, "ignorados": []}
     corpo = json.loads(pl.calls.last.request.content)["pick_list"]
-    assert corpo["planogram_id"] == 777 and corpo["notes"] == "Carga pelo painel (cupom)"
+    assert corpo["planogram_id"] == 777
+    # o mesmo produto em duas linhas vira um item só
     assert corpo["items_attributes"] == [{"planogram_item_id": 5001, "quantity": 6, "skip_rules": True}]
     assert json.loads(rs.calls.last.request.content) == {"restock_mode": "restock_only"}
+    assert pl.call_count == 1 and rs.call_count == 1
+
+
+@respx.mock
+async def test_instalacao_fora_de_somente_pick_list_recusa():
+    """Em outra estratégia o /restock pode virar reabastecimento COMPLETO."""
+    instalacao("allow_pick_list_or_full")
+    pl = respx.post(f"{INST}/pick_lists")
+    with pytest.raises(ConnectorError, match="somente por pick list"):
+        await conector().carregar(49, 857, [(163, 1.0)], "x", "m")
+    assert not pl.called
 
 
 @respx.mock
 async def test_pick_list_pendente_da_loja_recusa_sem_criar_nada():
     """O /restock executaria a pick list pendente — que não é a nossa."""
-    respx.get(f"{INST}/pick_lists").mock(return_value=httpx.Response(200, json=[{"id": 55, "pending": True}]))
+    instalacao()
+    lista({"id": 55, "pending": True})
     pl = respx.post(f"{INST}/pick_lists")
     rs = respx.post(f"{INST}/restock")
     with pytest.raises(ConnectorError, match="nº 55"):
-        await conector().carregar(49, 857, [(163, 1.0)], "x")
+        await conector().carregar(49, 857, [(163, 1.0)], "x", "m")
     assert not pl.called and not rs.called
 
 
 @respx.mock
-async def test_reabastecimento_recusado_apaga_a_pick_list_criada():
+async def test_fracionado_recusa_antes_de_criar():
+    instalacao()
+    lista()
+    pl = respx.post(f"{INST}/pick_lists")
+    with pytest.raises(ConnectorError, match="fracionada"):
+        await conector().carregar(49, 857, [(163, 1.5)], "x", "m")
+    assert not pl.called
+
+
+@respx.mock
+async def test_reabastecimento_recusado_e_pendente_apaga_a_pick_list():
     """Pick list pendente trava alteração de planograma: não pode sobrar."""
-    respx.get(f"{INST}/pick_lists").mock(return_value=httpx.Response(200, json=[]))
+    instalacao()
+    lista()
     respx.get(f"{INST}/current_planogram").mock(return_value=httpx.Response(200, json=PLANOGRAMA))
     respx.post(f"{INST}/pick_lists").mock(return_value=httpx.Response(201, json={"id": 9002}))
-    respx.post(f"{INST}/restock").mock(return_value=httpx.Response(422, json={"error": "não"}))
+    rs = respx.post(f"{INST}/restock").mock(return_value=httpx.Response(422, json={"error": "não"}))
+    detalhe(9002, [], pending=True)
     apaga = respx.delete(f"{INST}/pick_lists/9002").mock(return_value=httpx.Response(204))
     with pytest.raises(VMpayError):
-        await conector().carregar(49, 857, [(163, 1.0)], "x")
-    assert apaga.called
+        await conector().carregar(49, 857, [(163, 1.0)], "x", "m")
+    assert apaga.called and rs.call_count == 1
+
+
+@respx.mock
+async def test_erro_na_resposta_mas_aplicada_conta_como_sucesso():
+    """Timeout/5xx com a carga aplicada do lado de lá: marcar erro levaria a
+    lançar de novo — e a VMpay carregaria duas vezes."""
+    instalacao()
+    lista()
+    respx.get(f"{INST}/current_planogram").mock(return_value=httpx.Response(200, json=PLANOGRAMA))
+    respx.post(f"{INST}/pick_lists").mock(return_value=httpx.Response(201, json={"id": 9003}))
+    rs = respx.post(f"{INST}/restock").mock(return_value=httpx.Response(502))
+    detalhe(9003, [{"good_id": 163, "quantity": 1, "ignored": False}], pending=False)
+    apaga = respx.delete(f"{INST}/pick_lists/9003")
+    r = await conector().carregar(49, 857, [(163, 1.0)], "x", "m")
+    assert r["carregados"] == {163: 1.0}
+    assert rs.call_count == 1  # sem retry: repetir poderia carregar de novo
+    assert not apaga.called
+
+
+@respx.mock
+async def test_criacao_sem_resposta_apaga_a_nossa_pela_marca():
+    instalacao()
+    respx.get(f"{INST}/pick_lists").mock(
+        side_effect=[
+            httpx.Response(200, json=[]),  # guard: nada pendente
+            httpx.Response(200, json=[{"id": 9004, "pending": True, "notes": "Carga — ação nº 8"}]),
+        ]
+    )
+    respx.get(f"{INST}/current_planogram").mock(return_value=httpx.Response(200, json=PLANOGRAMA))
+    pl = respx.post(f"{INST}/pick_lists").mock(return_value=httpx.Response(504))
+    apaga = respx.delete(f"{INST}/pick_lists/9004").mock(return_value=httpx.Response(204))
+    with pytest.raises(VMpayError):
+        await conector().carregar(49, 857, [(163, 1.0)], "Carga — ação nº 8", "ação nº 8")
+    assert pl.call_count == 1 and apaga.called
+
+
+@respx.mock
+async def test_item_ignorado_pela_vmpay_nao_conta_como_carregado():
+    instalacao()
+    lista()
+    respx.get(f"{INST}/current_planogram").mock(
+        return_value=httpx.Response(
+            200, json={"id": 777, "items": [{"id": 5001, "good_id": 163}, {"id": 5002, "good_id": 164}]}
+        )
+    )
+    respx.post(f"{INST}/pick_lists").mock(return_value=httpx.Response(201, json={"id": 9005}))
+    respx.post(f"{INST}/restock").mock(return_value=httpx.Response(200, json={}))
+    detalhe(
+        9005,
+        [
+            {"good_id": 163, "quantity": 2, "ignored": False},
+            {"good_id": 164, "quantity": 3, "ignored": True, "ignore_reason": "Estoque disponível insuficiente"},
+        ],
+    )
+    r = await conector().carregar(49, 857, [(163, 2.0), (164, 3.0)], "x", "m")
+    assert r["carregados"] == {163: 2.0}
+    assert r["ignorados"] == [{"good_id": 164, "motivo": "Estoque disponível insuficiente"}]
 
 
 class Carregador(FakeConnector):
-    async def carregar(self, machine_id, installation_id, items, notas):
-        self.calls.append(("carregar", machine_id, installation_id, items, notas))
-        return {"pick_list_id": 9001}
+    def __init__(self, ignorar=None):
+        super().__init__()
+        self.ignorar = ignorar
+
+    async def carregar(self, machine_id, installation_id, items, notas, marcador):
+        self.calls.append(("carregar", machine_id, installation_id, items, notas, marcador))
+        carregados = {g: q for g, q in items if g != self.ignorar}
+        ignorados = [{"good_id": self.ignorar, "motivo": "Estoque disponível insuficiente"}] if self.ignorar else []
+        return {"pick_list_id": 9001, "carregados": carregados, "ignorados": ignorados}
 
 
 async def test_loja_ligada_carrega_por_pick_list(monkeypatch):
@@ -127,3 +231,18 @@ async def test_loja_de_outra_org_e_404():
     use_session([])
     resp = await call("PATCH", f"/orgs/mercadinho/lojas/{uuid.uuid4()}/modo-carga", json={"carga_como_carregamento": True})
     assert resp.status_code == 404
+
+
+async def test_item_ignorado_nao_entra_no_saldo_do_painel(monkeypatch):
+    fake = Carregador(ignorar=163)
+    monkeypatch.setattr(stock_router, "get_connector", lambda config, token=None: fake)
+    use_role("admin")
+    rotas = [r if r[0] != "join core.location_link" else (r[0], [{**TARGET_ROW, "carga_como_carregamento": True}]) for r in rotas_de_sucesso()]
+    sessao = use_session(rotas)
+    resp = await call(
+        "POST", "/orgs/mercadinho/stock/restock",
+        json={"location_id": str(LOC_ID), "items": [{"product_id": str(PROD_ID), "quantity": 6}]},
+    )
+    assert resp.status_code == 201 and resp.json()["status"] == "parcial"
+    sqls = " ".join(sql for sql, _ in sessao.executed)
+    assert "update core.stock_balance" not in sqls  # nada entrou de fato
