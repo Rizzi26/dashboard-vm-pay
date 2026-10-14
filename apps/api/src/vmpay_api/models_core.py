@@ -108,6 +108,8 @@ class Location(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
     name: Mapped[str] = mapped_column(Text)
+    #: Carga vira pick list + reabastecimento na VMpay (migration 0012).
+    carga_como_carregamento: Mapped[bool] = mapped_column(Boolean, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -138,6 +140,8 @@ class StockBalance(Base):
     price: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
     #: active | suspended | inactive, do planograma da loja (migration 0010).
     planogram_status: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Posição(ões) no planograma da loja, "500" ou "500, 501" (migration 0011).
+    canaleta: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

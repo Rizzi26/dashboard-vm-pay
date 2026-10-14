@@ -36,7 +36,7 @@ AdminCtx = Annotated[OrgContext, Depends(require_role("admin"))]
 
 Situacao = Literal["active", "suspended", "inactive"]
 
-COLUNAS = ["id", "produto", "codigo_barras", "saldo", "situacao_atual", "nova_situacao"]
+COLUNAS = ["id", "canaleta", "produto", "codigo_barras", "saldo", "situacao_atual", "nova_situacao"]
 
 NOMES: dict[str, str] = {"active": "ativo", "suspended": "suspenso", "inactive": "inativo"}
 
@@ -48,7 +48,7 @@ SINONIMOS: dict[str, str] = {
 }
 
 PRODUTOS_DA_LOJA = """
-select p.id as product_id, p.name, p.barcode, b.quantity, pl.external_id
+select p.id as product_id, p.name, p.barcode, b.quantity, b.canaleta, pl.external_id
   from core.stock_balance b
   join core.product p on p.id = b.product_id
   left join core.product_link pl
@@ -112,6 +112,7 @@ async def modelo(ctx: AdminCtx, session: Session, location_id: Annotated[uuid.UU
         writer.writerow(
             [
                 p["product_id"],
+                p.get("canaleta") or "",
                 p["name"],
                 p["barcode"] or "",
                 saldo.rstrip("0").rstrip(".") if "." in saldo else saldo,

@@ -29,7 +29,7 @@ from vmpay.redact import redact
 from ..audit import registrar
 from ..auth import OrgContext, require_role
 from ..config import settings
-from ..connector import VMpayConnector
+from ..connector import CargaIncerta, VMpayConnector
 from ..db import get_session, session_factory
 from ..models_core import Integration
 from ..sync_core import resolve_token, sync_integration, token_da_conta
@@ -79,6 +79,7 @@ select l.id   as location_id,
        b.quantity,
        b.updated_at,
        b.planogram_status,
+       b.canaleta,
        f.nomes as nomes_fornecedor
   from core.stock_balance b
   join core.location l on l.id = b.location_id
@@ -115,6 +116,8 @@ async def list_stock(ctx: ViewerCtx, session: Session) -> list[dict]:
             "nomes_fornecedor": list(r.get("nomes_fornecedor") or []),
             # Nulo = planograma não respondeu na última rodada: tratado como ativo.
             "situacao": r.get("planogram_status") or "active",
+            # Posição na loja: o "código" com que o operador acha o produto.
+            "canaleta": r.get("canaleta"),
         }
         for r in rows
     ]
@@ -128,11 +131,12 @@ async def export_csv(ctx: ViewerCtx, session: Session) -> Response:
     ).mappings().all()
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")  # Excel pt-BR abre ; direto
-    writer.writerow(["local", "produto", "codigo_barras", "preco", "quantidade", "atualizado_em"])
+    writer.writerow(["local", "canaleta", "produto", "codigo_barras", "preco", "quantidade", "atualizado_em"])
     for r in rows:
         writer.writerow(
             [
                 r["location_name"],
+                r.get("canaleta") or "",
                 r["product_name"],
                 r["barcode"] or "",
                 f"{r['unit_price']:.2f}".replace(".", ",") if r["unit_price"] is not None else "",
@@ -173,6 +177,7 @@ with vendas as (
 )
 select b.location_id, l.name as location_name,
        b.product_id, p.name as product_name, p.barcode,
+       b.canaleta,
        b.quantity,
        coalesce(b.price, p.unit_price) as preco,
        va.unidades as vendidas,
@@ -222,6 +227,8 @@ async def _reposicao_itens(session: AsyncSession, org_id: uuid.UUID, days: int) 
                 "product_id": str(r["product_id"]),
                 "produto": r["product_name"],
                 "barcode": r["barcode"],
+                # Vai na lista de compra: é por ela que se lança a carga depois.
+                "canaleta": r.get("canaleta"),
                 "quantidade": quantidade,
                 "status": "ruptura" if zerado else "acabando",
                 "dias_restantes": (
@@ -268,11 +275,12 @@ async def restock_csv(ctx: ViewerCtx, session: Session, days: int = 30) -> Respo
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")  # Excel pt-BR abre ; direto
     writer.writerow(
-        ["produto", "codigo_barras", "situacao", "restam", "dura_dias", "vende_por_dia", "levar"]
+        ["canaleta", "produto", "codigo_barras", "situacao", "restam", "dura_dias", "vende_por_dia", "levar"]
     )
     for i in itens:
         writer.writerow(
             [
+                i.get("canaleta") or "",
                 i["produto"],
                 i["barcode"] or "",
                 "zerado" if i["status"] == "ruptura" else "acabando",
@@ -657,7 +665,7 @@ async def _load_target(session: AsyncSession, org_id: uuid.UUID, location_id: uu
         await session.execute(
             text(
                 """
-                select l.id as location_id, l.name,
+                select l.id as location_id, l.name, l.carga_como_carregamento,
                        ll.machine_id, ll.installation_id,
                        i.id as integration_id, i.config
                   from core.location l
@@ -767,6 +775,19 @@ async def preparar_restock(session: AsyncSession, ctx: OrgContext, body: Restock
     return {"body": body, "target": target, "externals": externals, "token": token}
 
 
+def _notas_da_carga(action: str, extra: dict | None, action_id: int) -> str:
+    """O que aparece na pick list da VMpay: de onde veio a carga."""
+    origem = {
+        "picklist.approve": "cupom",
+        "picklist.manual": "carga manual",
+    }.get(action, "reposição")
+    fornecedor = (extra or {}).get("fornecedor")
+    partes = [f"Carga pelo painel ({origem})", f"[ação {action_id}]"]
+    if fornecedor:
+        partes.append(f"fornecedor {fornecedor}")
+    return " — ".join(partes)
+
+
 async def executar_restock(
     session: AsyncSession,
     ctx: OrgContext,
@@ -778,6 +799,9 @@ async def executar_restock(
     """action_log pendente → ajuste na VMpay → reflexo local → log fechado."""
     body: RestockBody = plano["body"]
     target, externals = plano["target"], plano["externals"]
+    # Loja ligada: a carga aparece como CARREGAMENTO na VMpay (pick list +
+    # reabastecimento); desligada, como ajuste de inventário (o de sempre).
+    carregamento = bool(target.get("carga_como_carregamento"))
     action_id = await _open_action(
         session,
         ctx,
@@ -785,24 +809,54 @@ async def executar_restock(
         {"location_id": str(body.location_id), "machine_id": target["machine_id"]},
         {
             "items": [{"product_id": str(i.product_id), "quantity": float(i.quantity)} for i in body.items],
+            "modo": "carregamento" if carregamento else "ajuste",
             **(extra_params or {}),
         },
     )
+    itens_vmpay = [(externals[i.product_id], float(i.quantity)) for i in body.items]
     try:
         connector = get_connector(target["config"], plano.get("token"))
         async with connector.client:
-            result = await connector.restock(
-                target["machine_id"],
-                target["installation_id"],
-                [(externals[i.product_id], float(i.quantity)) for i in body.items],
-            )
+            if carregamento:
+                result = await connector.carregar(
+                    target["machine_id"],
+                    target["installation_id"],
+                    itens_vmpay,
+                    _notas_da_carga(action, extra_params, action_id),
+                    marcador=f"[ação {action_id}]",
+                )
+            else:
+                result = await connector.restock(target["machine_id"], target["installation_id"], itens_vmpay)
+    except CargaIncerta as exc:
+        # Nem recusa nem sucesso: o recibo fica "em andamento" (o /aprovar não
+        # deixa relançar) até alguém conferir na VMpay.
+        aviso = (
+            f"resposta incerta da VMpay: confira a {exc} na VMpay antes de relançar — "
+            "se ela aparecer aplicada, a carga ENTROU"
+        )
+        await _close_action(session, action_id, error=aviso)
+        raise HTTPException(502, aviso) from None
     except VMpayError as exc:
         detail = redact(str(exc))
         await _close_action(session, action_id, error=detail)
         raise RestockRecusado(action_id, detail) from None
+    except Exception as exc:
+        # Rede de segurança da regra do action_log: nada fica 'pending' para
+        # sempre por um erro inesperado (resposta em formato estranho etc.).
+        await _close_action(session, action_id, error=f"erro inesperado: {type(exc).__name__}")
+        raise
+
+    # No carregamento, reflete o que a VMpay de fato carregou (item ignorado
+    # por falta de estoque no CD não entra); no ajuste, o que foi pedido.
+    carregados = result.get("carregados") if carregamento and isinstance(result, dict) else None
+    ignorados = result.get("ignorados", []) if carregamento and isinstance(result, dict) else []
 
     # Write-back aceito: refletir localmente e fechar o log.
     for item in body.items:
+        if carregados is not None:
+            item = item.model_copy(update={"quantity": Decimal(str(carregados.get(externals[item.product_id], 0)))})
+            if item.quantity == 0:
+                continue
         await session.execute(
             text(
                 """
@@ -833,8 +887,17 @@ async def executar_restock(
                 "actor": str(ctx.principal.user_id),
             },
         )
-    await _close_action(session, action_id)
-    return {"action_id": action_id, "status": "success", "vmpay": result}
+    await _close_action(
+        session,
+        action_id,
+        error=(
+            f"CARREGADO EM PARTE — NÃO relance: os demais itens entraram; "
+            f"a VMpay não carregou {len(ignorados)} item(ns): {ignorados}"
+        )
+        if ignorados
+        else None,
+    )
+    return {"action_id": action_id, "status": "parcial" if ignorados else "success", "vmpay": result}
 
 
 class RestockRecusado(HTTPException):

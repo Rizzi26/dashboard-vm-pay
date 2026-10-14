@@ -252,6 +252,15 @@ O kiosk é 100% cashless, um item por transação.
      dos zerados.
    - **Carga do pick list por planilha** (`/picklist/planilha`): só enche o
      carrinho da carga manual; avisa carga idêntica lançada em 7 dias.
+15. **Canaleta** (2026-10-14, pedido do operador): a posição do produto na
+   loja (`item.name` do planograma, "500" ou "500, 501"). É o "código" com
+   que eles trabalham — anotam na lista de compra e lançam a carga
+   procurando por ela, para garantir que é aquele produto e não um parecido.
+   `core.stock_balance.canaleta` (migration 0011), preenchida pelo snapshot.
+   Aparece na Prateleira (coluna, busca exata, ordenar), Reposição (linha e
+   CSV), Pick list/carga manual (busca de produto por número → canaleta
+   exata primeiro; selo no produto escolhido) e nas planilhas; a carga por
+   planilha casa por `canaleta`.
 8. Migrations são **automáticas** (migrate.yml): push na `homolog` aplica no
    banco de homologação, push na `main` no de produção — só os arquivos que
    faltam em `core.schema_migration`, cada um numa transação com o próprio

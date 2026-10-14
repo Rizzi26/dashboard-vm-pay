@@ -274,5 +274,5 @@ async def test_planilha_da_loja_sai_com_preco_novo_em_branco():
     resp = await call("GET", f"/orgs/mercadinho/stock/precos/planilha.csv?location_id={LOC_ID}")
     assert resp.status_code == 200
     texto = resp.content.decode("utf-8")
-    assert texto.startswith("﻿id;loja;produto;codigo_barras;saldo;preco_atual;preco_novo")
-    assert f"{PROD_ID};{TARGET_ROW['name']};Água;789;4;3,50;\r\n" in texto
+    assert texto.startswith("﻿id;loja;canaleta;produto;codigo_barras;saldo;preco_atual;preco_novo")
+    assert f"{PROD_ID};{TARGET_ROW['name']};;Água;789;4;3,50;\r\n" in texto

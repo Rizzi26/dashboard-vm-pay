@@ -72,8 +72,11 @@ export function CargaManual({
   // conta a VMpay recusaria na carga.
   const contaDaLoja = opcoes.locais.find((l) => l.id === localId)?.conta ?? null;
   const produtosDaLoja = useMemo(
-    () => (contaDaLoja ? opcoes.produtos.filter((p) => !p.conta || p.conta === contaDaLoja) : opcoes.produtos),
-    [opcoes.produtos, contaDaLoja],
+    () =>
+      (contaDaLoja ? opcoes.produtos.filter((p) => !p.conta || p.conta === contaDaLoja) : opcoes.produtos).map(
+        (p) => ({ ...p, canaleta: localId ? (p.canaletas?.[localId] ?? null) : null }),
+      ),
+    [opcoes.produtos, contaDaLoja, localId],
   );
   const porId = useMemo(() => new Map(opcoes.produtos.map((p) => [p.id, p])), [opcoes.produtos]);
   const daLoja = useMemo(() => new Set(produtosDaLoja.map((p) => p.id)), [produtosDaLoja]);
@@ -295,7 +298,8 @@ export function CargaManual({
               <input type="file" accept=".csv,text/csv" className="sr-only" onChange={importar} disabled={lendo} />
             </label>
             <span className="text-[13px] text-sec">
-              Também serve planilha só com <code>codigo_barras</code> e <code>quantidade</code>.
+              Também serve a lista de compra só com <code>canaleta</code> (ou <code>codigo_barras</code>) e{" "}
+            <code>quantidade</code>.
             </span>
           </div>
         )}
@@ -368,7 +372,15 @@ export function CargaManual({
                 >
                   <div className="min-w-0">
                     <div className="break-words text-[15px] font-medium text-texto">{p?.name ?? "Produto"}</div>
-                    {p?.barcode ? <div className="text-xs tabular-nums text-sec">{p.barcode}</div> : null}
+                    {p?.canaletas?.[localId] || p?.barcode ? (
+                      <div className="text-xs tabular-nums text-sec">
+                        {p?.canaletas?.[localId] ? (
+                          <strong className="text-texto">canaleta {p.canaletas[localId]}</strong>
+                        ) : null}
+                        {p?.canaletas?.[localId] && p?.barcode ? " · " : null}
+                        {p?.barcode}
+                      </div>
+                    ) : null}
                     {!daLoja.has(l.product_id) ? (
                       <p className="m-0 mt-1 text-[13px] text-vermelho-texto">
                         <span aria-hidden="true">■ </span>

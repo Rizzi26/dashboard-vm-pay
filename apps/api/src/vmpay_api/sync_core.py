@@ -195,6 +195,12 @@ def _saldo_mudou(anterior: tuple | None, novo: dict) -> bool:
     return de != para
 
 
+def _ordem_canaleta(nome: str) -> tuple:
+    """"140" antes de "1000": número como número; o que não é número vai depois."""
+    primeiro = nome.split(",")[0].strip()
+    return (0, int(primeiro), nome) if primeiro.isdigit() else (1, 0, nome)
+
+
 async def _dados_do_planograma(
     client: VMpayClient,
     links: Any,
@@ -231,7 +237,16 @@ async def _dados_do_planograma(
             # o desired_price — esse fica com o derivado do saldo.
             if item.get("desired_price") is not None and not item.get("use_default_price_product"):
                 preco = round(float(item["desired_price"]), 2)
-            dados[chave] = {"price": preco if preco is not None else dados.get(chave, {}).get("price"), "status": status}
+            # Canaleta: o número com que o operador acha o produto na loja.
+            canaletas = list(dados.get(chave, {}).get("canaletas", []))
+            nome = str(item.get("name") or "").strip()
+            if nome and nome not in canaletas:
+                canaletas.append(nome)
+            dados[chave] = {
+                "price": preco if preco is not None else dados.get(chave, {}).get("price"),
+                "status": status,
+                "canaletas": sorted(canaletas, key=_ordem_canaleta),
+            }
     return dados
 
 
@@ -309,6 +324,7 @@ async def sync_stock(
         # Todo saldo leva a chave: o upsert em lote exige as mesmas colunas
         # em todas as linhas. Nulo = planograma não respondeu.
         saldo["planogram_status"] = dados.get("status")
+        saldo["canaleta"] = ", ".join(dados["canaletas"]) if dados.get("canaletas") else None
 
     # A foto decide o que mudou contra a ÚLTIMA FOTO de cada par, não contra
     # core.stock_balance: uma carga pelo painel (restock/pick list) já soma no

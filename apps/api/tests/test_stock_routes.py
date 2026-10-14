@@ -181,7 +181,7 @@ async def test_csv_vem_como_anexo_com_separador_pt_br():
     resp = await call("GET", "/orgs/mercadinho/stock/export.csv")
     assert "attachment" in resp.headers["content-disposition"]
     linhas = resp.text.strip().splitlines()
-    assert linhas[0].startswith("local;produto")
+    assert linhas[0].startswith("local;canaleta;produto")
     assert "Água Mineral" in linhas[1]
     assert "3,50" in linhas[1]  # preço com vírgula
 
@@ -246,7 +246,7 @@ async def test_reposicao_csv_vem_como_anexo_pt_br():
     resp = await call("GET", "/orgs/mercadinho/stock/reposicao/export.csv")
     assert "attachment" in resp.headers["content-disposition"]
     linhas = resp.text.strip().splitlines()
-    assert linhas[0].startswith("produto;codigo_barras;situacao")
+    assert linhas[0].startswith("canaleta;produto;codigo_barras;situacao")
     assert "Água Mineral" in linhas[1]
     assert ";zerado;" in linhas[1]
     assert ";zerado;0;" in linhas[2]  # saldo negativo exporta como 0, não -1

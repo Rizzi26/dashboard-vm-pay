@@ -26,7 +26,9 @@ export function detalheItem(i: ReposicaoItem, curto = false, comLoja = false): s
       : curto
         ? `restam ${formatInt(i.quantidade)} · ${dias(i.dias_restantes)}`
         : `restam ${formatInt(i.quantidade)} — dá para ${dias(i.dias_restantes)} · vende ${ritmo(i.por_dia)}`;
-  return comLoja ? `${base} · ${i.local}` : base;
+  // Canaleta primeiro: é o que vai para a lista de compra, ao lado do nome.
+  const comCanaleta = i.canaleta ? `canaleta ${i.canaleta} · ${base}` : base;
+  return comLoja ? `${comCanaleta} · ${i.local}` : comCanaleta;
 }
 
 /**

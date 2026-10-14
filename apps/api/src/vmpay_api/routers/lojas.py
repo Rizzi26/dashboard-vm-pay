@@ -6,13 +6,16 @@ primeira tela — de onde se vê qual loja precisa de atenção e se entra nela.
 
 from __future__ import annotations
 
+import uuid
 from collections import Counter
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import registrar
 from ..auth import OrgContext, require_role
 from ..db import get_session
 from .stock import _reposicao_itens
@@ -21,12 +24,13 @@ router = APIRouter(prefix="/orgs/{org}/lojas", tags=["lojas"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 ViewerCtx = Annotated[OrgContext, Depends(require_role("viewer"))]
+MasterCtx = Annotated[OrgContext, Depends(require_role("master"))]
 
 # "Hoje" é o dia de Brasília: para quem toca a loja, a venda das 22h é de hoje,
 # não de amanhã em UTC. Os demais agregados do painel continuam em dias UTC.
 LOJAS_SQL = """
 with lojas as (
-    select l.id, l.name
+    select l.id, l.name, l.carga_como_carregamento
       from core.location l
      where l.org_id = :org_id
 ), maquinas as (
@@ -59,7 +63,7 @@ with lojas as (
       join lojas on lojas.id = b.location_id
      group by b.location_id
 )
-select lojas.id, lojas.name,
+select lojas.id, lojas.name, lojas.carga_como_carregamento,
        coalesce(v.hoje, 0) as hoje, coalesce(v.d7, 0) as d7, coalesce(v.d30, 0) as d30,
        coalesce(v.transacoes_30d, 0) as transacoes_30d, v.ultima_venda,
        coalesce(e.itens, 0) as itens, coalesce(e.zerados, 0) as zerados,
@@ -91,6 +95,7 @@ async def central(ctx: ViewerCtx, session: Session) -> dict:
             {
                 "id": str(r["id"]),
                 "nome": r["name"],
+                "carga_como_carregamento": bool(r.get("carga_como_carregamento")),
                 "vendas": {
                     "hoje": float(r["hoje"]),
                     "d7": float(r["d7"]),
@@ -119,3 +124,35 @@ async def central(ctx: ViewerCtx, session: Session) -> dict:
             "acabando": sum(l["estoque"]["acabando"] for l in lojas),
         },
     }
+
+
+class ModoCargaBody(BaseModel):
+    carga_como_carregamento: bool
+
+
+@router.patch("/{location_id}/modo-carga")
+async def modo_carga(location_id: uuid.UUID, body: ModoCargaBody, ctx: MasterCtx, session: Session) -> dict:
+    """Liga/desliga a carga como carregamento (pick list) na VMpay, loja a loja.
+
+    Master: muda como TODA carga da loja chega à VMpay. Vai para a auditoria.
+    """
+    row = (
+        await session.execute(
+            text(
+                """
+                update core.location set carga_como_carregamento = :valor
+                 where id = :id and org_id = :org_id
+                returning name
+                """
+            ),
+            {"valor": body.carga_como_carregamento, "id": str(location_id), "org_id": str(ctx.org_id)},
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(404, "loja não encontrada nesta organização")
+    await registrar(
+        session, ctx, "loja.modo_carga",
+        {"location_id": str(location_id), "loja": row[0], "carregamento": body.carga_como_carregamento},
+    )
+    await session.commit()
+    return {"location_id": str(location_id), "carga_como_carregamento": body.carga_como_carregamento}

@@ -122,10 +122,33 @@ async def _produtos_vinculados(session: AsyncSession, org_id: uuid.UUID) -> list
             {"org_id": str(org_id)},
         )
     ).mappings().all()
+    # Canaleta por loja: o operador lança a carga procurando pela canaleta
+    # anotada na lista de compra — é o que garante que é aquele produto.
+    canaletas: dict[str, dict[str, str]] = {}
+    for c in (
+        await session.execute(
+            text(
+                """
+                select b.product_id, b.location_id, b.canaleta
+                  from core.stock_balance b
+                  join core.location l on l.id = b.location_id
+                 where l.org_id = :org_id and b.canaleta is not null
+                """
+            ),
+            {"org_id": str(org_id)},
+        )
+    ).mappings().all():
+        canaletas.setdefault(str(c["product_id"]), {})[str(c["location_id"])] = c["canaleta"]
     # integration_id: com várias contas VMpay, a tela só oferece os produtos
     # da conta da loja escolhida — produto de outra conta a VMpay recusa.
     return [
-        {"id": str(r["id"]), "name": r["name"], "barcode": r["barcode"], "conta": str(r["integration_id"])}
+        {
+            "id": str(r["id"]),
+            "name": r["name"],
+            "barcode": r["barcode"],
+            "conta": str(r["integration_id"]),
+            "canaletas": canaletas.get(str(r["id"]), {}),
+        }
         for r in rows
     ]
 
@@ -615,7 +638,7 @@ with vendas as (
        and v.occurred_at >= now() - make_interval(days => :days)
      group by pl.product_id
 )
-select b.product_id, b.quantity, va.unidades
+select b.product_id, b.quantity, b.canaleta, va.unidades
   from core.stock_balance b
   join core.location l on l.id = b.location_id
   left join vendas va on va.product_id = b.product_id
@@ -643,6 +666,7 @@ async def saldos(loja: uuid.UUID, ctx: AdminCtx, session: Session, days: int = 3
         itens.append(
             {
                 "product_id": str(r["product_id"]),
+                "canaleta": r.get("canaleta"),
                 # Negativo é oversell de planograma; para quem compra, é zero.
                 "quantidade": max(0.0, quantidade),
                 "por_dia": round(por_dia, 2),

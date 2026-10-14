@@ -44,7 +44,7 @@ VARIACAO_AVISO = Decimal("0.5")
 MAX_BYTES = 2_000_000
 
 PRODUTOS_DA_LOJA = """
-select p.id as product_id, p.name, p.barcode, b.quantity,
+select p.id as product_id, p.name, p.barcode, b.quantity, b.canaleta,
        coalesce(b.price, p.unit_price) as preco, pl.external_id
   from core.stock_balance b
   join core.product p on p.id = b.product_id
@@ -99,6 +99,7 @@ async def planilha(
             [
                 p["product_id"],
                 target["name"],
+                p.get("canaleta") or "",
                 p["name"],
                 p["barcode"] or "",
                 f"{Decimal(str(p['quantity'])):f}".rstrip("0").rstrip("."),

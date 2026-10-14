@@ -117,8 +117,14 @@ class VMpayClient:
         *,
         params: Mapping[str, Any] | None = None,
         json: Any = None,
+        retry: bool = True,
     ) -> Any:
-        """Uma chamada, com rate limit e retry. Devolve o JSON já decodificado."""
+        """Uma chamada, com rate limit e retry. Devolve o JSON já decodificado.
+
+        `retry=False` para POST que CRIA algo (pick list, reabastecimento): um
+        timeout ou 5xx pode ter sido aplicado do lado de lá, e repetir criaria
+        de novo — quem chama confere o estado em vez de tentar outra vez.
+        """
         url = f"{self.base_url}/{path.lstrip('/')}"
         query: dict[str, Any] = {"access_token": self._token}
         for key, value in (params or {}).items():
@@ -127,13 +133,14 @@ class VMpayClient:
             query[key] = to_vmpay_datetime(value) if isinstance(value, datetime) else value
 
         last: Exception | None = None
-        for attempt in range(self.max_retries + 1):
+        tentativas = self.max_retries if retry else 0
+        for attempt in range(tentativas + 1):
             await self._bucket.acquire()
             try:
                 response = await self._http.request(method, url, params=query, json=json)
             except httpx.TransportError as exc:
                 last = exc
-                if attempt == self.max_retries:
+                if attempt == tentativas:
                     raise VMpayError(f"falha de rede em {redact(url)}: {exc}") from exc
                 await self._backoff(attempt)
                 continue
@@ -147,7 +154,7 @@ class VMpayClient:
             # 429 e 5xx são transitórios; o resto é problema do request.
             if response.status_code == 429 or response.status_code >= 500:
                 last = error
-                if attempt == self.max_retries:
+                if attempt == tentativas:
                     raise error
                 log.warning(
                     "VMpay %s em %s, tentativa %d/%d",
@@ -174,8 +181,8 @@ class VMpayClient:
     async def get(self, path: str, **params: Any) -> Any:
         return await self.request("GET", path, params=params)
 
-    async def post(self, path: str, json: Any = None, **params: Any) -> Any:
-        return await self.request("POST", path, params=params, json=json)
+    async def post(self, path: str, json: Any = None, *, retry: bool = True, **params: Any) -> Any:
+        return await self.request("POST", path, params=params, json=json, retry=retry)
 
     async def patch(self, path: str, json: Any = None, **params: Any) -> Any:
         return await self.request("PATCH", path, params=params, json=json)
