@@ -29,7 +29,7 @@ from vmpay.redact import redact
 from ..audit import registrar
 from ..auth import OrgContext, require_role
 from ..config import settings
-from ..connector import VMpayConnector
+from ..connector import CargaIncerta, VMpayConnector
 from ..db import get_session, session_factory
 from ..models_core import Integration
 from ..sync_core import resolve_token, sync_integration, token_da_conta
@@ -782,7 +782,7 @@ def _notas_da_carga(action: str, extra: dict | None, action_id: int) -> str:
         "picklist.manual": "carga manual",
     }.get(action, "reposição")
     fornecedor = (extra or {}).get("fornecedor")
-    partes = [f"Carga pelo painel ({origem})", f"ação nº {action_id}"]
+    partes = [f"Carga pelo painel ({origem})", f"[ação {action_id}]"]
     if fornecedor:
         partes.append(f"fornecedor {fornecedor}")
     return " — ".join(partes)
@@ -823,10 +823,19 @@ async def executar_restock(
                     target["installation_id"],
                     itens_vmpay,
                     _notas_da_carga(action, extra_params, action_id),
-                    marcador=f"ação nº {action_id}",
+                    marcador=f"[ação {action_id}]",
                 )
             else:
                 result = await connector.restock(target["machine_id"], target["installation_id"], itens_vmpay)
+    except CargaIncerta as exc:
+        # Nem recusa nem sucesso: o recibo fica "em andamento" (o /aprovar não
+        # deixa relançar) até alguém conferir na VMpay.
+        aviso = (
+            f"resposta incerta da VMpay: confira a {exc} na VMpay antes de relançar — "
+            "se ela aparecer aplicada, a carga ENTROU"
+        )
+        await _close_action(session, action_id, error=aviso)
+        raise HTTPException(502, aviso) from None
     except VMpayError as exc:
         detail = redact(str(exc))
         await _close_action(session, action_id, error=detail)
@@ -881,7 +890,12 @@ async def executar_restock(
     await _close_action(
         session,
         action_id,
-        error=f"carregado em parte: a VMpay ignorou {len(ignorados)} item(ns): {ignorados}" if ignorados else None,
+        error=(
+            f"CARREGADO EM PARTE — NÃO relance: os demais itens entraram; "
+            f"a VMpay não carregou {len(ignorados)} item(ns): {ignorados}"
+        )
+        if ignorados
+        else None,
     )
     return {"action_id": action_id, "status": "parcial" if ignorados else "success", "vmpay": result}
 

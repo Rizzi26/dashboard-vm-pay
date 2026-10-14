@@ -121,7 +121,11 @@ async def test_erro_na_resposta_mas_aplicada_conta_como_sucesso():
     respx.get(f"{INST}/current_planogram").mock(return_value=httpx.Response(200, json=PLANOGRAMA))
     respx.post(f"{INST}/pick_lists").mock(return_value=httpx.Response(201, json={"id": 9003}))
     rs = respx.post(f"{INST}/restock").mock(return_value=httpx.Response(502))
-    detalhe(9003, [{"good_id": 163, "quantity": 1, "ignored": False}], pending=False)
+    respx.get(f"{INST}/pick_lists/9003").mock(
+        return_value=httpx.Response(
+            200, json={"id": 9003, "pending": False, "status": "applied", "items": [{"good_id": 163, "quantity": 1}]}
+        )
+    )
     apaga = respx.delete(f"{INST}/pick_lists/9003")
     r = await conector().carregar(49, 857, [(163, 1.0)], "x", "m")
     assert r["carregados"] == {163: 1.0}
@@ -135,14 +139,14 @@ async def test_criacao_sem_resposta_apaga_a_nossa_pela_marca():
     respx.get(f"{INST}/pick_lists").mock(
         side_effect=[
             httpx.Response(200, json=[]),  # guard: nada pendente
-            httpx.Response(200, json=[{"id": 9004, "pending": True, "notes": "Carga — ação nº 8"}]),
+            httpx.Response(200, json=[{"id": 9004, "pending": True, "notes": "Carga — [ação 8]"}]),
         ]
     )
     respx.get(f"{INST}/current_planogram").mock(return_value=httpx.Response(200, json=PLANOGRAMA))
     pl = respx.post(f"{INST}/pick_lists").mock(return_value=httpx.Response(504))
     apaga = respx.delete(f"{INST}/pick_lists/9004").mock(return_value=httpx.Response(204))
     with pytest.raises(VMpayError):
-        await conector().carregar(49, 857, [(163, 1.0)], "Carga — ação nº 8", "ação nº 8")
+        await conector().carregar(49, 857, [(163, 1.0)], "Carga — [ação 8]", "[ação 8]")
     assert pl.call_count == 1 and apaga.called
 
 
@@ -246,3 +250,53 @@ async def test_item_ignorado_nao_entra_no_saldo_do_painel(monkeypatch):
     assert resp.status_code == 201 and resp.json()["status"] == "parcial"
     sqls = " ".join(sql for sql, _ in sessao.executed)
     assert "update core.stock_balance" not in sqls  # nada entrou de fato
+
+
+@respx.mock
+async def test_cancelada_depois_do_erro_nao_conta_como_carregada():
+    """pending=false também é 'cancelled': só 'applied' é sucesso."""
+    instalacao()
+    lista()
+    respx.get(f"{INST}/current_planogram").mock(return_value=httpx.Response(200, json=PLANOGRAMA))
+    respx.post(f"{INST}/pick_lists").mock(return_value=httpx.Response(201, json={"id": 9006}))
+    respx.post(f"{INST}/restock").mock(return_value=httpx.Response(502))
+    respx.get(f"{INST}/pick_lists/9006").mock(
+        return_value=httpx.Response(200, json={"id": 9006, "pending": False, "status": "cancelled"})
+    )
+    with pytest.raises(VMpayError):
+        await conector().carregar(49, 857, [(163, 1.0)], "x", "m")
+
+
+@respx.mock
+async def test_sem_saber_se_entrou_e_carga_incerta():
+    from vmpay_api.connector import CargaIncerta
+
+    instalacao()
+    lista()
+    respx.get(f"{INST}/current_planogram").mock(return_value=httpx.Response(200, json=PLANOGRAMA))
+    respx.post(f"{INST}/pick_lists").mock(return_value=httpx.Response(201, json={"id": 9007}))
+    respx.post(f"{INST}/restock").mock(return_value=httpx.Response(502))
+    respx.get(f"{INST}/pick_lists/9007").mock(return_value=httpx.Response(503))
+    apaga = respx.delete(f"{INST}/pick_lists/9007")
+    with pytest.raises(CargaIncerta):
+        await conector().carregar(49, 857, [(163, 1.0)], "x", "m")
+    assert not apaga.called
+
+
+async def test_carga_incerta_nao_vira_recusa(monkeypatch):
+    from vmpay_api.connector import CargaIncerta
+
+    class Incerto(Carregador):
+        async def carregar(self, *a, **k):
+            raise CargaIncerta(9007)
+
+    fake = Incerto()
+    monkeypatch.setattr(stock_router, "get_connector", lambda config, token=None: fake)
+    use_role("admin")
+    rotas = [r if r[0] != "join core.location_link" else (r[0], [{**TARGET_ROW, "carga_como_carregamento": True}]) for r in rotas_de_sucesso()]
+    use_session(rotas)
+    resp = await call(
+        "POST", "/orgs/mercadinho/stock/restock",
+        json={"location_id": str(LOC_ID), "items": [{"product_id": str(PROD_ID), "quantity": 1}]},
+    )
+    assert resp.status_code == 502 and "9007" in resp.json()["detail"] and "relançar" in resp.json()["detail"]

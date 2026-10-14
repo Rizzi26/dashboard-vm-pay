@@ -42,6 +42,19 @@ class ConnectorError(VMpayError):
     """Erro de tradução nossa (produto fora do planograma etc.) — não da API."""
 
 
+class CargaIncerta(Exception):
+    """A VMpay respondeu erro e não deu para saber se a carga entrou.
+
+    NÃO é recusa: tratar como recusa deixaria relançar, e se tinha entrado a
+    VMpay carregaria duas vezes. Quem chama deixa a carga "em andamento" e
+    manda conferir a pick list na VMpay.
+    """
+
+    def __init__(self, pick_list_id: Any):
+        super().__init__(f"pick list nº {pick_list_id}")
+        self.pick_list_id = pick_list_id
+
+
 @dataclass
 class PlanogramView:
     planogram_id: int
@@ -191,30 +204,45 @@ class VMpayConnector:
             await self.client.post(f"{base}/restock", json={"restock_mode": "restock_only"}, retry=False)
         except VMpayError:
             # Erro na resposta não quer dizer que não aplicou (timeout, 5xx, ou
-            # o abastecedor reabasteceu pela máquina no meio). Aplicada = sucesso;
-            # ainda pendente = apaga (pendente trava preço/cadastro e seria
-            # executada no próximo reabastecimento físico).
+            # o abastecedor reabasteceu pela máquina no meio). Só "applied" é
+            # sucesso — "cancelled" também tem pending=false e não carregou.
             estado = await self._ler_pick_list(base, pick_id)
-            if estado is None or estado.get("pending"):
-                try:
-                    await self.client.delete(f"{base}/pick_lists/{pick_id}")
-                except VMpayError:
-                    pass  # o erro que importa é o do reabastecimento
+            if estado is None:
+                raise CargaIncerta(pick_id) from None
+            situacao = estado.get("status")
+            if situacao != "applied":
+                if estado.get("pending"):
+                    # Pendente trava preço/cadastro e seria executada no
+                    # próximo reabastecimento físico: não pode sobrar.
+                    try:
+                        await self.client.delete(f"{base}/pick_lists/{pick_id}")
+                    except VMpayError:
+                        pass  # o erro que importa é o do reabastecimento
                 raise
 
-        # O que entrou de fato: item pode voltar "ignored" (estoque de CD).
+        return {"pick_list_id": pick_id, **(await self._o_que_entrou(base, pick_id, somados))}
+
+    async def _o_que_entrou(self, base: str, pick_id: Any, somados: dict[int, Decimal]) -> dict[str, Any]:
+        """O que a VMpay de fato carregou — item pode voltar "ignored" (estoque
+        de CD) ou nem aparecer. Resposta estranha depois de aplicada não pode
+        virar erro de uma carga que entrou: cai no pedido."""
+        pedido = {g: float(q) for g, q in somados.items()}
         final = await self._ler_pick_list(base, pick_id) or {}
-        carregados: dict[int, float] = {}
-        ignorados: list[dict[str, Any]] = []
-        for item in final.get("items", []):
-            if item.get("ignored"):
-                ignorados.append({"good_id": item.get("good_id"), "motivo": item.get("ignore_reason")})
-            elif item.get("good_id") is not None:
-                carregados[int(item["good_id"])] = float(item.get("quantity") or 0)
+        try:
+            carregados: dict[int, float] = {}
+            ignorados: list[dict[str, Any]] = []
+            for item in final.get("items") or []:
+                if item.get("ignored"):
+                    ignorados.append({"good_id": item.get("good_id"), "motivo": item.get("ignore_reason")})
+                elif item.get("good_id") is not None:
+                    carregados[int(item["good_id"])] = float(item.get("quantity") or 0)
+        except (TypeError, ValueError):
+            return {"carregados": pedido, "ignorados": []}
         if not final.get("items"):
-            # Sem o detalhe, o pedido é a melhor informação que há.
-            carregados = {g: float(q) for g, q in somados.items()}
-        return {"pick_list_id": pick_id, "carregados": carregados, "ignorados": ignorados}
+            return {"carregados": pedido, "ignorados": []}
+        vistos = set(carregados) | {i["good_id"] for i in ignorados}
+        ignorados += [{"good_id": g, "motivo": "não veio na pick list"} for g in pedido if g not in vistos]
+        return {"carregados": carregados, "ignorados": ignorados}
 
     async def _pick_list_pendente(self, base: str) -> dict[str, Any] | None:
         async for p in self.client.paginate(f"{base}/pick_lists"):
@@ -232,6 +260,7 @@ class VMpayConnector:
         """Pick list criada apesar do erro na resposta: acha pela marca e apaga."""
         try:
             async for p in self.client.paginate(f"{base}/pick_lists"):
+                # A marca é delimitada ("[ação 12]" não casa com "[ação 123]").
                 if p.get("pending") and marcador in (p.get("notes") or ""):
                     await self.client.delete(f"{base}/pick_lists/{p['id']}")
         except VMpayError:
