@@ -76,7 +76,13 @@ export default async function CentralPage() {
             {adicionar}
           </div>
         ) : (
-          <Conteudo central={central.data} resumo={resumo.ok ? resumo.data : null} contaDe={contaDe} adicionar={adicionar} />
+          <Conteudo
+            central={central.data}
+            resumo={resumo.ok ? resumo.data : null}
+            contaDe={contaDe}
+            adicionar={adicionar}
+            org={ehMaster ? org.slug : null}
+          />
         )}
 
         {contas?.ok ? <ContasVmpay org={org.slug} contas={contas.data} /> : null}
@@ -90,11 +96,14 @@ function Conteudo({
   resumo,
   contaDe,
   adicionar,
+  org,
 }: {
   central: Central;
   resumo: Summary | null;
   contaDe: Record<string, string>;
   adicionar: ReactNode;
+  /** Só para master: liga a carga como carregamento, loja a loja. */
+  org: string | null;
 }) {
   const { lojas, totais } = central;
   // Totais de transações saem dos cartões (a API soma só o dinheiro): mesma
@@ -133,7 +142,7 @@ function Conteudo({
       <h2 className="m-0 mt-5 hidden text-[22px] font-bold tracking-[-0.015em] text-texto md:block">Lojas</h2>
 
       <div className="hidden md:block">
-        <LojaCards lojas={lojas} contaDe={contaDe} extra={adicionar} />
+        <LojaCards lojas={lojas} contaDe={contaDe} extra={adicionar} orgMaster={org} />
       </div>
 
       {/* Celular: o dia de todas as lojas, a lista e o atalho da reposição. */}

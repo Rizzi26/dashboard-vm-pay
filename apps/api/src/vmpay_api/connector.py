@@ -42,6 +42,19 @@ class ConnectorError(VMpayError):
     """Erro de tradução nossa (produto fora do planograma etc.) — não da API."""
 
 
+class CargaIncerta(Exception):
+    """A VMpay respondeu erro e não deu para saber se a carga entrou.
+
+    NÃO é recusa: tratar como recusa deixaria relançar, e se tinha entrado a
+    VMpay carregaria duas vezes. Quem chama deixa a carga "em andamento" e
+    manda conferir a pick list na VMpay.
+    """
+
+    def __init__(self, pick_list_id: Any):
+        super().__init__(f"pick list nº {pick_list_id}")
+        self.pick_list_id = pick_list_id
+
+
 @dataclass
 class PlanogramView:
     planogram_id: int
@@ -111,6 +124,147 @@ class VMpayConnector:
             f"machines/{machine_id}/installations/{installation_id}/inventory_adjustments",
             json=body,
         )
+
+    async def carregar(
+        self,
+        machine_id: int,
+        installation_id: int,
+        items: list[tuple[int, float]],
+        notas: str,
+        marcador: str,
+    ) -> dict[str, Any]:
+        """Carga como CARREGAMENTO na VMpay: pick list + reabastecimento.
+
+        É o que aparece como carregamento para o operador (o ajuste de
+        inventário de restock() aparece como "ajuste"). `marcador` é um texto
+        único desta carga que vai dentro de `notas` — é por ele que se acha a
+        NOSSA pick list quando a resposta da VMpay se perde.
+
+        Devolve {pick_list_id, carregados: {good_id: qtd}, ignorados: [...]}
+        — o que a VMpay de fato carregou, que é o que se reflete no painel.
+        """
+        base = f"machines/{machine_id}/installations/{installation_id}"
+
+        # Só "somente por pick list": nas outras estratégias o /restock sem a
+        # nossa pick list pendente pode virar reabastecimento COMPLETO.
+        instalacao = await self.client.get(base)
+        estrategia = (instalacao or {}).get("restock_strategy")
+        if estrategia != "require_pending_pick_list":
+            raise ConnectorError(
+                f"a instalação está em '{estrategia}': carga como carregamento só em "
+                "'somente por pick list' — desligue o modo carregamento desta loja"
+            )
+
+        # O /restock executa A pick list pendente da loja — se houver uma criada
+        # na VMpay, seria a dela, não a nossa.
+        pendente = await self._pick_list_pendente(base)
+        if pendente is not None:
+            raise ConnectorError(
+                f"já há pick list pendente na VMpay para esta loja (nº {pendente.get('id')}) — "
+                "conclua ou apague-a na VMpay antes de lançar pelo painel"
+            )
+
+        somados: dict[int, Decimal] = {}
+        for good_id, quantidade in items:
+            somados[good_id] = somados.get(good_id, Decimal(0)) + Decimal(str(quantidade))
+        fracionados = [g for g, q in somados.items() if q != q.to_integral_value()]
+        if fracionados:
+            raise ConnectorError(
+                "quantidade fracionada não vai como carregamento (pick list é em unidades) — "
+                "confira o fator de conversão ou desligue o modo carregamento"
+            )
+        view = await self.current_planogram(machine_id, installation_id)
+        itens = [
+            {
+                "planogram_item_id": self._resolve(view, good_id)["id"],
+                "quantity": int(q),
+                # Sem as regras da instalação: a quantidade é a que chegou,
+                # não a que a regra de abastecimento acharia certa.
+                "skip_rules": True,
+            }
+            for good_id, q in somados.items()
+        ]
+
+        # Sem retry: um timeout pode ter criado a pick list do lado de lá.
+        try:
+            pick_list = await self.client.post(
+                f"{base}/pick_lists",
+                json={"pick_list": {"planogram_id": view.planogram_id, "notes": notas, "items_attributes": itens}},
+                retry=False,
+            )
+        except VMpayError:
+            await self._apagar_nossa_pendente(base, marcador)
+            raise
+        if not isinstance(pick_list, dict) or "id" not in pick_list:
+            await self._apagar_nossa_pendente(base, marcador)
+            raise ConnectorError("a VMpay não devolveu o número da pick list — nada foi carregado")
+        pick_id = pick_list["id"]
+
+        try:
+            await self.client.post(f"{base}/restock", json={"restock_mode": "restock_only"}, retry=False)
+        except VMpayError:
+            # Erro na resposta não quer dizer que não aplicou (timeout, 5xx, ou
+            # o abastecedor reabasteceu pela máquina no meio). Só "applied" é
+            # sucesso — "cancelled" também tem pending=false e não carregou.
+            estado = await self._ler_pick_list(base, pick_id)
+            if estado is None:
+                raise CargaIncerta(pick_id) from None
+            situacao = estado.get("status")
+            if situacao != "applied":
+                if estado.get("pending"):
+                    # Pendente trava preço/cadastro e seria executada no
+                    # próximo reabastecimento físico: não pode sobrar.
+                    try:
+                        await self.client.delete(f"{base}/pick_lists/{pick_id}")
+                    except VMpayError:
+                        pass  # o erro que importa é o do reabastecimento
+                raise
+
+        return {"pick_list_id": pick_id, **(await self._o_que_entrou(base, pick_id, somados))}
+
+    async def _o_que_entrou(self, base: str, pick_id: Any, somados: dict[int, Decimal]) -> dict[str, Any]:
+        """O que a VMpay de fato carregou — item pode voltar "ignored" (estoque
+        de CD) ou nem aparecer. Resposta estranha depois de aplicada não pode
+        virar erro de uma carga que entrou: cai no pedido."""
+        pedido = {g: float(q) for g, q in somados.items()}
+        final = await self._ler_pick_list(base, pick_id) or {}
+        try:
+            carregados: dict[int, float] = {}
+            ignorados: list[dict[str, Any]] = []
+            for item in final.get("items") or []:
+                if item.get("ignored"):
+                    ignorados.append({"good_id": item.get("good_id"), "motivo": item.get("ignore_reason")})
+                elif item.get("good_id") is not None:
+                    carregados[int(item["good_id"])] = float(item.get("quantity") or 0)
+        except (TypeError, ValueError):
+            return {"carregados": pedido, "ignorados": []}
+        if not final.get("items"):
+            return {"carregados": pedido, "ignorados": []}
+        vistos = set(carregados) | {i["good_id"] for i in ignorados}
+        ignorados += [{"good_id": g, "motivo": "não veio na pick list"} for g in pedido if g not in vistos]
+        return {"carregados": carregados, "ignorados": ignorados}
+
+    async def _pick_list_pendente(self, base: str) -> dict[str, Any] | None:
+        async for p in self.client.paginate(f"{base}/pick_lists"):
+            if p.get("pending"):
+                return p
+        return None
+
+    async def _ler_pick_list(self, base: str, pick_id: Any) -> dict[str, Any] | None:
+        try:
+            return await self.client.get(f"{base}/pick_lists/{pick_id}", show_all_items="true")
+        except VMpayError:
+            return None
+
+    async def _apagar_nossa_pendente(self, base: str, marcador: str) -> None:
+        """Pick list criada apesar do erro na resposta: acha pela marca e apaga."""
+        try:
+            async for p in self.client.paginate(f"{base}/pick_lists"):
+                # A marca é delimitada ("[ação 12]" não casa com "[ação 123]").
+                if p.get("pending") and marcador in (p.get("notes") or ""):
+                    await self.client.delete(f"{base}/pick_lists/{p['id']}")
+        except VMpayError:
+            pass
 
     async def contar(
         self,
