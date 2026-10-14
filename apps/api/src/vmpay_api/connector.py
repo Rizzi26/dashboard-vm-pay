@@ -213,6 +213,11 @@ class VMpayConnector:
         """
         return await self.client.post("products", json={"product": fields})
 
+    async def delete_product(self, good_id: int) -> Any:
+        """Exclui o produto do cadastro da VMpay (204). Só para produto que
+        nunca foi para loja — quem chama confere isso antes."""
+        return await self.client.delete(f"products/{good_id}")
+
     async def incluir_no_planograma(
         self,
         machine_id: int,
