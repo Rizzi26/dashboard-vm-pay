@@ -3,7 +3,11 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { Selo } from "@/components/ui/Selo";
 
-export type ProdutoOpcao = { id: string; name: string; barcode: string | null };
+/** canaleta: a posição na loja escolhida ("500", "500, 501") — busca e conferência. */
+export type ProdutoOpcao = { id: string; name: string; barcode: string | null; canaleta?: string | null };
+
+/** "500, 501" -> ["500", "501"]. */
+const canaletasDe = (p: ProdutoOpcao) => (p.canaleta ?? "").split(",").map((c) => c.trim()).filter(Boolean);
 
 const MAX_RESULTADOS = 8;
 
@@ -20,6 +24,8 @@ function palavras(texto: string): string[] {
 /**
  * Busca de produto por palavras com prefixo: "pres sea" acha "PRESUNTO
  * COZIDO FATIADO SEARA". Um <select> com ~900 itens não é escolha, é rolagem.
+ * Número digitado acha também pela canaleta — é como o operador anota a lista
+ * de compra e confere que é aquele produto, e não um parecido.
  */
 export function ProductPicker({
   produtos,
@@ -60,13 +66,16 @@ export function ProductPicker({
       return sugestoes.map((id) => porId.get(id)).filter((p): p is ProdutoOpcao => !!p);
     }
     const digitos = busca.replace(/\D/g, "");
-    return indice
-      .filter(
-        (p) =>
-          termos.every((t) => p.palavras.some((w) => w.startsWith(t))) ||
-          (digitos.length >= 4 && (p.barcode ?? "").includes(digitos)),
-      )
-      .slice(0, MAX_RESULTADOS);
+    // Só número: a canaleta exata vem primeiro — é o que o operador digitou.
+    const soNumero = /^\s*\d+\s*$/.test(busca);
+    const naCanaleta = soNumero ? indice.filter((p) => canaletasDe(p).includes(digitos)) : [];
+    const resto = indice.filter(
+      (p) =>
+        !naCanaleta.includes(p) &&
+        (termos.every((t) => p.palavras.some((w) => w.startsWith(t))) ||
+          (digitos.length >= 4 && (p.barcode ?? "").includes(digitos))),
+    );
+    return [...naCanaleta, ...resto].slice(0, MAX_RESULTADOS);
   }, [busca, indice, porId, sugestoes]);
 
   const selecionado = value ? porId.get(value) : undefined;
@@ -81,6 +90,11 @@ export function ProductPicker({
     return (
       <div className="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-campo-borda bg-campo px-3 md:min-h-10">
         <span className="min-w-0 flex-1 truncate text-[15px] text-texto md:text-[14px]">{selecionado.name}</span>
+        {selecionado.canaleta ? (
+          <Selo tom="cinza" simbolo={null}>
+            canaleta {selecionado.canaleta}
+          </Selo>
+        ) : null}
         {lembrado ? (
           <Selo tom="azul" simbolo={null}>
             lembrado
@@ -131,8 +145,8 @@ export function ProductPicker({
             setAberto(false);
           }
         }}
-        placeholder="Buscar produto…"
-        aria-label={rotulo ?? "Buscar produto por nome ou código de barras"}
+        placeholder="Nome, canaleta ou código…"
+        aria-label={rotulo ?? "Buscar produto por nome, canaleta ou código de barras"}
         role="combobox"
         aria-expanded={aberto}
         aria-controls={listaId}
@@ -165,6 +179,11 @@ export function ProductPicker({
                 i === ativo ? "bg-azul-tinta" : ""
               }`}
             >
+              {p.canaleta ? (
+                <span className="mr-2 shrink-0 rounded-md bg-trilho px-1.5 py-0.5 text-xs font-semibold tabular-nums text-texto">
+                  {p.canaleta}
+                </span>
+              ) : null}
               {p.name}
               {p.barcode ? (
                 <span className="ml-2 text-xs text-sec">{p.barcode}</span>
@@ -172,7 +191,7 @@ export function ProductPicker({
             </li>
           ))}
           {busca.trim() && resultados.length === 0 ? (
-            <li className="px-3 py-2 text-[14px] text-sec">Nenhum produto com esse nome.</li>
+            <li className="px-3 py-2 text-[14px] text-sec">Nenhum produto com esse nome, canaleta ou código.</li>
           ) : null}
           <li
             role="option"

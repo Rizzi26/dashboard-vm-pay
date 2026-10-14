@@ -13,7 +13,7 @@ __all__ = ["COLUNAS", "LinhaPreco", "PlanilhaInvalida", "formatar_preco", "ler_p
 #: Colunas da planilha exportada. Só `id` e `preco_novo` são lidas de volta;
 #: as outras existem para o operador se achar (e `loja` para pegar planilha
 #: subida na loja errada).
-COLUNAS = ["id", "loja", "produto", "codigo_barras", "saldo", "preco_atual", "preco_novo"]
+COLUNAS = ["id", "loja", "canaleta", "produto", "codigo_barras", "saldo", "preco_atual", "preco_novo"]
 
 #: Acima disso é quase sempre vírgula esquecida (699 em vez de 6,99).
 PRECO_MAXIMO = Decimal("10000")

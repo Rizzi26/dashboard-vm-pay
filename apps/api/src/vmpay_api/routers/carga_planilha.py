@@ -33,7 +33,7 @@ router = APIRouter(prefix="/orgs/{org}/picklist/planilha", tags=["pick list"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 AdminCtx = Annotated[OrgContext, Depends(require_role("admin"))]
 
-COLUNAS_MODELO = ["id", "produto", "codigo_barras", "saldo", "quantidade"]
+COLUNAS_MODELO = ["id", "canaleta", "produto", "codigo_barras", "saldo", "quantidade"]
 
 #: Mais que isso numa linha é dedo na tecla (ou código de barras colado na
 #: coluna errada).
@@ -46,7 +46,7 @@ MAX_PRODUTOS = 500
 DIAS_DUPLICIDADE = 7
 
 PRODUTOS_DA_LOJA = """
-select p.id, p.name, p.barcode, b.quantity
+select p.id, p.name, p.barcode, b.quantity, b.canaleta
   from core.stock_balance b
   join core.product p on p.id = b.product_id
  where b.location_id = :location_id
@@ -84,7 +84,14 @@ async def modelo(ctx: AdminCtx, session: Session, location_id: Annotated[uuid.UU
     for p in await _produtos(session, location_id):
         saldo = f"{Decimal(str(p['quantity'])):f}"
         writer.writerow(
-            [p["id"], p["name"], p["barcode"] or "", saldo.rstrip("0").rstrip(".") if "." in saldo else saldo, ""]
+            [
+                p["id"],
+                p.get("canaleta") or "",
+                p["name"],
+                p["barcode"] or "",
+                saldo.rstrip("0").rstrip(".") if "." in saldo else saldo,
+                "",
+            ]
         )
     await registrar(session, ctx, "picklist.modelo_planilha", {"location_id": str(location_id)})
     return Response(
@@ -116,14 +123,20 @@ async def ler(body: LerBody, ctx: AdminCtx, session: Session) -> dict:
     por_id = {str(p["id"]): p for p in produtos}
     por_codigo: dict[str, list[dict]] = defaultdict(list)
     por_nome: dict[str, list[dict]] = defaultdict(list)
+    por_canaleta: dict[str, list[dict]] = defaultdict(list)
     for p in produtos:
+        for c in (p.get("canaleta") or "").split(","):
+            if c.strip():
+                por_canaleta[c.strip()].append(p)
         if p["barcode"] and _codigo_normalizado(p["barcode"]):
             por_codigo[_codigo_normalizado(p["barcode"])].append(p)
         por_nome[_nome_normalizado(p["name"])].append(p)
 
     try:
         linhas = list(
-            linhas_do_csv(body.conteudo, exige=("quantidade",), uma_de=("id", "codigo_barras", "produto"))
+            linhas_do_csv(
+                body.conteudo, exige=("quantidade",), uma_de=("id", "codigo_barras", "canaleta", "produto")
+            )
         )
     except PlanilhaInvalida as exc:
         raise HTTPException(422, str(exc)) from None
@@ -133,7 +146,7 @@ async def ler(body: LerBody, ctx: AdminCtx, session: Session) -> dict:
     erros: list[dict[str, Any]] = []
     em_branco = 0
     for numero, campos in linhas:
-        rotulo = campos.get("produto") or campos.get("codigo_barras") or None
+        rotulo = campos.get("produto") or campos.get("codigo_barras") or campos.get("canaleta") or None
         if not campos.get("quantidade"):
             em_branco += 1
             continue
@@ -143,7 +156,7 @@ async def ler(body: LerBody, ctx: AdminCtx, session: Session) -> dict:
             erros.append({"linha": numero, "produto": rotulo, "motivo": str(exc)})
             continue
 
-        produto, motivo = _casar(campos, por_id, por_codigo, por_nome)
+        produto, motivo = _casar(campos, por_id, por_codigo, por_canaleta, por_nome)
         if produto is None:
             erros.append({"linha": numero, "produto": rotulo, "motivo": motivo})
             continue
@@ -175,9 +188,10 @@ def _casar(
     campos: dict[str, str],
     por_id: dict[str, dict],
     por_codigo: dict[str, list[dict]],
+    por_canaleta: dict[str, list[dict]],
     por_nome: dict[str, list[dict]],
 ) -> tuple[dict | None, str | None]:
-    """id > código de barras > nome exato. Nunca adivinha entre dois."""
+    """id > código de barras > canaleta > nome exato. Nunca adivinha entre dois."""
     bruto_id = campos.get("id", "")
     if bruto_id:
         try:
@@ -202,6 +216,17 @@ def _casar(
         if not campos.get("produto"):
             return None, f"código {codigo} não está na prateleira desta loja"
 
+    canaleta = campos.get("canaleta", "").strip()
+    if canaleta:
+        # A canaleta é como o operador anota a lista de compra.
+        achados = por_canaleta.get(canaleta, [])
+        if len(achados) == 1:
+            return achados[0], None
+        if len(achados) > 1:
+            return None, f"canaleta {canaleta} tem {len(achados)} produtos nesta loja — use o código de barras"
+        if not campos.get("produto"):
+            return None, f"nenhum produto na canaleta {canaleta} desta loja"
+
     nome = campos.get("produto", "")
     if nome:
         achados = por_nome.get(_nome_normalizado(nome), [])
@@ -210,7 +235,7 @@ def _casar(
         if len(achados) > 1:
             return None, "mais de um produto com esse nome nesta loja — use o código de barras ou a coluna id"
         return None, "nenhum produto da prateleira desta loja com esse nome (o nome tem de ser o do sistema)"
-    return None, "linha sem id, código de barras nem produto"
+    return None, "linha sem id, código de barras, canaleta nem produto"
 
 
 async def _carga_igual(

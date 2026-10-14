@@ -138,6 +138,8 @@ class StockBalance(Base):
     price: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
     #: active | suspended | inactive, do planograma da loja (migration 0010).
     planogram_status: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Posição(ões) no planograma da loja, "500" ou "500, 501" (migration 0011).
+    canaleta: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

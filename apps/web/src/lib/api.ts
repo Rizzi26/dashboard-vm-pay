@@ -53,6 +53,8 @@ export type StockRow = {
   nomes_fornecedor?: string[];
   /** Situação no planograma: suspenso/inativo = fora de linha, não se repõe. */
   situacao?: "active" | "suspended" | "inactive";
+  /** Posição na loja ("500", "500, 501"): o código com que o operador acha o produto. */
+  canaleta?: string | null;
 };
 
 /** Prévia da planilha de preços (POST /stock/precos/previa): nada foi escrito ainda. */
@@ -84,6 +86,8 @@ export type ReposicaoItem = {
   product_id: string;
   produto: string;
   barcode: string | null;
+  /** Vai na lista de compra: é por ela que se lança a carga depois. */
+  canaleta?: string | null;
   quantidade: number;
   status: "ruptura" | "acabando";
   dias_restantes: number;
@@ -200,7 +204,8 @@ export type PicklistConsulta = {
 export type PicklistOpcoes = {
   /** conta = integração VMpay do local; com várias contas, filtra os produtos. */
   locais: { id: string; name: string; conta: string | null }[];
-  produtos: { id: string; name: string; barcode: string | null; conta?: string }[];
+  /** canaletas: {location_id: "500"} — a posição do produto em cada loja. */
+  produtos: { id: string; name: string; barcode: string | null; conta?: string; canaletas?: Record<string, string> }[];
 };
 
 export type ContaVmpay = {
@@ -232,6 +237,7 @@ export type PicklistCarga = {
 /** Saldo e ritmo de um produto na loja (GET /picklist/saldos), para o cupom × lista. */
 export type PicklistSaldo = {
   product_id: string;
+  canaleta?: string | null;
   quantidade: number;
   por_dia: number;
   /** null quando não houve venda no período: sem ritmo, sem previsão. */
