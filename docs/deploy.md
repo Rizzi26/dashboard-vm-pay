@@ -115,13 +115,18 @@ devolvem o 503 da trava, o mesmo comportamento da produção nesta fase.
 É também o jeito de testar migration nova antes de aplicar no Supabase:
 `docker compose down -v && docker compose up --build` recria o banco do zero.
 
-## Trava de escrita (fase atual)
+## Trava de escrita
 
-`VMPAY_ALLOW_WRITES` — default **0**. Com o banco populado de dados de
-produção, nenhuma ação (reabastecer, preço) alcança a VMpay: o backend devolve
-503 com mensagem clara e a UI a exibe. Leitura, ingestão e exportação seguem
-normais. Ligar a escrita = subir `VMPAY_ALLOW_WRITES=1` no Render, de
-preferência primeiro com `VMPAY_BASE` apontando para homologação.
+`VMPAY_ALLOW_WRITES` — default **0** no código. Desligada, nenhuma ação
+(reabastecer, preço, cadastro, contagem, situação) alcança a VMpay: o backend
+devolve 503 com mensagem clara e a UI a exibe. Leitura, ingestão e exportação
+seguem normais; as prévias das planilhas também.
+
+**Produção: LIGADA desde 14/10/2026** (`render.yaml` = "1"), depois de cada
+ação provada em homologação contra a VMpay demo. O valor mora no
+`render.yaml` de propósito: mudar só no painel do Render seria desfeito na
+próxima sincronização do blueprint. Para travar de novo numa emergência: `0`
+no painel (efeito imediato) **e** no `render.yaml` (para não voltar).
 
 ## Chaves do Supabase (nomenclatura nova)
 
