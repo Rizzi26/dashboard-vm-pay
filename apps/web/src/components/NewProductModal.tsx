@@ -10,7 +10,8 @@ export type NewProductBody = {
   nome: string;
   fabricante_id: number;
   categoria_id: number;
-  categoria_abastecimento_id: number;
+  /** Ausente quando a conta não usa (ou não deixa ler) categoria de abastecimento. */
+  categoria_abastecimento_id: number | null;
   barcode: string | null;
   preco: number | null;
 };
@@ -49,8 +50,10 @@ export function NewProductModal({
 
   async function confirmar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!nome.trim() || !fabricante || !categoria || !abastecimento) {
-      setErro("Preencha nome, fabricante e as duas categorias.");
+    // A VMpay só exige a de abastecimento quando a conta usa mais de uma.
+    const exigeAbastecimento = (refs?.categorias_abastecimento.length ?? 0) > 1;
+    if (!nome.trim() || !fabricante || !categoria || (exigeAbastecimento && !abastecimento)) {
+      setErro(exigeAbastecimento ? "Preencha nome, fabricante e as duas categorias." : "Preencha nome, fabricante e categoria.");
       return;
     }
     const precoNum = preco.trim() ? Number(preco.replace(",", ".")) : null;
@@ -65,7 +68,11 @@ export function NewProductModal({
         nome: nome.trim(),
         fabricante_id: Number(fabricante),
         categoria_id: Number(categoria),
-        categoria_abastecimento_id: Number(abastecimento),
+        categoria_abastecimento_id: abastecimento
+          ? Number(abastecimento)
+          : refs?.categorias_abastecimento.length === 1
+            ? refs.categorias_abastecimento[0].id
+            : null,
         barcode: barcode.trim() || null,
         preco: precoNum,
       });
@@ -80,7 +87,15 @@ export function NewProductModal({
       ? [
           ["Fabricante", fabricante, setFabricante, refs.fabricantes],
           ["Categoria", categoria, setCategoria, refs.categorias],
-          ["Categoria de abastecimento", abastecimento, setAbastecimento, refs.categorias_abastecimento],
+          // Com uma só (ou nenhuma visível), não há o que escolher.
+          ...(refs.categorias_abastecimento.length > 1
+            ? ([["Categoria de abastecimento", abastecimento, setAbastecimento, refs.categorias_abastecimento]] as [
+                string,
+                string,
+                (v: string) => void,
+                { id: number; nome: string }[],
+              ][])
+            : []),
         ]
       : [];
 

@@ -195,6 +195,46 @@ def _saldo_mudou(anterior: tuple | None, novo: dict) -> bool:
     return de != para
 
 
+async def _dados_do_planograma(
+    client: VMpayClient,
+    links: Any,
+    product_by_external: dict[str, uuid.UUID],
+) -> dict[tuple[uuid.UUID, uuid.UUID], dict[str, Any]]:
+    """Preço unitário e situação de cada item, direto do planograma de cada loja.
+
+    Preço: o relatório de saldos só dá o valor TOTAL (qtd × preço) — com
+    saldo zero o unitário não sai da conta, e a prateleira mostrava "—" justo
+    no item que precisa de reposição. Situação: produto tirado de linha
+    (inativo/suspenso) não pode aparecer como "zerado, repor". Uma requisição
+    por loja; se falhar, fica o preço derivado e a situação desconhecida —
+    dado melhor não pode derrubar o retrato do estoque.
+    """
+    dados: dict[tuple[uuid.UUID, uuid.UUID], dict[str, Any]] = {}
+    for link in links:
+        caminho = f"machines/{link['machine_id']}/installations/{link['installation_id']}/current_planogram"
+        try:
+            planograma = await client.get(caminho)
+        except Exception as exc:  # noqa: BLE001 — qualquer falha cai no derivado
+            log.warning("planograma da loja %s indisponível: %s", link["location_id"], redact(str(exc)))
+            continue
+        for item in planograma.get("items", []):
+            product_id = product_by_external.get(str(item.get("good_id")))
+            if product_id is None:
+                continue
+            chave = (link["location_id"], product_id)
+            # Mesmo produto em duas posições: ativo em qualquer uma = ativo.
+            status = item.get("status")
+            if dados.get(chave, {}).get("status") == "active":
+                status = "active"
+            preco = None
+            # Item com "usar preço padrão" ligado cobra o padrão do produto, não
+            # o desired_price — esse fica com o derivado do saldo.
+            if item.get("desired_price") is not None and not item.get("use_default_price_product"):
+                preco = round(float(item["desired_price"]), 2)
+            dados[chave] = {"price": preco if preco is not None else dados.get(chave, {}).get("price"), "status": status}
+    return dados
+
+
 async def sync_stock(
     client: VMpayClient,
     session: AsyncSession,
@@ -260,6 +300,15 @@ async def sync_stock(
             "price": row["unit_price"],
             "updated_at": now,
         }
+
+    planograma = await _dados_do_planograma(client, links.values(), product_by_external)
+    for chave, saldo in balances.items():
+        dados = planograma.get(chave, {})
+        if dados.get("price") is not None:
+            saldo["price"] = dados["price"]
+        # Todo saldo leva a chave: o upsert em lote exige as mesmas colunas
+        # em todas as linhas. Nulo = planograma não respondeu.
+        saldo["planogram_status"] = dados.get("status")
 
     # A foto decide o que mudou contra a ÚLTIMA FOTO de cada par, não contra
     # core.stock_balance: uma carga pelo painel (restock/pick list) já soma no
@@ -366,6 +415,8 @@ class _Baixado:
 
     def __init__(self, dados: dict[str, list[dict[str, Any]]]):
         self._dados = dados
+        #: Leituras avulsas (planogramas), pelo caminho — servidas por get().
+        self._avulsos: dict[str, Any] = {}
 
     @classmethod
     async def de(cls, client: VMpayClient, recursos: tuple[str, ...]) -> _Baixado:
@@ -374,6 +425,34 @@ class _Baixado:
     async def paginate(self, path: str, **_: Any):
         for item in self._dados[path]:
             yield item
+
+    async def get(self, path: str, **_: Any) -> Any:
+        if path not in self._avulsos:
+            raise LookupError(f"{path} não foi baixado nesta rodada")
+        return self._avulsos[path]
+
+    async def baixar_planogramas(self, client: VMpayClient) -> None:
+        """Um planograma por loja com saldo — ainda na fase de rede.
+
+        Falha numa loja não para a rodada: a loja fica sem o preço do
+        planograma e o snapshot usa o derivado do saldo (ver
+        _precos_do_planograma).
+        """
+        por_maquina = installations_map(self._dados["installations"])
+        maquinas = {
+            linha["machine_id"]
+            for linha in map(map_balance, self._dados["installation_stock_balances"])
+            if linha is not None
+        }
+        for maquina in sorted(maquinas):
+            instalacao = por_maquina.get(maquina)
+            if instalacao is None:
+                continue
+            caminho = f"machines/{maquina}/installations/{instalacao['id']}/current_planogram"
+            try:
+                self._avulsos[caminho] = await client.get(caminho)
+            except Exception as exc:  # noqa: BLE001 — rede, 5xx, timeout: tudo cai no derivado
+                log.warning("planograma da máquina %s não veio: %s", maquina, redact(str(exc)))
 
 
 async def sync_integration(
@@ -427,6 +506,7 @@ async def sync_integration(
                 else:
                     baixado._dados["products"] = []
                     report.catalogo = "pulado"
+            await baixado.baixar_planogramas(client)
         report.products, by_external = await sync_products(baixado, session, integration)
         report.locations, report.balances, report.stale_balances_removed = (
             await sync_stock(baixado, session, integration, by_external)

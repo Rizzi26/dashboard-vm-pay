@@ -51,6 +51,25 @@ export type StockRow = {
   atualizado_em: string;
   /** Como o produto vem escrito nos cupons de compra já carregados. */
   nomes_fornecedor?: string[];
+  /** Situação no planograma: suspenso/inativo = fora de linha, não se repõe. */
+  situacao?: "active" | "suspended" | "inactive";
+};
+
+/** Prévia da planilha de preços (POST /stock/precos/previa): nada foi escrito ainda. */
+export type PreviaPrecos = {
+  location_id: string;
+  loja: string;
+  alterar: {
+    linha: number;
+    product_id: string;
+    produto: string;
+    preco_atual: number | null;
+    preco_novo: number;
+    avisos: string[];
+  }[];
+  erros: { linha: number; produto: string | null; motivo: string }[];
+  resumo: { alterar: number; iguais: number; em_branco: number; erros: number };
+  escrita_liberada: boolean;
 };
 
 export type StockHistoryPoint = {

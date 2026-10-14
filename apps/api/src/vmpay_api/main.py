@@ -11,7 +11,25 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import rotinas
 from .config import settings
-from .routers import auditoria, contas, health, interno, lojas, me, members, picklist, products, sales, stock, sync
+from .routers import (
+    auditoria,
+    cadastro_lote,
+    carga_planilha,
+    contagem,
+    contas,
+    health,
+    interno,
+    lojas,
+    me,
+    members,
+    picklist,
+    precos,
+    products,
+    sales,
+    situacao,
+    stock,
+    sync,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
@@ -45,8 +63,13 @@ def create_app() -> FastAPI:
     app.include_router(me.router)
     app.include_router(members.router)
     app.include_router(sales.router)
+    app.include_router(precos.router)
+    app.include_router(contagem.router)
+    app.include_router(situacao.router)
     app.include_router(stock.router)
+    app.include_router(cadastro_lote.router)
     app.include_router(products.router)
+    app.include_router(carga_planilha.router)
     app.include_router(picklist.router)
     app.include_router(sync.router)
     app.include_router(auditoria.router)

@@ -108,7 +108,8 @@ class NewProductBody(BaseModel):
     nome: str = Field(min_length=1, max_length=200)
     fabricante_id: int
     categoria_id: int
-    categoria_abastecimento_id: int
+    # Só obrigatória quando a conta usa mais de uma (doc da VMpay).
+    categoria_abastecimento_id: int | None = None
     barcode: str | None = Field(default=None, max_length=64)
     preco: Decimal | None = Field(default=None, gt=0)
     # Loja onde o produto vai ser usado: decide a conta VMpay (várias contas).
@@ -129,8 +130,9 @@ async def create_product(body: NewProductBody, ctx: AdminCtx, session: Session) 
         "name": body.nome,
         "manufacturer_id": body.fabricante_id,
         "category_id": body.categoria_id,
-        "supply_category_id": body.categoria_abastecimento_id,
     }
+    if body.categoria_abastecimento_id is not None:
+        fields["supply_category_id"] = body.categoria_abastecimento_id
     if body.barcode:
         fields["barcode"] = body.barcode
     if body.preco is not None:

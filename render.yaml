@@ -26,5 +26,5 @@ services:
         sync: false
       - key: CORS_ORIGINS          # domínio do dashboard na Vercel
         sync: false
-      - key: VMPAY_ALLOW_WRITES    # fase atual: dados de PRD, escrita bloqueada
-        value: "0"
+      - key: VMPAY_ALLOW_WRITES    # liberada em 14/10/2026, depois das planilhas provadas em homologação
+        value: "1"

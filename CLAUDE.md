@@ -161,8 +161,9 @@ no centavo:
   sozinha ao subir (`rotinas.py`, token interno no Vault); em produção também
   agenda o "manter acordado" (8h–23h BRT). Histórico completo desde o go-live
   do mercadinho (06/11/2025)
-- **Escrita na VMpay TRAVADA** em produção (`VMPAY_ALLOW_WRITES=0` no Render)
-  até ser provada em homologação
+- **Escrita na VMpay LIGADA** em produção desde 2026-10-14
+  (`VMPAY_ALLOW_WRITES=1` no `render.yaml`), depois de provada em homologação.
+  Travar de novo: `0` no painel do Render E no `render.yaml`
 - **Homologação** (desde 2026-10-05): Supabase `vmpay-hml`, Render
   `vmpay-api-hml` (branch `homolog`, escrita ligada, VMpay demo), Preview da
   Vercel na `homolog`. Detalhes e armadilhas em docs/deploy.md
@@ -181,9 +182,9 @@ O kiosk é 100% cashless, um item por transação.
    core.product + product_link. Mesmo action_log e mesma trava
    VMPAY_ALLOW_WRITES das outras ações. Cadastro ≠ prateleira: entrar no
    planograma continua manual na VMpay — a UI avisa.
-3. Preço unitário de item com saldo zero — a fonte exata é o
-   `current_planogram` da instalação (uma chamada por instalação no snapshot);
-   hoje deriva do valor total do relatório de saldos e fica nulo com saldo 0.
+3. ~~Preço unitário de item com saldo zero~~ — FEITO (2026-10-14): o
+   snapshot lê o `current_planogram` de cada loja (uma chamada por loja) e usa
+   o `desired_price`; se o planograma falhar, fica o derivado do saldo.
 4. Rotação da `sb_secret` vazada no primeiro deploy da Vercel — CONFERIR se o
    Revoke + chave nova no Render foi concluído.
 5. ~~**Histórico de estoque + quebras**~~ — FEITO (2026-08-29):
@@ -229,6 +230,28 @@ O kiosk é 100% cashless, um item por transação.
    (a principal mantém a chave antiga). Escrita usa o token da conta DA LOJA;
    cadastro de produto exige a loja quando há mais de uma conta. Produtos não
    são unificados entre contas (a mesma Coca em duas contas = 2 produtos).
+14. **Planilhas na Prateleira** (EM PRODUÇÃO, 2026-10-14) — botão
+   "Planilhas", sempre por loja, sempre baixar → preencher → prévia (lê o
+   planograma ao vivo, não escreve) → aplicar. Leitura de CSV comum em
+   `planilha.py` (`;`/`,`, BOM, Windows-1252 no front, "1.299" ambíguo é erro).
+   - **Preço** (`/stock/precos`): `preco_novo` em branco = não mexe; UM PATCH
+     por loja (tudo ou nada), `stock.price_batch`. Preço é da LOJA: nenhuma
+     rota grava mais em `core.product.unit_price`; `use_default_price_product`
+     vai sempre false (ligado, a VMpay ignora o preço).
+   - **Cadastro** (`/products/lote`): cria na VMpay um por um (cada um
+     commitado no core na hora) e inclui todos no planograma num PATCH só —
+     item novo com logical_locator depois do maior. Código já cadastrado vira
+     "só incluir na prateleira"; níveis em branco = os mais comuns da loja.
+   - **Contagem** (`/stock/contagem`): ajuste com `observed` (provado no demo:
+     20→18→20); diferença vira `stock_movement` `adjustment`. Desconta as
+     vendas feitas depois da contagem, trazidas na hora por
+     `ingest.vendas_em_dia` (sem elas, aplicar recusa). Mais de 24 h: recusada.
+   - **Tirar de linha** (`/stock/situacao`): suspenso/inativo/ativo (a VMpay
+     não apaga item de planograma). `stock_balance.planogram_status`
+     (migration 0010, o snapshot preenche) tira fora de linha da Reposição e
+     dos zerados.
+   - **Carga do pick list por planilha** (`/picklist/planilha`): só enche o
+     carrinho da carga manual; avisa carga idêntica lançada em 7 dias.
 8. Migrations são **automáticas** (migrate.yml): push na `homolog` aplica no
    banco de homologação, push na `main` no de produção — só os arquivos que
    faltam em `core.schema_migration`, cada um numa transação com o próprio

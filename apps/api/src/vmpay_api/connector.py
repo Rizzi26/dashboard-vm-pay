@@ -34,6 +34,10 @@ def _quantidade(valor: float | int | Decimal) -> str:
     return format(d.normalize(), "f")
 
 
+#: Teto de itens por PATCH de planograma, segundo a doc da VMpay.
+LIMITE_ITENS_PLANOGRAMA = 2000
+
+
 class ConnectorError(VMpayError):
     """Erro de tradução nossa (produto fora do planograma etc.) — não da API."""
 
@@ -42,24 +46,27 @@ class ConnectorError(VMpayError):
 class PlanogramView:
     planogram_id: int
     items_by_good: dict[int, dict[str, Any]]
+    #: Todos os itens: o mesmo produto pode ocupar mais de uma posição, e
+    #: preço mudado numa só deixaria a outra cobrando o antigo.
+    items: list[dict[str, Any]]
 
 
 class VMpayConnector:
     def __init__(self, client: VMpayClient):
         self.client = client
 
-    async def _current_planogram(
+    async def current_planogram(
         self, machine_id: int, installation_id: int
     ) -> PlanogramView:
         data = await self.client.get(
             f"machines/{machine_id}/installations/{installation_id}/current_planogram"
         )
-        items = {
-            item["good_id"]: item
-            for item in data.get("items", [])
-            if item.get("good_id") is not None
-        }
-        return PlanogramView(planogram_id=data["id"], items_by_good=items)
+        todos = [i for i in data.get("items", []) if i.get("good_id") is not None]
+        return PlanogramView(
+            planogram_id=data["id"],
+            items_by_good={item["good_id"]: item for item in todos},
+            items=todos,
+        )
 
     def _resolve(self, view: PlanogramView, good_id: int) -> dict[str, Any]:
         item = view.items_by_good.get(good_id)
@@ -79,7 +86,7 @@ class VMpayConnector:
         saldo corrente do planograma — é o que a API espera para calcular o novo
         saldo do item.
         """
-        view = await self._current_planogram(machine_id, installation_id)
+        view = await self.current_planogram(machine_id, installation_id)
         attrs = []
         for good_id, quantity in items:
             item = self._resolve(view, good_id)
@@ -105,6 +112,73 @@ class VMpayConnector:
             json=body,
         )
 
+    async def contar(
+        self,
+        machine_id: int,
+        installation_id: int,
+        contagens: list[tuple[int, float]],
+        view: PlanogramView | None = None,
+    ) -> Any:
+        """Contagem de inventário: o saldo do item passa a ser o que foi contado.
+
+        `contagens` é [(good_id, quantidade_observada)]. Vai como `observed`
+        num ajuste imediato — a VMpay calcula a diferença (balance_after =
+        observed), para cima ou para baixo, sem a gente mandar added/removed.
+        """
+        view = view or await self.current_planogram(machine_id, installation_id)
+        attrs = []
+        for good_id, observado in contagens:
+            item = self._resolve(view, good_id)
+            attrs.append(
+                {
+                    "planogram_item_id": item["id"],
+                    "balance_before": item.get("current_balance") or 0,
+                    "added": "",
+                    "removed": "",
+                    "observed": _quantidade(observado),
+                }
+            )
+        body = {
+            "inventory_adjustment": {
+                "planogram_id": view.planogram_id,
+                "kind": "now",
+                "occurred_at": datetime.now(timezone.utc).isoformat(),
+                "items_attributes": attrs,
+            }
+        }
+        return await self.client.post(
+            f"machines/{machine_id}/installations/{installation_id}/inventory_adjustments",
+            json=body,
+        )
+
+    async def set_status(
+        self,
+        machine_id: int,
+        installation_id: int,
+        changes: list[tuple[int, str]],
+        view: PlanogramView | None = None,
+    ) -> Any:
+        """Situação dos itens no planograma: active, suspended ou inactive.
+
+        É como se tira produto de linha — a VMpay não apaga item de planograma
+        (`_destroy` é ignorado). Vale para todas as posições do mesmo produto.
+        """
+        view = view or await self.current_planogram(machine_id, installation_id)
+        attrs = []
+        for good_id, status in changes:
+            if status not in ("active", "suspended", "inactive"):
+                raise ConnectorError(f"situação '{status}' não existe no planograma")
+            self._resolve(view, good_id)
+            attrs.extend({"id": i["id"], "status": status} for i in view.items if i["good_id"] == good_id)
+        if len(attrs) > LIMITE_ITENS_PLANOGRAMA:
+            raise ConnectorError(
+                f"{len(attrs)} itens numa alteração só; a VMpay aceita até {LIMITE_ITENS_PLANOGRAMA} por requisição"
+            )
+        return await self.client.patch(
+            f"machines/{machine_id}/installations/{installation_id}/current_planogram",
+            json={"planogram": {"items_attributes": attrs}},
+        )
+
     async def product_refs(self) -> dict[str, list[dict[str, Any]]]:
         """Registries que o cadastro de produto exige: id + nome de cada um.
 
@@ -117,34 +191,109 @@ class VMpayConnector:
             ("categorias", "categories"),
             ("categorias_abastecimento", "supply_categories"),
         ):
-            out[key] = [
-                {"id": item["id"], "nome": item.get("name") or ""}
-                async for item in self.client.paginate(path)
-            ]
+            try:
+                out[key] = [
+                    {"id": item["id"], "nome": item.get("name") or ""}
+                    async for item in self.client.paginate(path)
+                ]
+            except VMpayError as exc:
+                # Categoria de abastecimento só é obrigatória para quem usa mais
+                # de uma (doc da VMpay), e há conta cujo token nem enxerga a lista
+                # (401 na demo). Sem ela o cadastro segue sem o campo.
+                if path != "supply_categories" or exc.status not in (401, 403):
+                    raise
+                out[key] = []
         return out
 
     async def create_product(self, fields: dict[str, Any]) -> Any:
         """Cria o produto no cadastro da VMpay (envelope `product`).
 
         Cadastro ≠ prateleira: para vender, o produto ainda precisa entrar no
-        planograma da instalação — isso continua sendo feito na VMpay.
+        planograma da instalação (ver incluir_no_planograma).
         """
         return await self.client.post("products", json={"product": fields})
 
+    async def incluir_no_planograma(
+        self,
+        machine_id: int,
+        installation_id: int,
+        itens: list[dict[str, Any]],
+        view: PlanogramView | None = None,
+    ) -> Any:
+        """Põe produtos na prateleira da loja: itens novos no planograma atual.
+
+        `itens`: [{good_id, preco, capacidade, nivel_ideal, nivel_alerta}].
+        Cada item novo precisa de um logical_locator inteiro único no
+        planograma — o próximo depois do maior que existe. A VMpay só aceita
+        isso em micromarket, sem pick list pendente (422), e não deixa apagar
+        item depois: tirar de linha é inativar/suspender.
+        """
+        view = view or await self.current_planogram(machine_id, installation_id)
+        ja = {i["good_id"] for i in view.items}
+        repetidos = [i["good_id"] for i in itens if i["good_id"] in ja]
+        if repetidos:
+            raise ConnectorError(f"produtos já estão no planograma: {repetidos}")
+        numeros = [int(i["logical_locator"]) for i in view.items if str(i.get("logical_locator", "")).isdigit()]
+        proximo = max(numeros, default=0) + 1
+        attrs = []
+        for n, item in enumerate(itens):
+            posicao = proximo + n
+            attrs.append(
+                {
+                    "type": "Coil",
+                    "good_id": item["good_id"],
+                    "name": str(posicao),
+                    "logical_locator": posicao,
+                    "capacity": item["capacidade"],
+                    "par_level": item["nivel_ideal"],
+                    "alert_level": item["nivel_alerta"],
+                    "desired_price": item["preco"],
+                    "use_default_price_product": False,
+                    "status": "active",
+                }
+            )
+        if len(attrs) > LIMITE_ITENS_PLANOGRAMA:
+            raise ConnectorError(
+                f"{len(attrs)} itens numa alteração só; a VMpay aceita até "
+                f"{LIMITE_ITENS_PLANOGRAMA} por requisição"
+            )
+        return await self.client.patch(
+            f"machines/{machine_id}/installations/{installation_id}/current_planogram",
+            json={"planogram": {"items_attributes": attrs}},
+        )
+
     async def set_price(
-        self, machine_id: int, installation_id: int, changes: list[tuple[int, float]]
+        self,
+        machine_id: int,
+        installation_id: int,
+        changes: list[tuple[int, float]],
+        view: PlanogramView | None = None,
     ) -> Any:
         """Alteração de preço no planograma atual, agrupada numa requisição.
 
         A doc pede explicitamente para agrupar alterações de planograma em vez
         de mandar item a item — e avisa que só micromarket aceita PATCH e que
-        pick list pendente bloqueia (422 da API nos dois casos).
+        pick list pendente bloqueia (422 da API nos dois casos). `view` evita
+        reler o planograma quando quem chama acabou de lê-lo.
+
+        `use_default_price_product` vai sempre false: com ele ligado a VMpay
+        aceita o desired_price e continua cobrando o preço padrão do produto —
+        a alteração "funcionava" e nada mudava no caixa.
         """
-        view = await self._current_planogram(machine_id, installation_id)
-        attrs = [
-            {"id": self._resolve(view, good_id)["id"], "desired_price": price}
-            for good_id, price in changes
-        ]
+        view = view or await self.current_planogram(machine_id, installation_id)
+        attrs = []
+        for good_id, price in changes:
+            self._resolve(view, good_id)
+            attrs.extend(
+                {"id": item["id"], "desired_price": price, "use_default_price_product": False}
+                for item in view.items
+                if item["good_id"] == good_id
+            )
+        if len(attrs) > LIMITE_ITENS_PLANOGRAMA:
+            raise ConnectorError(
+                f"{len(attrs)} itens numa alteração só; a VMpay aceita até "
+                f"{LIMITE_ITENS_PLANOGRAMA} por requisição"
+            )
         body = {"planogram": {"items_attributes": attrs}}
         return await self.client.patch(
             f"machines/{machine_id}/installations/{installation_id}/current_planogram",

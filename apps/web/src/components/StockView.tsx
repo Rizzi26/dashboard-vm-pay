@@ -5,15 +5,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ProductRefs, StockRow } from "@/lib/api";
 import { browserApi } from "@/lib/api";
+import { CadastroEmLote } from "@/components/CadastroEmLote";
+import { ContagemEstoque } from "@/components/ContagemEstoque";
 import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { NewProductModal } from "@/components/NewProductModal";
 import { Paginacao } from "@/components/Paginacao";
+import { PrecosEmLote } from "@/components/PrecosEmLote";
+import { NOME_SITUACAO, SituacaoEmLote } from "@/components/SituacaoEmLote";
 import { Botao } from "@/components/ui/Botao";
 import { Cartao } from "@/components/ui/Cartao";
 import { CAMPO, Folha, ROTULO_CAMPO, RodapeFolha } from "@/components/ui/Folha";
 import { IconeBusca, IconeMaisSinal } from "@/components/ui/icones";
 import { LinhaLista, Lista } from "@/components/ui/Lista";
 import { Segmentado } from "@/components/ui/Segmentado";
+import { Selo } from "@/components/ui/Selo";
 import { Tile } from "@/components/ui/Tile";
 import { Titulo } from "@/components/ui/Titulo";
 import { formatInt, formatMoney } from "@/lib/format";
@@ -32,9 +37,43 @@ type RowModal =
   | { kind: "restock"; row: StockRow }
   | { kind: "price"; row: StockRow };
 
+type Planilha = "precos" | "cadastro" | "contagem" | "situacao";
+
+/** Fora de linha (suspenso/inativo): zerado não é ruptura — não se repõe. */
+const foraDeLinha = (r: StockRow) => !!r.situacao && r.situacao !== "active";
+
+/** O menu "Planilhas": cada opção é um fluxo baixar → preencher → conferir → aplicar. */
+const PLANILHAS: { kind: Planilha; titulo: string; descricao: string }[] = [
+  { kind: "precos", titulo: "Atualizar preços", descricao: "Preencha o preço novo só do que muda." },
+  {
+    kind: "cadastro",
+    titulo: "Cadastrar produtos",
+    descricao: "Cria na VMpay e já põe na prateleira, com preço e níveis.",
+  },
+  {
+    kind: "contagem",
+    titulo: "Contagem de estoque",
+    descricao: "Conte a loja: o saldo vira o contado e a diferença fica como perda ou sobra.",
+  },
+  {
+    kind: "situacao",
+    titulo: "Tirar de linha ou reativar",
+    descricao: "Suspenda ou inative o que saiu de linha — sai da Reposição e dos zerados.",
+  },
+];
+
 // "acoes" é a folha do celular: a linha da lista não tem espaço para os
 // botões Repor/Preço, então o toque abre as ações (e o link da ficha).
-type Modal = RowModal | { kind: "acoes"; row: StockRow } | { kind: "new" } | null;
+type Modal =
+  | RowModal
+  | { kind: "acoes"; row: StockRow }
+  | { kind: "new" }
+  | { kind: "planilhas" }
+  | { kind: "precos"; locationId: string; loja: string }
+  | { kind: "cadastro"; locationId: string; loja: string }
+  | { kind: "contagem"; locationId: string; loja: string }
+  | { kind: "situacao"; locationId: string; loja: string }
+  | null;
 
 export function StockView({
   rows,
@@ -70,6 +109,15 @@ export function StockView({
 
   const canOperate = CAN_OPERATE.has(role);
 
+  // Planilhas (preço, cadastro) são por loja — um planograma por loja na
+  // VMpay: com "todas as lojas" na barra, só dá quando há uma loja só.
+  const lojaDosPrecos = useMemo(() => {
+    const ids = new Set(rows.map((r) => r.location_id));
+    const id = loja ?? (ids.size === 1 ? [...ids][0] : null);
+    const nome = rows.find((r) => r.location_id === id)?.local;
+    return id && nome ? { locationId: id, loja: nome } : null;
+  }, [rows, loja]);
+
   // Tiles calculados dos dados que a página já carrega — sem endpoint novo.
   // Na ordem do repositor: primeiro o problema, depois o resto.
   const tiles = useMemo(
@@ -77,7 +125,7 @@ export function StockView({
       unidades: rows.reduce((s, r) => s + r.quantidade, 0),
       valor: rows.reduce((s, r) => s + r.quantidade * (r.preco ?? 0), 0),
       disponiveis: rows.filter((r) => r.quantidade > 0).length,
-      ruptura: rows.filter((r) => r.quantidade === 0).length,
+      ruptura: rows.filter((r) => r.quantidade === 0 && !foraDeLinha(r)).length,
     }),
     [rows],
   );
@@ -173,6 +221,7 @@ export function StockView({
               display na mesma classe dependem da ordem do CSS. */}
           <span className="hidden items-start gap-2.5 md:flex">
             <ExportCsvButton path={`/orgs/${org}/stock/export.csv`} filename="prateleira.csv" />
+            {canOperate ? <Botao onClick={() => setModal({ kind: "planilhas" })}>Planilhas</Botao> : null}
             {canOperate ? (
               <Botao variante="cheio" onClick={() => setModal({ kind: "new" })}>
                 Adicionar produto
@@ -354,6 +403,7 @@ export function StockView({
                   secundario={
                     <>
                       {apelido(r, filtro) ? <span className="block">no cupom: {apelido(r, filtro)}</span> : null}
+                      {foraDeLinha(r) ? <>{NOME_SITUACAO[r.situacao!]} · </> : null}
                       {preco(r)} · {r.barcode ?? "sem código"}
                       {variosLocais ? <> · {r.local}</> : null}
                     </>
@@ -391,6 +441,11 @@ export function StockView({
                         >
                           {r.produto}
                         </Link>
+                        {foraDeLinha(r) ? (
+                          <Selo tom="cinza" className="ml-2 align-middle">
+                            {NOME_SITUACAO[r.situacao!]}
+                          </Selo>
+                        ) : null}
                         {apelido(r, filtro) ? (
                           <span className="block text-[13px] text-sec">no cupom: {apelido(r, filtro)}</span>
                         ) : null}
@@ -447,7 +502,81 @@ export function StockView({
         </div>
       </Cartao>
 
-      {modal?.kind === "new" ? (
+      {modal?.kind === "planilhas" ? (
+        <Folha
+          titulo="Planilhas"
+          subtitulo={lojaDosPrecos ? lojaDosPrecos.loja : "escolha a loja na barra antes"}
+          onFechar={() => setModal(null)}
+        >
+          <div className="flex flex-col gap-2.5">
+            {PLANILHAS.map((p) => (
+              <button
+                key={p.kind}
+                type="button"
+                disabled={!lojaDosPrecos}
+                onClick={() => lojaDosPrecos && setModal({ kind: p.kind, ...lojaDosPrecos })}
+                className="rounded-2xl border border-borda bg-lista px-4 py-3 text-left hover:bg-[var(--row-hover)] disabled:opacity-50"
+              >
+                <span className="block text-[16px] font-semibold text-texto">{p.titulo}</span>
+                <span className="block text-[14px] text-sec">{p.descricao}</span>
+              </button>
+            ))}
+            {!lojaDosPrecos ? (
+              <p className="m-0 text-[14px] text-laranja-texto">
+                ▲ Cada planilha é de uma loja: escolha a loja na barra do topo.
+              </p>
+            ) : null}
+          </div>
+        </Folha>
+      ) : modal?.kind === "situacao" ? (
+        <SituacaoEmLote
+          org={org}
+          locationId={modal.locationId}
+          loja={modal.loja}
+          onFechar={() => setModal(null)}
+          onAplicado={(mensagem) => {
+            setFeedback(mensagem);
+            setModal(null);
+            router.refresh();
+          }}
+        />
+      ) : modal?.kind === "contagem" ? (
+        <ContagemEstoque
+          org={org}
+          locationId={modal.locationId}
+          loja={modal.loja}
+          onFechar={() => setModal(null)}
+          onAplicado={(mensagem) => {
+            setFeedback(mensagem);
+            setModal(null);
+            router.refresh();
+          }}
+        />
+      ) : modal?.kind === "cadastro" ? (
+        <CadastroEmLote
+          org={org}
+          locationId={modal.locationId}
+          loja={modal.loja}
+          onFechar={() => setModal(null)}
+          onConcluido={(mensagem) => {
+            setFeedback(mensagem);
+            setModal(null);
+            router.refresh();
+          }}
+        />
+      ) : modal?.kind === "precos" ? (
+        <PrecosEmLote
+          org={org}
+          locationId={modal.locationId}
+          loja={modal.loja}
+          onFechar={() => setModal(null)}
+          onAplicado={(mensagem) => {
+            setFeedback(mensagem);
+            setModal(null);
+            router.refresh();
+          }}
+        />
+      ) : modal?.kind === "new" ? (
         <NewProductModal
           onClose={() => setModal(null)}
           loadRefs={carregarRefs}

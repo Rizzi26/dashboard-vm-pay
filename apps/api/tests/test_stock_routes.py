@@ -473,7 +473,7 @@ async def test_local_de_outra_org_e_404(monkeypatch):
 # --------------------------------------------------------------------- preço
 
 
-async def test_preco_atualiza_o_produto_canonico_apos_aceite(monkeypatch):
+async def test_preco_muda_so_a_loja_e_nao_o_produto_de_todas(monkeypatch):
     use_role("admin")
     sessao = use_session(rotas_de_sucesso())
     fake = use_connector(monkeypatch)
@@ -486,7 +486,8 @@ async def test_preco_atualiza_o_produto_canonico_apos_aceite(monkeypatch):
     assert resp.status_code == 200
     assert fake.calls == [("price", 49, 857, [(163, 4.25)])]
     sqls = " ".join(sql for sql, _ in sessao.executed)
-    assert "update core.product" in sqls
+    assert "update core.stock_balance set price" in sqls
+    assert "update core.product" not in sqls  # preço é da loja, não do lojista
 
 
 # ------------------------------------------------------------ trava de escrita
