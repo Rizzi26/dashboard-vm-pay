@@ -195,20 +195,21 @@ def _saldo_mudou(anterior: tuple | None, novo: dict) -> bool:
     return de != para
 
 
-async def _precos_do_planograma(
+async def _dados_do_planograma(
     client: VMpayClient,
     links: Any,
     product_by_external: dict[str, uuid.UUID],
-) -> dict[tuple[uuid.UUID, uuid.UUID], float]:
-    """Preço unitário de cada item, direto do planograma de cada loja.
+) -> dict[tuple[uuid.UUID, uuid.UUID], dict[str, Any]]:
+    """Preço unitário e situação de cada item, direto do planograma de cada loja.
 
-    O relatório de saldos só dá o valor TOTAL (qtd × preço): com saldo zero o
-    unitário não sai da conta, e a prateleira mostrava "—" justo no item que
-    precisa de reposição. O planograma tem o preço de todo item, zerado ou
-    não. Uma requisição por loja; se falhar, fica o preço derivado — preço
-    melhor não pode derrubar o retrato do estoque.
+    Preço: o relatório de saldos só dá o valor TOTAL (qtd × preço) — com
+    saldo zero o unitário não sai da conta, e a prateleira mostrava "—" justo
+    no item que precisa de reposição. Situação: produto tirado de linha
+    (inativo/suspenso) não pode aparecer como "zerado, repor". Uma requisição
+    por loja; se falhar, fica o preço derivado e a situação desconhecida —
+    dado melhor não pode derrubar o retrato do estoque.
     """
-    precos: dict[tuple[uuid.UUID, uuid.UUID], float] = {}
+    dados: dict[tuple[uuid.UUID, uuid.UUID], dict[str, Any]] = {}
     for link in links:
         caminho = f"machines/{link['machine_id']}/installations/{link['installation_id']}/current_planogram"
         try:
@@ -218,12 +219,20 @@ async def _precos_do_planograma(
             continue
         for item in planograma.get("items", []):
             product_id = product_by_external.get(str(item.get("good_id")))
+            if product_id is None:
+                continue
+            chave = (link["location_id"], product_id)
+            # Mesmo produto em duas posições: ativo em qualquer uma = ativo.
+            status = item.get("status")
+            if dados.get(chave, {}).get("status") == "active":
+                status = "active"
+            preco = None
             # Item com "usar preço padrão" ligado cobra o padrão do produto, não
             # o desired_price — esse fica com o derivado do saldo.
-            if product_id is None or item.get("desired_price") is None or item.get("use_default_price_product"):
-                continue
-            precos[(link["location_id"], product_id)] = round(float(item["desired_price"]), 2)
-    return precos
+            if item.get("desired_price") is not None and not item.get("use_default_price_product"):
+                preco = round(float(item["desired_price"]), 2)
+            dados[chave] = {"price": preco if preco is not None else dados.get(chave, {}).get("price"), "status": status}
+    return dados
 
 
 async def sync_stock(
@@ -292,10 +301,14 @@ async def sync_stock(
             "updated_at": now,
         }
 
-    precos = await _precos_do_planograma(client, links.values(), product_by_external)
+    planograma = await _dados_do_planograma(client, links.values(), product_by_external)
     for chave, saldo in balances.items():
-        if precos.get(chave) is not None:
-            saldo["price"] = precos[chave]
+        dados = planograma.get(chave, {})
+        if dados.get("price") is not None:
+            saldo["price"] = dados["price"]
+        # Todo saldo leva a chave: o upsert em lote exige as mesmas colunas
+        # em todas as linhas. Nulo = planograma não respondeu.
+        saldo["planogram_status"] = dados.get("status")
 
     # A foto decide o que mudou contra a ÚLTIMA FOTO de cada par, não contra
     # core.stock_balance: uma carga pelo painel (restock/pick list) já soma no

@@ -78,6 +78,7 @@ select l.id   as location_id,
        coalesce(b.price, p.unit_price) as unit_price,
        b.quantity,
        b.updated_at,
+       b.planogram_status,
        f.nomes as nomes_fornecedor
   from core.stock_balance b
   join core.location l on l.id = b.location_id
@@ -112,6 +113,8 @@ async def list_stock(ctx: ViewerCtx, session: Session) -> list[dict]:
             "quantidade": float(r["quantity"]),
             "atualizado_em": r["updated_at"].isoformat(),
             "nomes_fornecedor": list(r.get("nomes_fornecedor") or []),
+            # Nulo = planograma não respondeu na última rodada: tratado como ativo.
+            "situacao": r.get("planogram_status") or "active",
         }
         for r in rows
     ]
@@ -180,6 +183,8 @@ select b.location_id, l.name as location_name,
   join core.product  p on p.id = b.product_id
   join vendas va on va.location_id = b.location_id and va.product_id = b.product_id
  where l.org_id = :org_id
+   -- Produto tirado de linha não entra na lista de compra.
+   and coalesce(b.planogram_status, 'active') = 'active'
    and (
         b.quantity = 0
         or b.quantity / (va.unidades / cast(:days as numeric)) <= :horizonte

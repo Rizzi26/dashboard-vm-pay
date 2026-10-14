@@ -50,7 +50,9 @@ with lojas as (
 ), estoque as (
     select b.location_id,
            count(*)                                  as itens,
-           count(*) filter (where b.quantity <= 0)   as zerados,
+           -- Fora de linha (inativo/suspenso) zerado não é ruptura: não se repõe.
+           count(*) filter (where b.quantity <= 0
+                              and coalesce(b.planogram_status, 'active') = 'active') as zerados,
            coalesce(sum(greatest(b.quantity, 0)), 0) as unidades,
            max(b.updated_at)                         as atualizado_em
       from core.stock_balance b

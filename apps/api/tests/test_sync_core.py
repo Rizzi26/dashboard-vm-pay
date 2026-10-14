@@ -275,3 +275,32 @@ async def test_planograma_fora_do_ar_nao_derruba_o_snapshot():
     client = VMpayClient("segredo", base_url=BASE, max_retries=0)
     _, saldos, _ = await sync_core.sync_stock(client, sessao, INTEGRATION, {"163": uuid.uuid4()})
     assert saldos == 1  # fica o preço derivado (20,97 / 3)
+
+
+@respx.mock
+async def test_situacao_do_planograma_vai_para_o_saldo():
+    """Produto tirado de linha não pode aparecer como zerado a repor."""
+    respx.get(f"{BASE}/installations").mock(
+        return_value=httpx.Response(200, json=[{"id": 857, "machine_id": 10}])
+    )
+    respx.get(f"{BASE}/installation_stock_balances").mock(
+        return_value=httpx.Response(200, json=[saldo(163, 0, 0.0), saldo(164, 2, 9.0)])
+    )
+    respx.get(f"{BASE}/machines/10/installations/857/current_planogram").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": 1,
+                "items": [
+                    {"id": 1, "good_id": 163, "desired_price": 5.0, "status": "inactive"},
+                    {"id": 2, "good_id": 164, "desired_price": 4.5, "status": "active"},
+                ],
+            },
+        )
+    )
+    sessao = FakeSession()
+    client = VMpayClient("segredo", base_url=BASE, max_retries=0)
+    await sync_core.sync_stock(client, sessao, INTEGRATION, {"163": uuid.uuid4(), "164": uuid.uuid4()})
+    stmt = next(s for s in sessao.statements if "stock_balance" in str(s) and "INSERT" in str(s).upper())
+    params = stmt.compile(dialect=postgresql.dialect()).params
+    assert sorted(v for k, v in params.items() if k.startswith("planogram_status")) == ["active", "inactive"]

@@ -11,12 +11,14 @@ import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { NewProductModal } from "@/components/NewProductModal";
 import { Paginacao } from "@/components/Paginacao";
 import { PrecosEmLote } from "@/components/PrecosEmLote";
+import { NOME_SITUACAO, SituacaoEmLote } from "@/components/SituacaoEmLote";
 import { Botao } from "@/components/ui/Botao";
 import { Cartao } from "@/components/ui/Cartao";
 import { CAMPO, Folha, ROTULO_CAMPO, RodapeFolha } from "@/components/ui/Folha";
 import { IconeBusca, IconeMaisSinal } from "@/components/ui/icones";
 import { LinhaLista, Lista } from "@/components/ui/Lista";
 import { Segmentado } from "@/components/ui/Segmentado";
+import { Selo } from "@/components/ui/Selo";
 import { Tile } from "@/components/ui/Tile";
 import { Titulo } from "@/components/ui/Titulo";
 import { formatInt, formatMoney } from "@/lib/format";
@@ -35,7 +37,10 @@ type RowModal =
   | { kind: "restock"; row: StockRow }
   | { kind: "price"; row: StockRow };
 
-type Planilha = "precos" | "cadastro" | "contagem";
+type Planilha = "precos" | "cadastro" | "contagem" | "situacao";
+
+/** Fora de linha (suspenso/inativo): zerado não é ruptura — não se repõe. */
+const foraDeLinha = (r: StockRow) => !!r.situacao && r.situacao !== "active";
 
 /** O menu "Planilhas": cada opção é um fluxo baixar → preencher → conferir → aplicar. */
 const PLANILHAS: { kind: Planilha; titulo: string; descricao: string }[] = [
@@ -50,6 +55,11 @@ const PLANILHAS: { kind: Planilha; titulo: string; descricao: string }[] = [
     titulo: "Contagem de estoque",
     descricao: "Conte a loja: o saldo vira o contado e a diferença fica como perda ou sobra.",
   },
+  {
+    kind: "situacao",
+    titulo: "Tirar de linha ou reativar",
+    descricao: "Suspenda ou inative o que saiu de linha — sai da Reposição e dos zerados.",
+  },
 ];
 
 // "acoes" é a folha do celular: a linha da lista não tem espaço para os
@@ -62,6 +72,7 @@ type Modal =
   | { kind: "precos"; locationId: string; loja: string }
   | { kind: "cadastro"; locationId: string; loja: string }
   | { kind: "contagem"; locationId: string; loja: string }
+  | { kind: "situacao"; locationId: string; loja: string }
   | null;
 
 export function StockView({
@@ -114,7 +125,7 @@ export function StockView({
       unidades: rows.reduce((s, r) => s + r.quantidade, 0),
       valor: rows.reduce((s, r) => s + r.quantidade * (r.preco ?? 0), 0),
       disponiveis: rows.filter((r) => r.quantidade > 0).length,
-      ruptura: rows.filter((r) => r.quantidade === 0).length,
+      ruptura: rows.filter((r) => r.quantidade === 0 && !foraDeLinha(r)).length,
     }),
     [rows],
   );
@@ -392,6 +403,7 @@ export function StockView({
                   secundario={
                     <>
                       {apelido(r, filtro) ? <span className="block">no cupom: {apelido(r, filtro)}</span> : null}
+                      {foraDeLinha(r) ? <>{NOME_SITUACAO[r.situacao!]} · </> : null}
                       {preco(r)} · {r.barcode ?? "sem código"}
                       {variosLocais ? <> · {r.local}</> : null}
                     </>
@@ -429,6 +441,11 @@ export function StockView({
                         >
                           {r.produto}
                         </Link>
+                        {foraDeLinha(r) ? (
+                          <Selo tom="cinza" className="ml-2 align-middle">
+                            {NOME_SITUACAO[r.situacao!]}
+                          </Selo>
+                        ) : null}
                         {apelido(r, filtro) ? (
                           <span className="block text-[13px] text-sec">no cupom: {apelido(r, filtro)}</span>
                         ) : null}
@@ -511,6 +528,18 @@ export function StockView({
             ) : null}
           </div>
         </Folha>
+      ) : modal?.kind === "situacao" ? (
+        <SituacaoEmLote
+          org={org}
+          locationId={modal.locationId}
+          loja={modal.loja}
+          onFechar={() => setModal(null)}
+          onAplicado={(mensagem) => {
+            setFeedback(mensagem);
+            setModal(null);
+            router.refresh();
+          }}
+        />
       ) : modal?.kind === "contagem" ? (
         <ContagemEstoque
           org={org}
