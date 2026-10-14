@@ -33,6 +33,7 @@ from ..connector import LIMITE_ITENS_PLANOGRAMA, PlanogramView
 from ..db import get_session
 from ..ingest import vendas_em_dia
 from ..planilha import PlanilhaInvalida, linhas_do_csv, ler_numero
+from ..sync_core import _ordem_canaleta
 from . import stock as estoque
 
 router = APIRouter(prefix="/orgs/{org}/stock/contagem", tags=["contagem"])
@@ -40,7 +41,7 @@ router = APIRouter(prefix="/orgs/{org}/stock/contagem", tags=["contagem"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 AdminCtx = Annotated[OrgContext, Depends(require_role("admin"))]
 
-COLUNAS = ["id", "produto", "codigo_barras", "saldo_sistema", "contado"]
+COLUNAS = ["id", "canaleta", "produto", "codigo_barras", "saldo_sistema", "contado"]
 
 #: Contagem mais antiga que isso não se compensa com segurança: entre ela e
 #: agora pode ter havido carga, e carga não se desconta como venda.
@@ -50,7 +51,7 @@ MAX_IDADE_CONTAGEM = timedelta(hours=24)
 DIFERENCA_AVISO = Decimal("10")
 
 PRODUTOS_DA_LOJA = """
-select p.id as product_id, p.name, p.barcode, b.quantity, pl.external_id
+select p.id as product_id, p.name, p.barcode, b.quantity, b.canaleta, pl.external_id
   from core.stock_balance b
   join core.product p on p.id = b.product_id
   left join core.product_link pl
@@ -134,8 +135,11 @@ async def modelo(ctx: AdminCtx, session: Session, location_id: Annotated[uuid.UU
     buffer.write("﻿")
     writer = csv.writer(buffer, delimiter=";")
     writer.writerow(COLUNAS)
-    for p in await _produtos(session, target):
-        writer.writerow([p["product_id"], p["name"], p["barcode"] or "", _texto(_num(p["quantity"])), ""])
+    # Em ordem de canaleta: é a ordem de andar pela loja contando.
+    for p in sorted(await _produtos(session, target), key=lambda p: _ordem_canaleta(p.get("canaleta") or "")):
+        writer.writerow(
+            [p["product_id"], p.get("canaleta") or "", p["name"], p["barcode"] or "", _texto(_num(p["quantity"])), ""]
+        )
     return Response(
         content=buffer.getvalue(),
         media_type="text/csv; charset=utf-8",

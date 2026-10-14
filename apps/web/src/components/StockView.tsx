@@ -102,7 +102,7 @@ export function StockView({
   const [disponibilidade, setDisponibilidade] = useState<"todos" | "com" | "sem">(
     initialDisp ?? "todos",
   );
-  const [ordem, setOrdem] = useState<"nome" | "qtd-desc" | "qtd-asc">("nome");
+  const [ordem, setOrdem] = useState<"nome" | "canaleta" | "qtd-desc" | "qtd-asc">("nome");
   const [pagina, setPagina] = useState(0);
   const [modal, setModal] = useState<Modal>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -161,7 +161,9 @@ export function StockView({
     let out = porTexto;
     if (disponibilidade === "com") out = out.filter((r) => r.quantidade > 0);
     if (disponibilidade === "sem") out = out.filter((r) => r.quantidade === 0);
-    if (ordem !== "nome") {
+    if (ordem === "canaleta") {
+      out = [...out].sort((a, b) => ordemCanaleta(a) - ordemCanaleta(b));
+    } else if (ordem !== "nome") {
       out = [...out].sort((a, b) =>
         ordem === "qtd-desc" ? b.quantidade - a.quantidade : a.quantidade - b.quantidade,
       );
@@ -322,7 +324,7 @@ export function StockView({
             <span className="sr-only">Buscar</span>
             <input
               type="search"
-              placeholder="Buscar produto, código ou nome no cupom"
+              placeholder="Buscar produto, canaleta, código ou nome no cupom"
               value={filtro}
               onChange={(e) => {
                 setFiltro(e.target.value);
@@ -369,6 +371,7 @@ export function StockView({
                 className="h-11 rounded-xl border border-campo-borda bg-campo px-2.5 text-[16px] text-texto md:h-10 md:text-[14px]"
               >
                 <option value="nome">Nome (A–Z)</option>
+                <option value="canaleta">Canaleta</option>
                 <option value="qtd-desc">Saldo: maior → menor</option>
                 <option value="qtd-asc">Saldo: menor → maior</option>
               </select>
@@ -407,6 +410,7 @@ export function StockView({
                   secundario={
                     <>
                       {apelido(r, filtro) ? <span className="block">no cupom: {apelido(r, filtro)}</span> : null}
+                      {r.canaleta ? <>canaleta {r.canaleta} · </> : null}
                       {foraDeLinha(r) ? <>{NOME_SITUACAO[r.situacao!]} · </> : null}
                       {preco(r)} · {r.barcode ?? "sem código"}
                       {variosLocais ? <> · {r.local}</> : null}
@@ -423,7 +427,8 @@ export function StockView({
               <table className="w-full border-collapse text-[15px]">
                 <thead>
                   <tr className="text-left text-[12px] font-semibold uppercase tracking-[0.03em] text-sec">
-                    <th scope="col" className="px-4 py-2.5 font-semibold">Produto</th>
+                    <th scope="col" className="w-[90px] px-4 py-2.5 font-semibold">Canaleta</th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">Produto</th>
                     <th scope="col" className="w-[150px] px-3 py-2.5 font-semibold">Código</th>
                     <th scope="col" className="w-[110px] px-3 py-2.5 text-right font-semibold">Preço</th>
                     <th scope="col" className="w-[100px] px-3 py-2.5 text-right font-semibold">Saldo</th>
@@ -438,7 +443,8 @@ export function StockView({
                       key={`${r.location_id}:${r.product_id}`}
                       className="border-t border-sep hover:bg-[var(--row-hover)]"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 font-semibold tabular-nums text-texto">{r.canaleta ?? "—"}</td>
+                      <td className="px-3 py-3">
                         <Link
                           href={`/produto/${r.product_id}`}
                           className="font-medium text-texto no-underline hover:underline"
@@ -735,9 +741,17 @@ function ActionModal({
   );
 }
 
-/** Nome, loja, código de barras ou como o produto vem escrito nos cupons de compra. */
+/** A canaleta como número para ordenar ("140" antes de "1000"); sem canaleta vai para o fim. */
+function ordemCanaleta(r: StockRow): number {
+  const n = parseInt((r.canaleta ?? "").split(",")[0], 10);
+  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+}
+
+/** Canaleta, nome, loja, código de barras ou como o produto vem escrito nos cupons de compra. */
 function casaBusca(r: StockRow, termo: string): boolean {
   return (
+    // Número exato da canaleta: "500" acha a canaleta 500, não a 1500.
+    (r.canaleta ?? "").split(",").some((c) => c.trim() === termo) ||
     r.produto.toLowerCase().includes(termo) ||
     r.local.toLowerCase().includes(termo) ||
     (r.barcode ?? "").includes(termo) ||

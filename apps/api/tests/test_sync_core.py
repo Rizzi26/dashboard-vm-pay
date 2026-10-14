@@ -304,3 +304,32 @@ async def test_situacao_do_planograma_vai_para_o_saldo():
     stmt = next(s for s in sessao.statements if "stock_balance" in str(s) and "INSERT" in str(s).upper())
     params = stmt.compile(dialect=postgresql.dialect()).params
     assert sorted(v for k, v in params.items() if k.startswith("planogram_status")) == ["active", "inactive"]
+
+
+@respx.mock
+async def test_canaleta_vem_do_planograma_em_ordem_numerica():
+    respx.get(f"{BASE}/installations").mock(
+        return_value=httpx.Response(200, json=[{"id": 857, "machine_id": 10}])
+    )
+    respx.get(f"{BASE}/installation_stock_balances").mock(
+        return_value=httpx.Response(200, json=[saldo(163, 1, 5.0), saldo(164, 2, 9.0)])
+    )
+    respx.get(f"{BASE}/machines/10/installations/857/current_planogram").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": 1,
+                "items": [
+                    {"id": 1, "good_id": 163, "name": "1000", "desired_price": 5.0, "status": "active"},
+                    {"id": 2, "good_id": 163, "name": "140", "desired_price": 5.0, "status": "active"},
+                    {"id": 3, "good_id": 164, "name": "500", "desired_price": 4.5, "status": "active"},
+                ],
+            },
+        )
+    )
+    sessao = FakeSession()
+    client = VMpayClient("segredo", base_url=BASE, max_retries=0)
+    await sync_core.sync_stock(client, sessao, INTEGRATION, {"163": uuid.uuid4(), "164": uuid.uuid4()})
+    stmt = next(s for s in sessao.statements if "stock_balance" in str(s) and "INSERT" in str(s).upper())
+    params = stmt.compile(dialect=postgresql.dialect()).params
+    assert sorted(v for k, v in params.items() if k.startswith("canaleta")) == ["140, 1000", "500"]

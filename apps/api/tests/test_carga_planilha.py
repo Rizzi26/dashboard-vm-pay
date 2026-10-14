@@ -17,8 +17,8 @@ SUCO = uuid.UUID("00000000-0000-0000-0000-0000000000a2")
 COCO = uuid.UUID("00000000-0000-0000-0000-0000000000a3")
 
 PRODUTOS = [
-    {"id": AGUA, "name": "Água Mineral 500ml", "barcode": "07896002110983", "quantity": 4},
-    {"id": SUCO, "name": "Suco de Uva 1L", "barcode": "7891000000001", "quantity": 0},
+    {"id": AGUA, "name": "Água Mineral 500ml", "barcode": "07896002110983", "quantity": 4, "canaleta": "140"},
+    {"id": SUCO, "name": "Suco de Uva 1L", "barcode": "7891000000001", "quantity": 0, "canaleta": "500, 501"},
     {"id": COCO, "name": "Água de Coco 1L", "barcode": None, "quantity": 2},
 ]
 
@@ -122,5 +122,13 @@ async def test_modelo_sai_com_quantidade_em_branco():
     resp = await call("GET", f"/orgs/mercadinho/picklist/planilha/modelo.csv?location_id={LOC_ID}")
     assert resp.status_code == 200
     texto = resp.content.decode("utf-8")
-    assert texto.startswith("﻿id;produto;codigo_barras;saldo;quantidade")
-    assert f"{AGUA};Água Mineral 500ml;07896002110983;4;\r\n" in texto
+    assert texto.startswith("﻿id;canaleta;produto;codigo_barras;saldo;quantidade")
+    assert f"{AGUA};140;Água Mineral 500ml;07896002110983;4;\r\n" in texto
+
+
+async def test_casa_pela_canaleta_da_lista_de_compra():
+    """O operador anota a canaleta na lista de compra e lança por ela."""
+    corpo = await ler("canaleta;quantidade\n140;6\n501;2\n999;1\n")
+    qtd = {i["product_id"]: i["quantidade"] for i in corpo["itens"]}
+    assert qtd == {str(AGUA): 6.0, str(SUCO): 2.0}  # 501 é uma das canaletas do suco
+    assert "nenhum produto na canaleta 999" in corpo["erros"][0]["motivo"]

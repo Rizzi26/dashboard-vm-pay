@@ -79,6 +79,7 @@ select l.id   as location_id,
        b.quantity,
        b.updated_at,
        b.planogram_status,
+       b.canaleta,
        f.nomes as nomes_fornecedor
   from core.stock_balance b
   join core.location l on l.id = b.location_id
@@ -115,6 +116,8 @@ async def list_stock(ctx: ViewerCtx, session: Session) -> list[dict]:
             "nomes_fornecedor": list(r.get("nomes_fornecedor") or []),
             # Nulo = planograma não respondeu na última rodada: tratado como ativo.
             "situacao": r.get("planogram_status") or "active",
+            # Posição na loja: o "código" com que o operador acha o produto.
+            "canaleta": r.get("canaleta"),
         }
         for r in rows
     ]
@@ -128,11 +131,12 @@ async def export_csv(ctx: ViewerCtx, session: Session) -> Response:
     ).mappings().all()
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")  # Excel pt-BR abre ; direto
-    writer.writerow(["local", "produto", "codigo_barras", "preco", "quantidade", "atualizado_em"])
+    writer.writerow(["local", "canaleta", "produto", "codigo_barras", "preco", "quantidade", "atualizado_em"])
     for r in rows:
         writer.writerow(
             [
                 r["location_name"],
+                r.get("canaleta") or "",
                 r["product_name"],
                 r["barcode"] or "",
                 f"{r['unit_price']:.2f}".replace(".", ",") if r["unit_price"] is not None else "",
@@ -173,6 +177,7 @@ with vendas as (
 )
 select b.location_id, l.name as location_name,
        b.product_id, p.name as product_name, p.barcode,
+       b.canaleta,
        b.quantity,
        coalesce(b.price, p.unit_price) as preco,
        va.unidades as vendidas,
@@ -222,6 +227,8 @@ async def _reposicao_itens(session: AsyncSession, org_id: uuid.UUID, days: int) 
                 "product_id": str(r["product_id"]),
                 "produto": r["product_name"],
                 "barcode": r["barcode"],
+                # Vai na lista de compra: é por ela que se lança a carga depois.
+                "canaleta": r.get("canaleta"),
                 "quantidade": quantidade,
                 "status": "ruptura" if zerado else "acabando",
                 "dias_restantes": (
@@ -268,11 +275,12 @@ async def restock_csv(ctx: ViewerCtx, session: Session, days: int = 30) -> Respo
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")  # Excel pt-BR abre ; direto
     writer.writerow(
-        ["produto", "codigo_barras", "situacao", "restam", "dura_dias", "vende_por_dia", "levar"]
+        ["canaleta", "produto", "codigo_barras", "situacao", "restam", "dura_dias", "vende_por_dia", "levar"]
     )
     for i in itens:
         writer.writerow(
             [
+                i.get("canaleta") or "",
                 i["produto"],
                 i["barcode"] or "",
                 "zerado" if i["status"] == "ruptura" else "acabando",

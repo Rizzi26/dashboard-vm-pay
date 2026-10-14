@@ -278,7 +278,7 @@ async def test_saldos_da_loja_trazem_ritmo_e_dias():
     use_role("admin")
     sessao = use_session([
         ("from core.stock_balance b", [
-            {"product_id": PROD_ID, "quantity": 12, "unidades": 60},     # 2/dia → 6 dias
+            {"product_id": PROD_ID, "quantity": 12, "unidades": 60, "canaleta": "500"},  # 2/dia → 6 dias
             {"product_id": OUTRO_PROD, "quantity": 4, "unidades": None},  # sem venda: sem ritmo
             {"product_id": uuid.UUID(int=3), "quantity": -2, "unidades": 30},  # oversell
         ]),
@@ -286,7 +286,9 @@ async def test_saldos_da_loja_trazem_ritmo_e_dias():
     resp = await call("GET", f"/orgs/mercadinho/picklist/saldos?loja={LOC_ID}")
     assert resp.status_code == 200, resp.text
     itens = {i["product_id"]: i for i in resp.json()["itens"]}
-    assert itens[str(PROD_ID)] == {"product_id": str(PROD_ID), "quantidade": 12.0, "por_dia": 2.0, "dias_restantes": 6.0}
+    assert itens[str(PROD_ID)] == {
+        "product_id": str(PROD_ID), "canaleta": "500", "quantidade": 12.0, "por_dia": 2.0, "dias_restantes": 6.0
+    }
     assert itens[str(OUTRO_PROD)]["dias_restantes"] is None
     assert itens[str(uuid.UUID(int=3))]["quantidade"] == 0.0
     _, params = next((q, p) for q, p in sessao.executed if "from core.stock_balance b" in q)

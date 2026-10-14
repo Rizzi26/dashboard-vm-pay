@@ -120,8 +120,13 @@ export function PickListView({
   // de outra conta a VMpay recusaria na carga.
   const contaDaLoja = opcoes.locais.find((l) => l.id === localId)?.conta ?? null;
   const produtosDaLoja = useMemo(
-    () => (contaDaLoja ? produtos.filter((p) => !p.conta || p.conta === contaDaLoja) : produtos),
-    [produtos, contaDaLoja],
+    () =>
+      (contaDaLoja ? produtos.filter((p) => !p.conta || p.conta === contaDaLoja) : produtos).map((p) => ({
+        ...p,
+        // A canaleta é da loja: o mesmo produto fica em posições diferentes.
+        canaleta: localId ? (p.canaletas?.[localId] ?? null) : null,
+      })),
+    [produtos, contaDaLoja, localId],
   );
   // A dica "Parece ser…" só cita produto que a loja escolhida pode receber.
   const nomeProduto = useMemo(
