@@ -261,3 +261,34 @@ async def test_inclusao_numera_as_posicoes_depois_da_maior():
     attrs = json.loads(rota.calls.last.request.content)["planogram"]["items_attributes"]
     assert [(a["good_id"], a["logical_locator"], a["name"]) for a in attrs] == [(10, 61, "61"), (11, 62, "62")]
     assert all(a["type"] == "Coil" and a["status"] == "active" and a["use_default_price_product"] is False for a in attrs)
+
+
+@respx.mock
+async def test_refs_sem_permissao_de_abastecimento_vem_vazia():
+    """Doc da VMpay: a categoria de abastecimento só é obrigatória para quem usa
+    mais de uma — e o token da demo nem enxerga a lista (401)."""
+    respx.get(f"{BASE}/manufacturers").mock(return_value=httpx.Response(200, json=[{"id": 1, "name": "X"}]))
+    respx.get(f"{BASE}/categories").mock(return_value=httpx.Response(200, json=[{"id": 2, "name": "Y"}]))
+    respx.get(f"{BASE}/supply_categories").mock(return_value=httpx.Response(401, json={}))
+    conn = VMpayConnector(VMpayClient("tok", base_url=BASE, max_retries=0))
+    refs = await conn.product_refs()
+    assert refs["categorias_abastecimento"] == [] and refs["fabricantes"] == [{"id": 1, "nome": "X"}]
+
+
+@pytest.mark.parametrize(
+    ("abastecimento", "esperado"),
+    [([], None), ([{"id": 20, "nome": "Geladeira"}], {"id": 20, "nome": "Geladeira"})],
+)
+async def test_sem_varias_categorias_de_abastecimento_a_coluna_e_opcional(monkeypatch, conector, abastecimento, esperado):
+    monkeypatch.setitem(REFS, "categorias_abastecimento", abastecimento)
+    corpo = await previa(CAB + "Água Nova;;3,50;Nestlé;Bebidas;;;;\n")
+    assert corpo["resumo"]["criar"] == 1, corpo["erros"]
+    assert corpo["itens"][0].get("categoria_abastecimento") == esperado
+
+
+async def test_com_varias_categorias_de_abastecimento_continua_obrigatoria(monkeypatch, conector):
+    monkeypatch.setitem(
+        REFS, "categorias_abastecimento", [{"id": 20, "nome": "Geladeira"}, {"id": 21, "nome": "Seco"}]
+    )
+    corpo = await previa(CAB + "Água Nova;;3,50;Nestlé;Bebidas;;;;\n")
+    assert "categoria_abastecimento vazia" in corpo["erros"][0]["motivo"]
