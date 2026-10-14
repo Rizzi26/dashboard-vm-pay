@@ -229,17 +229,28 @@ O kiosk é 100% cashless, um item por transação.
    (a principal mantém a chave antiga). Escrita usa o token da conta DA LOJA;
    cadastro de produto exige a loja quando há mais de uma conta. Produtos não
    são unificados entre contas (a mesma Coca em duas contas = 2 produtos).
-14. **Preço em lote** (EM HOMOLOGAÇÃO, 2026-10-14): Prateleira → "Atualizar
-   preços" baixa `precos.csv` da loja (`preco_novo` em branco), a prévia
-   (`POST /stock/precos/previa`) lê o planograma ao vivo e não escreve, e
-   `/aplicar` manda UM PATCH por loja (tudo ou nada) com action_log
-   `stock.price_batch`. Linha em branco ou ausente não mexe em nada. Preço é
-   da LOJA: nenhuma rota de preço grava mais em `core.product.unit_price`.
-   `use_default_price_product` vai sempre false — ligado, a VMpay ignora o
-   preço enviado. Próximas fases: carga do pick list por planilha, cadastro
-   em lote JÁ no planograma (PATCH aceita item novo — provado no demo em
-   2026-10-14), contagem de inventário, tirar de linha em lote (só
-   inativar/suspender: a VMpay não apaga item de planograma).
+14. **Planilhas na Prateleira** (EM HOMOLOGAÇÃO, 2026-10-14) — botão
+   "Planilhas", sempre por loja, sempre baixar → preencher → prévia (lê o
+   planograma ao vivo, não escreve) → aplicar. Leitura de CSV comum em
+   `planilha.py` (`;`/`,`, BOM, Windows-1252 no front, "1.299" ambíguo é erro).
+   - **Preço** (`/stock/precos`): `preco_novo` em branco = não mexe; UM PATCH
+     por loja (tudo ou nada), `stock.price_batch`. Preço é da LOJA: nenhuma
+     rota grava mais em `core.product.unit_price`; `use_default_price_product`
+     vai sempre false (ligado, a VMpay ignora o preço).
+   - **Cadastro** (`/products/lote`): cria na VMpay um por um (cada um
+     commitado no core na hora) e inclui todos no planograma num PATCH só —
+     item novo com logical_locator depois do maior. Código já cadastrado vira
+     "só incluir na prateleira"; níveis em branco = os mais comuns da loja.
+   - **Contagem** (`/stock/contagem`): ajuste com `observed` (provado no demo:
+     20→18→20); diferença vira `stock_movement` `adjustment`. Desconta as
+     vendas feitas depois da contagem, trazidas na hora por
+     `ingest.vendas_em_dia` (sem elas, aplicar recusa). Mais de 24 h: recusada.
+   - **Tirar de linha** (`/stock/situacao`): suspenso/inativo/ativo (a VMpay
+     não apaga item de planograma). `stock_balance.planogram_status`
+     (migration 0010, o snapshot preenche) tira fora de linha da Reposição e
+     dos zerados.
+   - **Carga do pick list por planilha** (`/picklist/planilha`): só enche o
+     carrinho da carga manual; avisa carga idêntica lançada em 7 dias.
 8. Migrations são **automáticas** (migrate.yml): push na `homolog` aplica no
    banco de homologação, push na `main` no de produção — só os arquivos que
    faltam em `core.schema_migration`, cada um numa transação com o próprio

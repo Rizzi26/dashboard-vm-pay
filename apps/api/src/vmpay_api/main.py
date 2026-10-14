@@ -26,6 +26,7 @@ from .routers import (
     precos,
     products,
     sales,
+    situacao,
     stock,
     sync,
 )
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(sales.router)
     app.include_router(precos.router)
     app.include_router(contagem.router)
+    app.include_router(situacao.router)
     app.include_router(stock.router)
     app.include_router(cadastro_lote.router)
     app.include_router(products.router)

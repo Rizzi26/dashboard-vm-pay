@@ -151,6 +151,34 @@ class VMpayConnector:
             json=body,
         )
 
+    async def set_status(
+        self,
+        machine_id: int,
+        installation_id: int,
+        changes: list[tuple[int, str]],
+        view: PlanogramView | None = None,
+    ) -> Any:
+        """Situação dos itens no planograma: active, suspended ou inactive.
+
+        É como se tira produto de linha — a VMpay não apaga item de planograma
+        (`_destroy` é ignorado). Vale para todas as posições do mesmo produto.
+        """
+        view = view or await self.current_planogram(machine_id, installation_id)
+        attrs = []
+        for good_id, status in changes:
+            if status not in ("active", "suspended", "inactive"):
+                raise ConnectorError(f"situação '{status}' não existe no planograma")
+            self._resolve(view, good_id)
+            attrs.extend({"id": i["id"], "status": status} for i in view.items if i["good_id"] == good_id)
+        if len(attrs) > LIMITE_ITENS_PLANOGRAMA:
+            raise ConnectorError(
+                f"{len(attrs)} itens numa alteração só; a VMpay aceita até {LIMITE_ITENS_PLANOGRAMA} por requisição"
+            )
+        return await self.client.patch(
+            f"machines/{machine_id}/installations/{installation_id}/current_planogram",
+            json={"planogram": {"items_attributes": attrs}},
+        )
+
     async def product_refs(self) -> dict[str, list[dict[str, Any]]]:
         """Registries que o cadastro de produto exige: id + nome de cada um.
 
