@@ -137,6 +137,12 @@ export function StockView({
   const porTexto = useMemo(() => {
     const termo = filtro.trim().toLowerCase();
     if (!termo) return rows;
+    // Número que é uma canaleta: só ela. "500" não pode trazer junto todo
+    // "500ML" e todo código de barras com 500 no meio.
+    if (/^\d+$/.test(termo)) {
+      const naCanaleta = rows.filter((r) => temCanaleta(r, termo));
+      if (naCanaleta.length > 0) return naCanaleta;
+    }
     return rows.filter((r) => casaBusca(r, termo));
   }, [rows, filtro]);
 
@@ -748,10 +754,14 @@ function ordemCanaleta(r: StockRow): number {
 }
 
 /** Canaleta, nome, loja, código de barras ou como o produto vem escrito nos cupons de compra. */
+/** Número exato da canaleta: "500" acha a canaleta 500, não a 1500. */
+function temCanaleta(r: StockRow, numero: string): boolean {
+  return (r.canaleta ?? "").split(",").some((c) => c.trim() === numero);
+}
+
 function casaBusca(r: StockRow, termo: string): boolean {
   return (
-    // Número exato da canaleta: "500" acha a canaleta 500, não a 1500.
-    (r.canaleta ?? "").split(",").some((c) => c.trim() === termo) ||
+    temCanaleta(r, termo) ||
     r.produto.toLowerCase().includes(termo) ||
     r.local.toLowerCase().includes(termo) ||
     (r.barcode ?? "").includes(termo) ||
