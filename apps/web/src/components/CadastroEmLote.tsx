@@ -189,7 +189,7 @@ export function CadastroEmLote({
                         {i.nome}
                         <span className="block text-[13px] text-sec">
                           {i.acao === "criar"
-                            ? `${i.fabricante?.nome} · ${i.categoria?.nome} · ${i.categoria_abastecimento?.nome}`
+                            ? [i.fabricante?.nome, i.categoria?.nome, i.categoria_abastecimento?.nome].filter(Boolean).join(" · ")
                             : "já no cadastro — só entra na prateleira"}
                           {i.codigo_barras ? ` · ${i.codigo_barras}` : ""}
                         </span>
