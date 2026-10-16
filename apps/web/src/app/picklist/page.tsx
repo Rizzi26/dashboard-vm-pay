@@ -26,6 +26,7 @@ export default async function PickListPage() {
           <PickListView
             org={org.slug}
             opcoes={opcoes.data}
+            lojaInicial={org.loja}
             historico={historico.ok ? historico.data : []}
           />
         ) : (

@@ -132,13 +132,16 @@ async def _produtos_vinculados(session: AsyncSession, org_id: uuid.UUID) -> list
                 select b.product_id, b.location_id, b.canaleta
                   from core.stock_balance b
                   join core.location l on l.id = b.location_id
-                 where l.org_id = :org_id and b.canaleta is not null
+                 where l.org_id = :org_id
                 """
             ),
             {"org_id": str(org_id)},
         )
     ).mappings().all():
-        canaletas.setdefault(str(c["product_id"]), {})[str(c["location_id"])] = c["canaleta"]
+        # Todo produto do planograma da loja entra, mesmo sem canaleta lida
+        # (planograma fora do ar numa rodada): a tela filtra por presença aqui
+        # — sumir da busca travaria a carga.
+        canaletas.setdefault(str(c["product_id"]), {})[str(c["location_id"])] = c["canaleta"] or ""
     # integration_id: com várias contas VMpay, a tela só oferece os produtos
     # da conta da loja escolhida — produto de outra conta a VMpay recusa.
     return [
