@@ -73,9 +73,10 @@ export function CargaManual({
   const contaDaLoja = opcoes.locais.find((l) => l.id === localId)?.conta ?? null;
   const produtosDaLoja = useMemo(
     () =>
-      (contaDaLoja ? opcoes.produtos.filter((p) => !p.conta || p.conta === contaDaLoja) : opcoes.produtos).map(
-        (p) => ({ ...p, canaleta: localId ? (p.canaletas?.[localId] ?? null) : null }),
-      ),
+      (contaDaLoja ? opcoes.produtos.filter((p) => !p.conta || p.conta === contaDaLoja) : opcoes.produtos)
+        // Só o planograma da loja: é o que se confere pela canaleta e o que a VMpay aceita.
+        .filter((p) => !localId || p.canaletas?.[localId] !== undefined)
+        .map((p) => ({ ...p, canaleta: localId ? (p.canaletas?.[localId] ?? null) : null })),
     [opcoes.produtos, contaDaLoja, localId],
   );
   const porId = useMemo(() => new Map(opcoes.produtos.map((p) => [p.id, p])), [opcoes.produtos]);
@@ -203,7 +204,7 @@ export function CargaManual({
     : linhas.length === 0
       ? "adicione os produtos"
       : foraDaConta > 0
-        ? `${foraDaConta} de outra conta VMpay`
+        ? `${foraDaConta} fora do planograma da loja`
         : quantidadesRuins > 0
           ? "confira as quantidades"
           : !valorTotal.ok
@@ -384,7 +385,7 @@ export function CargaManual({
                     {!daLoja.has(l.product_id) ? (
                       <p className="m-0 mt-1 text-[13px] text-vermelho-texto">
                         <span aria-hidden="true">■ </span>
-                        É de outra conta VMpay — remova ou troque a loja.
+                        Fora do planograma desta loja — remova ou troque a loja.
                       </p>
                     ) : null}
                     {l.novo ? (
@@ -481,7 +482,14 @@ export function CargaManual({
             const payload = await resp.json().catch(() => ({}));
             if (!resp.ok) throw new Error(payload.detail ?? `backend respondeu ${resp.status}`);
             const id = payload.product_id as string;
-            onProdutoCadastrado({ id, name: body.nome, barcode: body.barcode, conta: contaDaLoja ?? undefined });
+            onProdutoCadastrado({
+              id,
+              name: body.nome,
+              barcode: body.barcode,
+              conta: contaDaLoja ?? undefined,
+              // Entrou na prateleira: já é do planograma desta loja.
+              canaletas: payload.prateleira === "incluido" && localId ? { [localId]: "nova" } : undefined,
+            });
             // Fora da prateleira a VMpay recusa a carga inteira: só aí o aviso.
             const fora = payload.prateleira !== "incluido";
             setLinhas((ls) => [{ product_id: id, quantidade: "1", novo: fora }, ...ls]);

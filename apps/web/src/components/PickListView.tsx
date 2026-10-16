@@ -90,16 +90,25 @@ export function PickListView({
   org,
   opcoes,
   historico,
+  lojaInicial = null,
 }: {
   org: string;
   opcoes: PicklistOpcoes;
   historico: PicklistCarga[];
+  /** A loja escolhida na barra: a conferência já começa nela (canaleta à vista). */
+  lojaInicial?: string | null;
 }) {
   const router = useRouter();
   const [entrada, setEntrada] = useState("");
   const [consulta, setConsulta] = useState<PicklistConsulta | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
-  const [localId, setLocalId] = useState(opcoes.locais.length === 1 ? opcoes.locais[0].id : "");
+  const [localId, setLocalId] = useState(
+    opcoes.locais.length === 1
+      ? opcoes.locais[0].id
+      : opcoes.locais.some((l) => l.id === lojaInicial)
+        ? (lojaInicial as string)
+        : "",
+  );
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -119,15 +128,21 @@ export function PickListView({
   // Várias contas VMpay: só os produtos da conta da loja escolhida — produto
   // de outra conta a VMpay recusaria na carga.
   const contaDaLoja = opcoes.locais.find((l) => l.id === localId)?.conta ?? null;
+  // Com a loja escolhida, só o planograma DELA: é o que o operador confere
+  // (canaleta) e o único que a VMpay aceita na carga.
   const produtosDaLoja = useMemo(
     () =>
-      (contaDaLoja ? produtos.filter((p) => !p.conta || p.conta === contaDaLoja) : produtos).map((p) => ({
-        ...p,
-        // A canaleta é da loja: o mesmo produto fica em posições diferentes.
-        canaleta: localId ? (p.canaletas?.[localId] ?? null) : null,
-      })),
+      (contaDaLoja ? produtos.filter((p) => !p.conta || p.conta === contaDaLoja) : produtos)
+        .filter((p) => !localId || p.canaletas?.[localId] !== undefined)
+        .map((p) => ({
+          ...p,
+          // A canaleta é da loja: o mesmo produto fica em posições diferentes.
+          canaleta: localId ? (p.canaletas?.[localId] ?? null) : null,
+        })),
     [produtos, contaDaLoja, localId],
   );
+  const noPlanograma = useMemo(() => new Set(produtosDaLoja.map((p) => p.id)), [produtosDaLoja]);
+  const nomeDeQualquer = useMemo(() => new Map(produtos.map((p) => [p.id, p.name])), [produtos]);
   // A dica "Parece ser…" só cita produto que a loja escolhida pode receber.
   const nomeProduto = useMemo(
     () => new Map(produtosDaLoja.map((p) => [p.id, p.name])),
@@ -324,11 +339,14 @@ export function PickListView({
             </button>
           </p>
         ) : null}
-        {l.novo ? (
+        {!localId && !falta ? (
+          <p className="m-0 mt-1.5 text-[13px] text-sec">Escolha a loja que recebeu para ver a canaleta.</p>
+        ) : null}
+        {localId && l.product_id && !noPlanograma.has(l.product_id) ? (
           <p className="m-0 mt-1.5 text-[13px] text-laranja-texto">
             <span aria-hidden="true">▲ </span>
-            Produto recém-cadastrado: inclua-o no planograma da máquina na VMpay antes de aprovar — fora
-            do planograma a VMpay recusa a carga do cupom inteiro.
+            {nomeDeQualquer.get(l.product_id) ?? "Este produto"} não está no planograma desta loja — escolha o
+            produto certo pela canaleta (a VMpay recusaria a carga do cupom inteiro).
           </p>
         ) : null}
         {l.product_id && valido(l.quantidade) && valido(l.fator) && num(l.fator) !== 1 ? (
@@ -797,7 +815,13 @@ export function PickListView({
             const payload = await resp.json().catch(() => ({}));
             if (!resp.ok) throw new Error(payload.detail ?? `backend respondeu ${resp.status}`);
             const id = payload.product_id as string;
-            setProdutos((ps) => [...ps, { id, name: body.nome, barcode: body.barcode, conta: contaDaLoja ?? undefined }]);
+            // Entrou na prateleira: passa a ser do planograma desta loja (a
+            // posição a VMpay acabou de dar; a canaleta real vem na próxima leitura).
+            const canaletas = payload.prateleira === "incluido" && localId ? { [localId]: "nova" } : undefined;
+            setProdutos((ps) => [
+              ...ps,
+              { id, name: body.nome, barcode: body.barcode, conta: contaDaLoja ?? undefined, canaletas },
+            ]);
             editar(cadastrando, { product_id: id, vinculo: null, novo: true });
             setCadastrando(null);
           }}
