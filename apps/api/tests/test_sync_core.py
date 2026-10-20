@@ -333,3 +333,23 @@ async def test_canaleta_vem_do_planograma_em_ordem_numerica():
     stmt = next(s for s in sessao.statements if "stock_balance" in str(s) and "INSERT" in str(s).upper())
     params = stmt.compile(dialect=postgresql.dialect()).params
     assert sorted(v for k, v in params.items() if k.startswith("canaleta")) == ["140, 1000", "500"]
+
+
+@respx.mock
+async def test_snapshot_nao_desliga_o_carregamento_da_loja():
+    """Regressão (19/10): o upsert de core.location atualizava TODAS as
+    colunas e punha o default (false) em carga_como_carregamento a cada
+    rodada — o interruptor que o master ligou voltava desligado sozinho."""
+    respx.get(f"{BASE}/installations").mock(
+        return_value=httpx.Response(200, json=[{"id": 857, "machine_id": 10}])
+    )
+    respx.get(f"{BASE}/installation_stock_balances").mock(
+        return_value=httpx.Response(200, json=[saldo(163, 3, 20.97)])
+    )
+    sessao = FakeSession()
+    client = VMpayClient("segredo", base_url=BASE, max_retries=0)
+    await sync_core.sync_stock(client, sessao, INTEGRATION, {"163": uuid.uuid4()})
+    upsert_loja = next(s for s in sessao.sql() if s.startswith("INSERT INTO core.location ") or s.startswith("INSERT INTO core.location("))
+    set_ = upsert_loja.split("DO UPDATE SET", 1)[1]
+    assert "name" in set_
+    assert "carga_como_carregamento" not in set_
