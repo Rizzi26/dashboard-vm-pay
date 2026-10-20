@@ -244,10 +244,21 @@ class VMpayConnector:
         ignorados += [{"good_id": g, "motivo": "não veio na pick list"} for g in pedido if g not in vistos]
         return {"carregados": carregados, "ignorados": ignorados}
 
+    async def _pick_lists_pendentes(self, base: str):
+        """Só as pendentes (status=confirmed), filtradas NA VMpay.
+
+        Listar todas e filtrar aqui travou em produção (19/10): a loja tem
+        pick list desde o go-live, a VMpay não entregou a lista inteira e a
+        carga ficou 12 minutos esperando até dar "falha de rede". Pendente é
+        no máximo uma por categoria de abastecimento — a resposta é mínima.
+        """
+        async for p in self.client.paginate(f"{base}/pick_lists", status="confirmed"):
+            if p.get("pending", True):
+                yield p
+
     async def _pick_list_pendente(self, base: str) -> dict[str, Any] | None:
-        async for p in self.client.paginate(f"{base}/pick_lists"):
-            if p.get("pending"):
-                return p
+        async for p in self._pick_lists_pendentes(base):
+            return p
         return None
 
     async def _ler_pick_list(self, base: str, pick_id: Any) -> dict[str, Any] | None:
@@ -259,9 +270,9 @@ class VMpayConnector:
     async def _apagar_nossa_pendente(self, base: str, marcador: str) -> None:
         """Pick list criada apesar do erro na resposta: acha pela marca e apaga."""
         try:
-            async for p in self.client.paginate(f"{base}/pick_lists"):
+            async for p in self._pick_lists_pendentes(base):
                 # A marca é delimitada ("[ação 12]" não casa com "[ação 123]").
-                if p.get("pending") and marcador in (p.get("notes") or ""):
+                if marcador in (p.get("notes") or ""):
                     await self.client.delete(f"{base}/pick_lists/{p['id']}")
         except VMpayError:
             pass
