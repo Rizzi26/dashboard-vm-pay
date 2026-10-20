@@ -118,10 +118,14 @@ async def _upsert(session: AsyncSession, table, rows: list[dict], keys: list[str
     for start in range(0, len(rows), UPSERT_CHUNK):
         chunk = rows[start : start + UPSERT_CHUNK]
         stmt = insert(table).values(chunk)
+        # Só as colunas que a rodada trouxe. Atualizar a tabela inteira punha o
+        # DEFAULT em toda coluna que o snapshot não manda — e desligava, de
+        # hora em hora, o "carga como carregamento" que o master ligou na loja.
+        enviadas = set().union(*(r.keys() for r in chunk))
         updatable = {
             c.name: stmt.excluded[c.name]
             for c in table.__table__.columns
-            if c.name not in keys and c.name not in ("created_at",)
+            if c.name in enviadas and c.name not in keys and c.name not in ("created_at",)
         }
         await session.execute(
             stmt.on_conflict_do_update(index_elements=keys, set_=updatable)
