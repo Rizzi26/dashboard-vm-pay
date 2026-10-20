@@ -300,3 +300,16 @@ async def test_carga_incerta_nao_vira_recusa(monkeypatch):
         json={"location_id": str(LOC_ID), "items": [{"product_id": str(PROD_ID), "quantity": 1}]},
     )
     assert resp.status_code == 502 and "9007" in resp.json()["detail"] and "relançar" in resp.json()["detail"]
+
+
+@respx.mock
+async def test_conferencia_de_pendentes_pede_so_as_pendentes_a_vmpay():
+    """Regressão (19/10): listar todas as pick lists da loja travou 12 min em produção."""
+    instalacao()
+    rota = respx.get(f"{INST}/pick_lists").mock(return_value=httpx.Response(200, json=[]))
+    respx.get(f"{INST}/current_planogram").mock(return_value=httpx.Response(200, json=PLANOGRAMA))
+    respx.post(f"{INST}/pick_lists").mock(return_value=httpx.Response(201, json={"id": 9100}))
+    respx.post(f"{INST}/restock").mock(return_value=httpx.Response(200, json={}))
+    detalhe(9100, [{"good_id": 163, "quantity": 1}])
+    await conector().carregar(49, 857, [(163, 1.0)], "x", "m")
+    assert all(c.request.url.params.get("status") == "confirmed" for c in rota.calls)
